@@ -51,8 +51,24 @@ func (app *App) POST(path string, handler context.HandlerFunc) {
 	app.Router.POST(path, app.applyMiddleware(handler))
 }
 
+func (app *App) PUT(path string, handler context.HandlerFunc) {
+	app.Router.PUT(path, app.applyMiddleware(handler))
+}
+
 func (app *App) DELETE(path string, handler context.Handlerfunc) {
 	app.Router.DELETE(path, app.applyMiddleware(handler))
 }
 
+func (app *App) Group(prefix string) *router.Group {
+	return app.Router.Group(prefix, app.middlewares)
+}
 
+// serves static files
+func (app *App) Static(prefix, dir string) {
+	app.Router.Static(prefix, dir)
+}
+
+func (app *App) Run(addr string) error {
+	fmt.Printf("Server is running on %s\n", addr)
+	return http.ListenAndServe(addr, app)
+}
