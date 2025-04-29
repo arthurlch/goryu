@@ -1,9 +1,9 @@
 package goryu
 
 import (
-	"github.com/yourusername/goframe/pkg/app"
-	"github.com/yourusername/goframe/pkg/context"
-	"github.com/yourusername/goframe/pkg/middleware"
+	"github.com/yourusername/goryu/pkg/app"
+	"github.com/yourusername/goryu/pkg/context"
+	"github.com/yourusername/goryu/pkg/middleware"
 )
 
 type App = app.App 

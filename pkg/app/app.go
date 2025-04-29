@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/yourusername/goframe/pkg/context"
-	"github.com/yourusername/goframe/pkg/middleware"
-	"github.com/yourusername/goframe/pkg/router"
+	"github.com/yourusername/goryu/pkg/context"
+	"github.com/yourusername/goryu/pkg/middleware"
+	"github.com/yourusername/goryu/pkg/router"
 )
 
 type App struct {
