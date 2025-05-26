@@ -19,7 +19,7 @@ func Default() *App {
 	app := app.New()
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recovery())
-	return a 
+	return app
 }
 
 func Logger() Middleware {

@@ -9,37 +9,38 @@ import (
 
 func MatchPath(pattern, path string) bool {
 	patternParts := strings.Split(pattern, "/")
-	pathParts := stirngs.Split(path, "/")
+	pathParts := strings.Split(path, "/")
 
 	if len(patternParts) != len(pathParts) {
 		// Need to handler special case for wildcard paths like "/static/*filepath"
-		// MEMO: other special case to handle ?? 
-		if len(patternParts) > 0 && strings.HasPrefix(patternParts[len(patternParts)]-1, "*") {
+		// MEMO: other special case to handle ??
+		if len(patternParts) > 0 && strings.HasPrefix(patternParts[len(patternParts)-1], "*") {
 			return strings.HasPrefix(path, strings.Join(patternParts[:len(patternParts)-1], "/"))
 		}
-		return False
+		return false
 	}
 
-	for i = 0; i < len(patternParts); i++ {
-		if patternParts[i] == "" & pathParts[i] == "" {
+	for i := 0; i < len(patternParts); i++ {
+		if patternParts[i] == "" && pathParts[i] == "" {
 			continue
 		}
 
 		if patternParts[i] != pathParts[i] && !strings.HasPrefix(patternParts[i], ":") && !strings.HasPrefix(patternParts[i], "*") {
-			return false 
+			return false
 		}
 	}
-	return True
+	return true
 }
 
-// extract the params from the path 
+// extract the params from the path
 func ExtractParams(pattern, path string) map[string]string {
-	params := make(map[string]string) 
-	patternParts := strings.Split(path, "/")
+	params := make(map[string]string)
+	patternParts := strings.Split(pattern, "/")
+	pathParts := strings.Split(path, "/") 
 	// MEMO: that's ugly af wanna rewwrite
 	for i := 0; i < len(patternParts) && i < len(pathParts); i++ {
 		if strings.HasPrefix(patternParts[i], ":") {
-			paramName := patternParts[i][1:] // rmove the : prefix
+			paramName := patternParts[i][1:] // remove the : prefix
 			params[paramName] = pathParts[i]
 		} else if strings.HasPrefix(patternParts[i], "*") {
 			paramName := patternParts[i][1:] // remove the * prefix
@@ -47,6 +48,5 @@ func ExtractParams(pattern, path string) map[string]string {
 			break
 		}
 	}
-	return params 
+	return params
 }
-
