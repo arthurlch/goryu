@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/yourusername/goryu/pkg/context"
-	"github.com/yourusername/goryu/pkg/middleware"
-	"github.com/yourusername/goryu/pkg/router"
+	"github.com/arthurlch/goryu/pkg/context"
+	"github.com/arthurlch/goryu/pkg/middleware"
+	"github.com/arthurlch/goryu/pkg/router"
 )
 
 type App struct {
@@ -72,3 +72,4 @@ func (app *App) Run(addr string) error {
 	fmt.Printf("Server is running on %s\n", addr)
 	return http.ListenAndServe(addr, app)
 }
+

@@ -46,3 +46,10 @@ func (context *Context) Text(code int, text string) {
 	context.Writer.Write([]byte(html))
 }
 
+func (context *Context) HTML(code int, html string) {
+	context.Writer.Header().Set("Content-Type", "text/html")
+	context.WriterHeader(code)
+	context.Writer([]byte(html))
+}
+
+// work on going
