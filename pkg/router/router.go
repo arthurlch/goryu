@@ -77,15 +77,14 @@ func (router *Router) Group(prefix string, middlewares []middleware.Middleware) 
 	return group
 }
 
-// Static serves static files.
-// We need to implement the logic for this, e.g. using http.FileServer
-// basic placeholder.
 func (router *Router) Static(prefix string, dir string) {
-    fs := http.FileServer(http.Dir(dir))
-    router.Add("GET", prefix+"/*", func(ctx *context.Context) {
-        http.StripPrefix(prefix, fs).ServeHTTP(ctx.Writer, ctx.Request)
-    })
+	fileServer := http.FileServer(http.Dir(dir))
+	routePattern := strings.TrimSuffix(prefix, "/") + "/*filepath"
+	router.Add("GET", routePattern, func(ctx *context.Context) {
+		http.StripPrefix(prefix, fileServer).ServeHTTP(ctx.Writer, ctx.Request)
+	})
 }
+
 
 
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
