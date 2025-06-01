@@ -1,0 +1,114 @@
+name: lib release
+
+on:
+  push:
+    branches: 
+      - main
+    tags:
+      - 'v*.*.*'
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  publish-release:
+    name: Publish GitHub Release
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@17d0e2bd7d51742c71671bd19fa12bdc9d40a3d6 # v2.8.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0 
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get Tag Name
+        id: get_tag
+        run: |
+          TAG_NAME=""
+          EVENT_REF_NAME="${{ github.event.workflow_run.head_branch }}"
+          if [[ "$EVENT_REF_NAME" == v* ]]; then
+            TAG_NAME="$EVENT_REF_NAME"
+          elif [[ "$EVENT_REF_NAME" == refs/tags/v* ]]; then
+            TAG_NAME="${EVENT_REF_NAME#refs/tags/}"
+          fi
+          if [[ "$TAG_NAME" != v* ]]; then
+            TAG_NAME=""
+          fi
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          echo "tag_name_output=${TAG_NAME}" >> $GITHUB_OUTPUT
+          if [[ -z "$TAG_NAME" ]]; then
+            echo "Not a tag event, or tag does not start with 'v'. Skipping release."
+          else
+            echo "Tag detected for release: $TAG_NAME"
+          fi
+
+      - name: Run final checks and prepare optional assets
+        if: steps.get_tag.outputs.tag_name_output != ''
+        run: |
+          echo "Preparing release for tag: ${{ env.TAG_NAME }}"
+          make test
+          mkdir -p ./dist
+          echo "Source code for Goryu v${{ env.TAG_NAME }} will be automatically attached by GitHub." > ./dist/RELEASE_INFO.txt
+
+      - name: Generate Release Notes
+        id: generate_release_notes
+        if: steps.get_tag.outputs.tag_name_output != ''
+        run: |
+          echo "Generating release notes for tag ${{ env.TAG_NAME }}"
+          PREVIOUS_TAG=$(git describe --abbrev=0 --tags "${{ env.TAG_NAME }}^" 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          echo "Previous tag for changelog: $PREVIOUS_TAG"
+
+          # Generate changelog from commits between the previous tag and the current one.
+          # %s is subject, %h is short hash, %H is full hash, %an is author name.
+          # format creates a markdown list with links to commits.
+          LOG_FORMAT="- %s ([%h](https://github.com/${{ github.repository }}/commit/%H)) by %an"
+          
+          CHANGELOG_CONTENT=$(git log ${PREVIOUS_TAG}..${{ env.TAG_NAME }} --pretty=format:"${LOG_FORMAT}" --reverse)
+
+          if [ -z "$CHANGELOG_CONTENT" ]; then
+            CHANGELOG_CONTENT="No new code changes identified between tags. This release might include non-code updates (e.g., documentation, CI changes) or it's the first tagged release."
+          fi
+          
+          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//'%'/'%25'}"
+          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\n'/'%0A'}" # Newline
+          CHANGELOG_CONTENT="${CHANGELOG_CONTENT//$'\r'/'%0D'}" # Carriage return
+          
+          echo "::set-output name=changelog::${CHANGELOG_CONTENT}"
+
+      - name: Create GitHub Release
+        if: steps.get_tag.outputs.tag_name_output != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Goryu Framework ${{ env.TAG_NAME }}
+          body: |
+            Release of Goryu Framework version ${{ env.TAG_NAME }}.
+
+            **Changes in this release:**
+            ${{ steps.generate_release_notes.outputs.changelog }}
+
+            ---
+            To use this version in your Go project:
+            \`\`\`shell
+            go get github.com/${{ github.repository }}@${{ env.TAG_NAME }}
+            \`\`\`
+
+            This release was automatically created after successful tests.
+          files: ./dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
