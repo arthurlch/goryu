@@ -1,9 +1,9 @@
-name: pr_checks
+name: pre_pr_sentry
 
 on:
   pull_request:
     branches:
-      - main 
+      - main
 
 jobs:
   validate-feature-branch:
@@ -64,14 +64,10 @@ jobs:
           echo "Running tests..."
           make test # Assumes your Makefile has a 'test' target
 
-      - name: Run Linter
-        run: |
-          echo "Installing golangci-lint..."
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          echo "golangci-lint version:"
-          golangci-lint version # Optional: verify installation
-          echo "Running linter..."
-          make lint
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
 
       - name: Check Code Formatting
         run: |
@@ -87,4 +83,4 @@ jobs:
             git diff # Show the formatting differences
             exit 1
           fi
-          
+
