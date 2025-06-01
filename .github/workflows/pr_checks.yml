@@ -66,8 +66,12 @@ jobs:
 
       - name: Run Linter
         run: |
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          echo "golangci-lint version:"
+          golangci-lint version # Optional: verify installation
           echo "Running linter..."
-          make lint # Assumes your Makefile has a 'lint' target (e.g., using golangci-lint)
+          make lint
 
       - name: Check Code Formatting
         run: |
