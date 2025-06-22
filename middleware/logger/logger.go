@@ -1,17 +1,17 @@
-package middleware
+package logger
 
 import (
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/arthurlch/goryu/pkg/context"
+	"github.com/arthurlch/goryu"
 )
 
 type loggingResponseWriter struct {
-	http.ResponseWriter // oringinal
-	statusCode          int
-	size                int
+	http.ResponseWriter
+	statusCode int
+	size       int
 }
 
 func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
@@ -31,31 +31,22 @@ func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func Logger() Middleware {
-	return func(next context.HandlerFunc) context.HandlerFunc {
-		return func(c *context.Context) {
+func New() goryu.Middleware {
+	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
+		return func(c *goryu.Context) {
 			start := time.Now()
-
 			lrw := newLoggingResponseWriter(c.Writer)
-
-			// WARUNINGU: Replace the original ResponseWriter in the context with our wrapper.
-			// Need to  ensures that subsequent calls to c.Writer.WriteHeader() or c.Writer.Write()
-			// (e.g., from c.JSON(), c.Text(), render.Render()) go through the wrapper
 			c.Writer = lrw
-
 			next(c)
-
 			duration := time.Since(start)
-
-			// structured format is the best 
 			log.Printf(
 				"method=%s path=\"%s\" proto=%s status=%d duration=%v size=%d remote_addr=\"%s\" user_agent=\"%s\"",
 				c.Request.Method,
 				c.Request.URL.Path,
 				c.Request.Proto,
-				lrw.statusCode, 
+				lrw.statusCode,
 				duration,
-				lrw.size,       
+				lrw.size,
 				c.Request.RemoteAddr,
 				c.Request.UserAgent(),
 			)

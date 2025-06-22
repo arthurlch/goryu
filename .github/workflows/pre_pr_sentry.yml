@@ -1,0 +1,86 @@
+name: pre_pr_sentry
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-feature-branch:
+    name: Validate Feature Branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@17d0e2bd7d51742c71671bd19fa12bdc9d40a3d6 # v2.8.1
+        with:
+          egress-policy: audit 
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21' 
+
+      - name: Check if Branch is Up-to-Date with Base (main)
+        run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+          
+          BASE_BRANCH_NAME="${{ github.base_ref }}"
+          REMOTE_BASE_BRANCH_REF="origin/${BASE_BRANCH_NAME}"
+
+          echo "Current branch (HEAD): $(git rev-parse --abbrev-ref HEAD)"
+          echo "Base branch for PR: ${BASE_BRANCH_NAME}"
+          
+          echo "Fetching latest state of base branch '${BASE_BRANCH_NAME}'..."
+          git fetch origin "${BASE_BRANCH_NAME}"
+          
+          FEATURE_BRANCH_HEAD_COMMIT=$(git rev-parse HEAD)
+          BASE_BRANCH_HEAD_COMMIT=$(git rev-parse "${REMOTE_BASE_BRANCH_REF}")
+          
+          # Find the common ancestor commit
+          MERGE_BASE_COMMIT=$(git merge-base "${REMOTE_BASE_BRANCH_REF}" HEAD)
+          
+          if [ "${MERGE_BASE_COMMIT}" = "${BASE_BRANCH_HEAD_COMMIT}" ]; then
+            echo "Success: Branch is up-to-date with all changes from '${BASE_BRANCH_NAME}'."
+          else
+            echo "--------------------------------------------------------------------"
+            echo "ERROR: Your branch is not up-to-date with '${BASE_BRANCH_NAME}'."
+            echo "The base branch '${BASE_BRANCH_NAME}' has new commits that are not in your feature branch."
+            echo "Please update your feature branch by rebasing onto '${BASE_BRANCH_NAME}' (git rebase origin/${BASE_BRANCH_NAME}) "
+            echo "or by merging '${BASE_BRANCH_NAME}' into your feature branch (git merge origin/${BASE_BRANCH_NAME})."
+            echo "--------------------------------------------------------------------"
+            echo "Merge base with ${REMOTE_BASE_BRANCH_REF}: ${MERGE_BASE_COMMIT}"
+            echo "Current ${REMOTE_BASE_BRANCH_REF} HEAD: ${BASE_BRANCH_HEAD_COMMIT}"
+            exit 1
+          fi
+
+      - name: Run Tests
+        run: |
+          echo "Running tests..."
+          make test # Assumes your Makefile has a 'test' target
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+      - name: Check Code Formatting
+        run: |
+          echo "Checking code formatting..."
+          make fmt # Assumes 'make fmt' runs 'go fmt ./...' or similar
+          if git diff --quiet; then
+            echo "Success: Code is correctly formatted."
+          else
+            echo "--------------------------------------------------------------------"
+            echo "ERROR: Code is not correctly formatted."
+            echo "Please run 'make fmt' or 'go fmt ./...' on your code and commit the changes."
+            echo "--------------------------------------------------------------------"
+            git diff # Show the formatting differences
+            exit 1
+          fi
+
