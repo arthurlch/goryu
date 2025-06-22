@@ -6,17 +6,17 @@ import (
 	"net/http"
 )
 
-// NOTE: on going cleanup needed
-
-type HandlerFunc func(*Context)
-
 type Context struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
 	Params  map[string]string
 }
 
-func New(writer http.ResponseWriter, request *http.Request) *Context {
+type HandlerFunc func(*Context)
+
+type Middleware func(HandlerFunc) HandlerFunc
+
+func NewContext(writer http.ResponseWriter, request *http.Request) *Context {
 	return &Context{
 		Writer:  writer,
 		Request: request,
@@ -35,7 +35,6 @@ func (context *Context) Form(name string) string {
 func (context *Context) JSON(code int, obj interface{}) {
 	context.Writer.Header().Set("Content-Type", "application/json")
 	context.Writer.WriteHeader(code)
-
 	if err := json.NewEncoder(context.Writer).Encode(obj); err != nil {
 		http.Error(context.Writer, err.Error(), http.StatusInternalServerError)
 	}
@@ -56,5 +55,3 @@ func (context *Context) HTML(code int, html string) {
 		log.Printf("Error writing HTML response: %v", err)
 	}
 }
-
-// work on going

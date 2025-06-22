@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/arthurlch/goryu/pkg/context"
+	"github.com/arthurlch/goryu/context"
 )
 
 func TestContext_Query(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/test?name=goryu&version=1", nil)
 	rr := httptest.NewRecorder()
-	ctx := context.New(rr, req)
+	ctx := context.NewContext(rr, req)
 
 	if name := ctx.Query("name"); name != "goryu" {
 		t.Errorf("Query(\"name\") got %s, want goryu", name)
@@ -38,7 +38,7 @@ func TestContext_Form(t *testing.T) {
 	if err := req.ParseForm(); err != nil {
 		t.Fatalf("Failed to parse form: %v", err)
 	}
-	ctx := context.New(rr, req)
+	ctx := context.NewContext(rr, req)
 
 	if username := ctx.Form("username"); username != "tester" {
 		t.Errorf("Form(\"username\") got %s, want tester", username)
@@ -54,7 +54,7 @@ func TestContext_Form(t *testing.T) {
 func TestContext_JSON(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/", nil)
-	ctx := context.New(rr, req)
+	ctx := context.NewContext(rr, req)
 
 	data := map[string]string{"message": "hello"}
 	ctx.JSON(http.StatusOK, data)
