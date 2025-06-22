@@ -34,14 +34,11 @@ func TestContext_Form(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/submit", strings.NewReader(form.Encode()))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-
-
 	rr := httptest.NewRecorder()
 	if err := req.ParseForm(); err != nil {
 		t.Fatalf("Failed to parse form: %v", err)
 	}
 	ctx := context.New(rr, req)
-
 
 	if username := ctx.Form("username"); username != "tester" {
 		t.Errorf("Form(\"username\") got %s, want tester", username)
@@ -54,10 +51,9 @@ func TestContext_Form(t *testing.T) {
 	}
 }
 
-
 func TestContext_JSON(t *testing.T) {
 	rr := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/", nil) 
+	req, _ := http.NewRequest("GET", "/", nil)
 	ctx := context.New(rr, req)
 
 	data := map[string]string{"message": "hello"}
@@ -74,4 +70,3 @@ func TestContext_JSON(t *testing.T) {
 		t.Errorf("JSON() body got %s, want %s", rr.Body.String(), expectedBody)
 	}
 }
-

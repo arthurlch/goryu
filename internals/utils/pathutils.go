@@ -36,7 +36,7 @@ func MatchPath(pattern, path string) bool {
 func ExtractParams(pattern, path string) map[string]string {
 	params := make(map[string]string)
 	patternParts := strings.Split(pattern, "/")
-	pathParts := strings.Split(path, "/") 
+	pathParts := strings.Split(path, "/")
 	// MEMO: that's ugly af wanna rewwrite
 	for i := 0; i < len(patternParts) && i < len(pathParts); i++ {
 		if strings.HasPrefix(patternParts[i], ":") {

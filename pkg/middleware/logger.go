@@ -47,15 +47,15 @@ func Logger() Middleware {
 
 			duration := time.Since(start)
 
-			// structured format is the best 
+			// structured format is the best
 			log.Printf(
 				"method=%s path=\"%s\" proto=%s status=%d duration=%v size=%d remote_addr=\"%s\" user_agent=\"%s\"",
 				c.Request.Method,
 				c.Request.URL.Path,
 				c.Request.Proto,
-				lrw.statusCode, 
+				lrw.statusCode,
 				duration,
-				lrw.size,       
+				lrw.size,
 				c.Request.RemoteAddr,
 				c.Request.UserAgent(),
 			)

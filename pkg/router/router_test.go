@@ -104,4 +104,3 @@ func TestRouter_Group(t *testing.T) {
 		t.Errorf("Expected body 'api_info', got '%s'", rr.Body.String())
 	}
 }
-

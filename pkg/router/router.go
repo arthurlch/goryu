@@ -85,8 +85,6 @@ func (router *Router) Static(prefix string, dir string) {
 	})
 }
 
-
-
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := context.New(writer, request) // Renamed to avoid conflict
 

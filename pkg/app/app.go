@@ -26,7 +26,7 @@ func (app *App) Use(middleware middleware.Middleware) {
 }
 
 func (app *App) applyMiddleware(handler context.HandlerFunc) context.HandlerFunc {
-	appliedHandler := handler 
+	appliedHandler := handler
 
 	for i := len(app.middlewares) - 1; i >= 0; i-- {
 		appliedHandler = app.middlewares[i](appliedHandler)
@@ -65,7 +65,7 @@ func (app *App) Group(prefix string) *router.Group {
 
 // serves static files
 func (app *App) Static(prefix, dir string) {
-	app.Router.Static(prefix, dir) 
+	app.Router.Static(prefix, dir)
 }
 
 func (app *App) Run(addr string) error {

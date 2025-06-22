@@ -13,10 +13,10 @@ func Render(c *context.Context, code int, templateName string, data interface{})
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	c.Writer.Header().Set("Content-Type", "text/html")
 	c.Writer.WriteHeader(code)
-	
+
 	// exe the template
 	if err := tmpl.Execute(c.Writer, data); err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)

@@ -17,7 +17,7 @@ func Recovery() Middleware {
 					c.Text(http.StatusInternalServerError, "Internal Server Error")
 				}
 			}()
-			
+
 			next(c)
 		}
 	}
