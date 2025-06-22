@@ -6,14 +6,10 @@ import (
 	"github.com/arthurlch/goryu/pkg/middleware"
 )
 
-type App = app.App 
+type App = app.App
 type Context = context.Context
 type HandlerFunc = context.HandlerFunc
-type Middleware = middleware.Middleware 
-
-func newApp() *App {
-	return app.New()
-}
+type Middleware = middleware.Middleware
 
 func Default() *App {
 	app := app.New()
@@ -23,10 +19,9 @@ func Default() *App {
 }
 
 func Logger() Middleware {
-	return middleware.Logger() 
+	return middleware.Logger()
 }
 
 func Recovery() Middleware {
 	return middleware.Recovery()
 }
-

@@ -2,6 +2,7 @@ package context
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -43,13 +44,17 @@ func (context *Context) JSON(code int, obj interface{}) {
 func (context *Context) Text(code int, text string) {
 	context.Writer.Header().Set("Content-Type", "text/plain")
 	context.Writer.WriteHeader(code)
-	context.Writer.Write([]byte(text))
+	if _, err := context.Writer.Write([]byte(text)); err != nil {
+		log.Printf("Error writing text response: %v", err)
+	}
 }
 
 func (context *Context) HTML(code int, html string) {
 	context.Writer.Header().Set("Content-Type", "text/html")
 	context.Writer.WriteHeader(code)
-	context.Writer.Write([]byte(html))
+	if _, err := context.Writer.Write([]byte(html)); err != nil {
+		log.Printf("Error writing HTML response: %v", err)
+	}
 }
 
 // work on going

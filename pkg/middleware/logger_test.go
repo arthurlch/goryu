@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -13,15 +12,6 @@ import (
 	"github.com/arthurlch/goryu/pkg/context"
 	"github.com/arthurlch/goryu/pkg/middleware"
 )
-
-// Helper to capture log output
-func captureLogOutput(fn func()) string {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	fn()
-	log.SetOutput(os.Stderr) // Reset to default
-	return buf.String()
-}
 
 // To safely swap log output in concurrent tests if needed
 var logMutex sync.Mutex
