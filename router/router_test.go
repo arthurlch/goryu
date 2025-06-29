@@ -77,8 +77,9 @@ func TestRouter_Group(t *testing.T) {
 		}
 	}
 
-	// The Group function now takes a slice of context.Middleware
-	group := r.Group("/api", []context.Middleware{testGroupMiddleware})
+	// This is the corrected line. We pass the middleware directly.
+	group := r.Group("/api", testGroupMiddleware)
+
 	group.GET("/info", func(c *context.Context) {
 		groupHandlerCalled = true
 		c.Text(http.StatusOK, "api_info")
