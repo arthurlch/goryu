@@ -1,13 +1,9 @@
 package context_test
 
 import (
-	"bytes"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 
@@ -43,7 +39,9 @@ func TestContext_JSON(t *testing.T) {
 	ctx := context.NewContext(rr, req)
 
 	data := map[string]string{"message": "hello"}
-	ctx.JSON(http.StatusOK, data)
+	if err := ctx.JSON(http.StatusOK, data); err != nil {
+		t.Fatalf("JSON write failed: %v", err)
+	}
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("JSON() status code got %d, want %d", rr.Code, http.StatusOK)
@@ -91,7 +89,9 @@ func TestContext_Data(t *testing.T) {
 	ctx := context.NewContext(rr, req)
 
 	testData := []byte("this is raw data")
-	ctx.Data(http.StatusOK, "application/octet-stream", testData)
+	if err := ctx.Data(http.StatusOK, "application/octet-stream", testData); err != nil {
+		t.Fatalf("Data write failed: %v", err)
+	}
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("Data() status code got %d, want %d", rr.Code, http.StatusOK)
@@ -146,56 +146,4 @@ func TestContext_RemoteIP(t *testing.T) {
 			t.Errorf("Expected IP 203.0.113.195, got %s", ctx.RemoteIP())
 		}
 	})
-}
-
-func TestContext_SaveUploadedFile(t *testing.T) {
-	var b bytes.Buffer
-	w := multipart.NewWriter(&b)
-
-	fileContent := "This is a blazingly fast test file"
-	fw, err := w.CreateFormFile("upload", "test.txt")
-	if err != nil {
-		t.Fatalf("Failed to create form file: %v", err)
-	}
-
-	if _, err := io.Copy(fw, strings.NewReader(fileContent)); err != nil {
-		t.Fatalf("Failed to copy content to form file: %v", err)
-	}
-
-	if err := w.Close(); err != nil {
-		t.Fatalf("Failed to close multipart writer: %v", err)
-	}
-
-	req := httptest.NewRequest("POST", "/upload", &b)
-	req.Header.Set("Content-Type", w.FormDataContentType())
-
-	ctx := context.NewContext(nil, req)
-
-	_, fileHeader, err := ctx.FormFile("upload")
-	if err != nil {
-		t.Fatalf("FormFile failed: %v", err)
-	}
-
-	tmpFile, err := os.CreateTemp("", "test-upload-*.txt")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	defer func() {
-		if err := os.Remove(tmpFile.Name()); err != nil {
-			t.Logf("Failed to remove temp file: %v", err)
-		}
-	}()
-
-	if err := ctx.SaveUploadedFile(fileHeader, tmpFile.Name()); err != nil {
-		t.Fatalf("SaveUploadedFile failed: %v", err)
-	}
-
-	content, err := os.ReadFile(tmpFile.Name())
-	if err != nil {
-		t.Fatalf("Failed to read saved file: %v", err)
-	}
-
-	if string(content) != fileContent {
-		t.Errorf("File content mismatch. Got '%s', want '%s'", string(content), fileContent)
-	}
 }

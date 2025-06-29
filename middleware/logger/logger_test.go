@@ -2,67 +2,156 @@ package logger_test
 
 import (
 	"bytes"
-	"log"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/context"
 	"github.com/arthurlch/goryu/middleware/logger"
 )
 
-var logMutex sync.Mutex
+func newTestContext(req *http.Request) (*goryu.Context, *httptest.ResponseRecorder) {
+	rr := httptest.NewRecorder()
+	return context.NewContext(rr, req), rr
+}
 
 func TestLoggerMiddleware(t *testing.T) {
-	loggerMiddleware := logger.New()
-
-	dummyHandler := func(c *context.Context) {
-		c.Text(http.StatusAccepted, "Logged!")
+	dummyHandler := func(c *goryu.Context) {
+		_ = c.Text(http.StatusOK, "OK")
 	}
 
-	req, _ := http.NewRequest("GET", "/logtest", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("User-Agent", "TestLoggerAgent")
+	t.Run("Default Logger", func(t *testing.T) {
+		var buf bytes.Buffer
+		middleware := logger.New(logger.Config{
+			Output: &buf,
+		})
 
-	rr := httptest.NewRecorder()
-	ctx := context.NewContext(rr, req)
+		req := httptest.NewRequest("GET", "/test", nil)
+		ctx, _ := newTestContext(req)
 
-	handlerToTest := loggerMiddleware(dummyHandler)
+		handlerToTest := middleware(dummyHandler)
+		handlerToTest(ctx)
 
-	logMutex.Lock()
-	defer logMutex.Unlock()
+		logOutput := buf.String()
 
-	var buf bytes.Buffer
-	originalFlags := log.Flags()
-	originalOutput := log.Writer()
+		if !strings.Contains(logOutput, "\033[32m200\033[0m") {
+			t.Errorf("log output does not contain colored status code 200. Got: %s", logOutput)
+		}
+		if !strings.Contains(logOutput, "\033[34mGET\033[0m /test") {
+			t.Errorf("log output does not contain colored method and path. Got: %s", logOutput)
+		}
+	})
 
-	log.SetOutput(&buf)
-	log.SetFlags(0)
+	t.Run("Custom Format with Colors Disabled", func(t *testing.T) {
+		var buf bytes.Buffer
+		middleware := logger.New(logger.Config{
+			Output:        &buf,
+			DisableColors: true,
+			Format:        "METHOD=${method} PATH=${path} STATUS=${status}",
+		})
 
-	handlerToTest(ctx)
+		req := httptest.NewRequest("POST", "/custom", nil)
+		ctx, _ := newTestContext(req)
 
-	log.SetOutput(originalOutput)
-	log.SetFlags(originalFlags)
-	logOutput := buf.String()
+		handlerToTest := middleware(dummyHandler)
+		handlerToTest(ctx)
 
-	if rr.Code != http.StatusAccepted {
-		t.Errorf("Expected status %d from dummy handler, got %d", http.StatusAccepted, rr.Code)
-	}
-	if !strings.Contains(logOutput, "method=GET") {
-		t.Errorf("Log output missing 'method=GET'. Got: %s", logOutput)
-	}
-	if !strings.Contains(logOutput, "path=\"/logtest\"") {
-		t.Errorf("Log output missing 'path=\"/logtest\"'. Got: %s", logOutput)
-	}
-	if !strings.Contains(logOutput, "status=202") {
-		t.Errorf("Log output missing 'status=202'. Got: %s", logOutput)
-	}
-	if !strings.Contains(logOutput, "user_agent=\"TestLoggerAgent\"") {
-		t.Errorf("Log output missing 'user_agent=\"TestLoggerAgent\"'. Got: %s", logOutput)
-	}
-	if !strings.Contains(logOutput, "size=7") {
-		t.Errorf("Log output missing 'size=7'. Got: %s", logOutput)
-	}
+		logOutput := strings.TrimSpace(buf.String())
+		expected := "METHOD=POST PATH=/custom STATUS=200"
+
+		if logOutput != expected {
+			t.Errorf("expected log output '%s', got '%s'", expected, logOutput)
+		}
+		if strings.Contains(logOutput, "\033") {
+			t.Errorf("log output should not contain color codes. Got: %s", logOutput)
+		}
+	})
+
+	t.Run("Error Logging", func(t *testing.T) {
+		var buf bytes.Buffer
+		middleware := logger.New(logger.Config{
+			Output:        &buf,
+			DisableColors: true,
+			Format:        "STATUS=${status} ERROR='${error}'",
+		})
+
+		errorHandler := func(c *goryu.Context) {
+			err := errors.New("database connection failed")
+			c.Set("error", err)
+			c.Status(http.StatusInternalServerError)
+		}
+
+		req := httptest.NewRequest("GET", "/db-error", nil)
+		ctx, _ := newTestContext(req)
+
+		handlerToTest := middleware(errorHandler)
+		handlerToTest(ctx)
+
+		logOutput := strings.TrimSpace(buf.String())
+		expected := "STATUS=500 ERROR='database connection failed'"
+
+		if logOutput != expected {
+			t.Errorf("expected log output '%s', got '%s'", expected, logOutput)
+		}
+	})
+
+	t.Run("Skip Logging with Next", func(t *testing.T) {
+		var buf bytes.Buffer
+		middleware := logger.New(logger.Config{
+			Output: &buf,
+			Next: func(c *goryu.Context) bool {
+				return strings.HasPrefix(c.Request.URL.Path, "/health")
+			},
+		})
+
+		req1 := httptest.NewRequest("GET", "/api/v1/users", nil)
+		ctx1, _ := newTestContext(req1)
+		middleware(dummyHandler)(ctx1)
+
+		if buf.Len() == 0 {
+			t.Error("expected /api/v1/users to be logged, but output is empty")
+		}
+
+		buf.Reset()
+		req2 := httptest.NewRequest("GET", "/healthz", nil)
+		ctx2, _ := newTestContext(req2)
+		middleware(dummyHandler)(ctx2)
+
+		if buf.Len() > 0 {
+			t.Errorf("expected /healthz to be skipped, but got log output: %s", buf.String())
+		}
+	})
+
+	t.Run("Request ID", func(t *testing.T) {
+		var buf bytes.Buffer
+		middleware := logger.New(logger.Config{
+			Output:        &buf,
+			DisableColors: true,
+			Format:        "ID=${request_id}",
+		})
+
+		req1 := httptest.NewRequest("GET", "/", nil)
+		req1.Header.Set("X-Request-ID", "my-custom-id-123")
+		ctx1, _ := newTestContext(req1)
+		middleware(dummyHandler)(ctx1)
+
+		if !strings.Contains(buf.String(), "ID=my-custom-id-123") {
+			t.Errorf("log did not use existing X-Request-ID. Got: %s", buf.String())
+		}
+
+		buf.Reset()
+		req2 := httptest.NewRequest("GET", "/", nil)
+		ctx2, _ := newTestContext(req2)
+		middleware(dummyHandler)(ctx2)
+
+		logOutput := buf.String()
+		re := regexp.MustCompile(`ID=([a-f0-9]{32})`)
+		if !re.MatchString(logOutput) {
+			t.Errorf("log did not contain a generated 32-char hex request ID. Got: %s", logOutput)
+		}
+	})
 }
