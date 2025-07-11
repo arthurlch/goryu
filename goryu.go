@@ -12,15 +12,44 @@ type Context = context.Context
 type HandlerFunc = context.HandlerFunc
 type Middleware = context.Middleware
 
+type Config struct {
+	// AppName is the name of the application.
+	// Default: ""
+	AppName string
+	// ServerHeader is the value of the "Server" header.
+	// Default: ""
+	ServerHeader string
+	// StrictRouting enables strict routing.
+	// Default: false
+	StrictRouting bool
+	// CaseSensitive enables case-sensitive routing.
+	// Default: false
+	CaseSensitive bool
+	// DisableStartupMessage disables the startup message.
+	// Default: false
+	DisableStartupMessage bool
+}
+
 type App struct {
 	Router      *router.Router
 	middlewares []Middleware
+	Config      Config
 }
 
-func New() *App {
+func New(config ...Config) *App {
+	cfg := Config{
+		AppName:      "",
+		ServerHeader: "",
+	}
+
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
 	return &App{
 		Router:      router.New(),
 		middlewares: make([]Middleware, 0),
+		Config:      cfg,
 	}
 }
 
@@ -37,6 +66,9 @@ func (app *App) applyMiddleware(handler HandlerFunc) HandlerFunc {
 }
 
 func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if app.Config.ServerHeader != "" {
+		w.Header().Set("Server", app.Config.ServerHeader)
+	}
 	if err := req.ParseForm(); err != nil {
 		http.Error(w, "Failed to parse Form Data", http.StatusBadRequest)
 		return
@@ -53,6 +85,12 @@ func (app *App) POST(path string, handler HandlerFunc) {
 }
 
 func (app *App) Run(addr string) error {
-	fmt.Printf("Server is running on %s\n", addr)
+	if !app.Config.DisableStartupMessage {
+		appName := "Goryu"
+		if app.Config.AppName != "" {
+			appName = app.Config.AppName
+		}
+		fmt.Printf("%s is running on %s\n", appName, addr)
+	}
 	return http.ListenAndServe(addr, app)
 }
