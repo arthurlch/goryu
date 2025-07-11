@@ -56,6 +56,30 @@ func (router *Router) POST(path string, handler context.HandlerFunc) *Route {
 	return router.Add("POST", path, handler)
 }
 
+func (router *Router) PUT(path string, handler context.HandlerFunc) *Route {
+	return router.Add("PUT", path, handler)
+}
+
+func (router *Router) DELETE(path string, handler context.HandlerFunc) *Route {
+	return router.Add("DELETE", path, handler)
+}
+
+func (router *Router) PATCH(path string, handler context.HandlerFunc) *Route {
+	return router.Add("PATCH", path, handler)
+}
+
+func (router *Router) HEAD(path string, handler context.HandlerFunc) *Route {
+	return router.Add("HEAD", path, handler)
+}
+
+func (router *Router) OPTIONS(path string, handler context.HandlerFunc) *Route {
+	return router.Add("OPTIONS", path, handler)
+}
+
+func (router *Router) ALL(path string, handler context.HandlerFunc) *Route {
+	return router.Add("ALL", path, handler)
+}
+
 func (router *Router) Group(prefix string, middlewares ...context.Middleware) *Group {
 	return &Group{
 		prefix:      prefix,
@@ -83,15 +107,25 @@ func (router *Router) Reverse(name string, params ...interface{}) string {
 
 func (router *Router) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := context.NewContext(writer, request)
+
 	tree, ok := router.trees[request.Method]
-	if !ok {
-		http.NotFound(writer, request)
-		return
+	var node *node
+	var params map[string]string
+
+	if ok {
+		parts := parsePath(request.URL.Path)
+		node, params = tree.find(parts, 0)
 	}
 
-	parts := parsePath(request.URL.Path)
-	node, params := tree.find(parts, 0)
+	if node == nil {
+		tree, ok = router.trees["ALL"]
+		if ok {
+			parts := parsePath(request.URL.Path)
+			node, params = tree.find(parts, 0)
+		}
+	}
 
+	// If still no handler, return 404 ...
 	if node == nil {
 		http.NotFound(writer, request)
 		return
