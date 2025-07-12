@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,13 +13,13 @@ import (
 )
 
 type Agent struct {
-	client         *http.Client
-	request        *http.Request
-	errors         []error
-	debugWriter    io.Writer
-	jsonEncoder    func(v interface{}) ([]byte, error)
-	jsonDecoder    func(data []byte, v interface{}) error
-	tlsConfig      *tls.Config
+	client      *http.Client
+	request     *http.Request
+	errors      []error
+	debugWriter io.Writer
+	jsonEncoder func(v interface{}) ([]byte, error)
+	jsonDecoder func(data []byte, v interface{}) error
+	tlsConfig   *tls.Config
 }
 
 func New() *Agent {
@@ -55,7 +56,7 @@ func Head(url string) *Agent {
 	return New().Head(url)
 }
 
-// agents methods 
+// agents methods
 
 func (a *Agent) Get(url string) *Agent {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -152,7 +153,11 @@ func (a *Agent) Bytes() (int, []byte, []error) {
 		a.errors = append(a.errors, err)
 		return 0, nil, a.errors
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("client: error closing response body: %v", err)
+		}
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -160,7 +165,7 @@ func (a *Agent) Bytes() (int, []byte, []error) {
 		return resp.StatusCode, nil, a.errors
 	}
 
-	return resp.StatusCode, body, nil
+	return resp.StatusCode, body, a.errors
 }
 
 func (a *Agent) Struct(v interface{}) (int, []byte, []error) {
@@ -206,7 +211,6 @@ func (a *Agent) Form(data url.Values) *Agent {
 	return a.Body([]byte(data.Encode()))
 }
 
-// Timeout sets the timeout for the request.
 func (a *Agent) Timeout(timeout time.Duration) *Agent {
 	a.client.Timeout = timeout
 	return a
