@@ -26,7 +26,6 @@ func TestFilesystem(t *testing.T) {
 
 	t.Run("serves existing file", func(t *testing.T) {
 		t.Parallel()
-		// FIX: Use the tempDir string directly.
 		config := FilesystemConfig{Root: tempDir}
 		handler := Filesystem(config)(nextHandler)
 
@@ -44,7 +43,6 @@ func TestFilesystem(t *testing.T) {
 
 	t.Run("serves file with path prefix", func(t *testing.T) {
 		t.Parallel()
-		// FIX: Use the tempDir string directly.
 		config := FilesystemConfig{Root: tempDir, PathPrefix: "/static"}
 		handler := Filesystem(config)(nextHandler)
 
@@ -62,7 +60,6 @@ func TestFilesystem(t *testing.T) {
 
 	t.Run("passthrough for non-existent file", func(t *testing.T) {
 		t.Parallel()
-		// FIX: Use the tempDir string directly.
 		config := FilesystemConfig{Root: tempDir}
 		handler := Filesystem(config)(nextHandler)
 
@@ -77,7 +74,6 @@ func TestFilesystem(t *testing.T) {
 
 	t.Run("passthrough for directory request", func(t *testing.T) {
 		t.Parallel()
-		// FIX: Use the tempDir string directly.
 		config := FilesystemConfig{Root: tempDir}
 		handler := Filesystem(config)(nextHandler)
 
