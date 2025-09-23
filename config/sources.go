@@ -8,12 +8,10 @@ import (
 	"strings"
 )
 
-// EnvironmentSource loads configuration from environment variables
 type EnvironmentSource struct {
 	prefix string
 }
 
-// NewEnvironmentSource creates a new environment variable source
 func NewEnvironmentSource(prefix string) *EnvironmentSource {
 	return &EnvironmentSource{
 		prefix: prefix,
@@ -32,36 +30,30 @@ func (e *EnvironmentSource) Load() (map[string]interface{}, error) {
 		key := parts[0]
 		value := parts[1]
 
-		// Check if key starts with prefix
 		if e.prefix != "" && !strings.HasPrefix(key, e.prefix+"_") {
 			continue
 		}
 
-		// Remove prefix
 		if e.prefix != "" {
 			key = strings.TrimPrefix(key, e.prefix+"_")
 		}
 
-		// Convert key to lowercase and replace underscores
 		key = strings.ToLower(key)
 
 		// Handle nested keys (e.g., SERVER_HOST -> server.host)
 		if strings.Contains(key, "_") {
 			parts := strings.Split(key, "_")
 			if len(parts) >= 2 {
-				// Create nested structure
 				current := data
 				for i, part := range parts[:len(parts)-1] {
 					if _, exists := current[part]; !exists {
 						current[part] = make(map[string]interface{})
 					}
 					if i == len(parts)-2 {
-						// Last level - set the value
 						if nested, ok := current[part].(map[string]interface{}); ok {
 							nested[parts[len(parts)-1]] = value
 						}
 					} else {
-						// Continue nesting
 						if nested, ok := current[part].(map[string]interface{}); ok {
 							current = nested
 						}
@@ -101,29 +93,27 @@ func NewFileSource(filePath string) *FileSource {
 func (f *FileSource) Load() (map[string]interface{}, error) {
 	data := make(map[string]interface{})
 
-	// Check if file exists
 	if _, err := os.Stat(f.filePath); os.IsNotExist(err) {
-		// File doesn't exist - return empty data
 		return data, nil
 	}
 
-	// Read file content
 	content, err := os.ReadFile(f.filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %s: %w", f.filePath, err)
 	}
 
-	// Parse based on file extension
 	ext := strings.ToLower(filepath.Ext(f.filePath))
 	switch ext {
 	case ".json":
-		if err := _ = json.Unmarshal(content, &data); err != nil {
+		if err := json.Unmarshal(content, &data); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON file %s: %w", f.filePath, err)
 		}
 
 	case ".yaml", ".yml":
-		// For YAML support, you would use gopkg.in/yaml.v2 or similar
-		// For now, we'll just return an error
+		// For YAML support, I would use gopkg.in/yaml.v2 or similar
+		// For now, I'll just return an error indicating YAML is not supported, better and easier.
+		// Actually I don't want to add a new dependency just for YAML parsing ????? 
+		// The less dependency the better I feel, goryu should rely on my unreliable code
 		return nil, fmt.Errorf("YAML support not implemented yet")
 
 	default:
@@ -141,23 +131,40 @@ func (f *FileSource) Priority() int {
 	return 50 // Medium priority - files override defaults but not environment
 }
 
-// DefaultSource provides default configuration values
 type DefaultSource struct {
 	defaults map[string]interface{}
 }
 
-// NewDefaultSource creates a new default source with predefined values
 func NewDefaultSource() *DefaultSource {
 	defaults := map[string]interface{}{
 		"app": map[string]interface{}{
-			"name":    "goryu-app",
-			"version": "1.0.0",
+			"name":        "goryu-app",
+			"version":     "1.0.0",
+			"environment": "development",
+			"log_level":   "info",
 		},
 		"server": map[string]interface{}{
 			"host": "localhost",
 			"port": 8080,
+			"read_timeout": "30s",
+			"write_timeout": "30s",
+			"shutdown_timeout": "30s",
 		},
-		"environment": "development",
+		"database": map[string]interface{}{
+			"driver": "sqlite3",
+			"path":   "./app.db",
+			"max_open_conns": 25,
+			"max_idle_conns": 5,
+			"conn_max_lifetime": "1h",
+			"conn_max_idle_time": "30m",
+		},
+		"framework": map[string]interface{}{
+			"strict_routing": false,
+			"case_sensitive": false,
+			"redirect_trailing_slash": true,
+			"enable_head_fallback": true,
+			"disable_startup_msg": false,
+		},
 	}
 
 	return &DefaultSource{
@@ -166,7 +173,6 @@ func NewDefaultSource() *DefaultSource {
 }
 
 func (d *DefaultSource) Load() (map[string]interface{}, error) {
-	// Return a copy to avoid modification
 	data := make(map[string]interface{})
 	copyMap(d.defaults, data)
 	return data, nil
@@ -177,10 +183,9 @@ func (d *DefaultSource) Name() string {
 }
 
 func (d *DefaultSource) Priority() int {
-	return 1 // Lowest priority - defaults are overridden by everything
+	return 1 // Low priority 
 }
 
-// copyMap performs a deep copy of a map
 func copyMap(src, dst map[string]interface{}) {
 	for key, value := range src {
 		switch v := value.(type) {
@@ -194,39 +199,33 @@ func copyMap(src, dst map[string]interface{}) {
 	}
 }
 
-// ConfigBuilder provides a fluent interface for building configuration
+// NOTE: use builder pattern to make it easier to add sources and build the final config
 type ConfigBuilder struct {
 	manager *Manager
 }
 
-// NewBuilder creates a new configuration builder
 func NewBuilder() *ConfigBuilder {
 	return &ConfigBuilder{
 		manager: NewManager(),
 	}
 }
 
-// WithDefaults adds default configuration source
 func (b *ConfigBuilder) WithDefaults() *ConfigBuilder {
 	b.manager.AddSource(NewDefaultSource())
 	return b
 }
 
-// WithFile adds a file-based configuration source
 func (b *ConfigBuilder) WithFile(filePath string) *ConfigBuilder {
 	b.manager.AddSource(NewFileSource(filePath))
 	return b
 }
 
-// WithEnvironment adds environment variable source
 func (b *ConfigBuilder) WithEnvironment(prefix string) *ConfigBuilder {
 	b.manager.AddSource(NewEnvironmentSource(prefix))
 	return b
 }
 
-// WithConfigDir searches for config files in a directory
 func (b *ConfigBuilder) WithConfigDir(dir string) *ConfigBuilder {
-	// Look for common config file names
 	configFiles := []string{
 		"config.json",
 		"config.yaml",
@@ -246,12 +245,10 @@ func (b *ConfigBuilder) WithConfigDir(dir string) *ConfigBuilder {
 	return b
 }
 
-// Build builds the final configuration
 func (b *ConfigBuilder) Build() (*Config, error) {
 	return b.manager.Load()
 }
 
-// LoadConfig is a convenience function for common configuration loading patterns
 func LoadConfig() (*Config, error) {
 	builder := NewBuilder().
 		WithDefaults().
@@ -264,7 +261,6 @@ func LoadConfig() (*Config, error) {
 	return builder.Build()
 }
 
-// LoadConfigWithFile loads configuration from a specific file
 func LoadConfigWithFile(filePath string) (*Config, error) {
 	builder := NewBuilder().
 		WithDefaults().
@@ -274,7 +270,6 @@ func LoadConfigWithFile(filePath string) (*Config, error) {
 	return builder.Build()
 }
 
-// LoadConfigFromEnv loads configuration only from environment variables
 func LoadConfigFromEnv(prefix string) (*Config, error) {
 	builder := NewBuilder().
 		WithDefaults().

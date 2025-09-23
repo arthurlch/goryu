@@ -9,35 +9,30 @@ import (
 	"time"
 )
 
-// Manager handles configuration loading from multiple sources
 type Manager struct {
 	sources []Source
 	cache   map[string]interface{}
 }
 
-// Source represents a configuration source (env, file, etc.)
 type Source interface {
 	Load() (map[string]interface{}, error)
 	Name() string
-	Priority() int // Higher priority sources override lower ones
+	Priority() int 
 }
 
-// Config represents the application configuration
-type Config struct {
-	// App settings
-	App AppConfig `json:"app" env:"APP" yaml:"app"`
+// legacy types for backward compatibility - DEPRECATED
+// Need to use the new types in types.go instead
+// Cause it's fine to shoot yourself in the foot once in a while
+// happens to the best of us.... right?
 
-	// Server settings
-	Server ServerConfig `json:"server" env:"SERVER" yaml:"server"`
-
-	// Environment
-	Environment string `json:"environment" env:"ENVIRONMENT" default:"development"`
-
-	// Custom app-specific configuration can be added here by users
+// DEPRECATEDO
+type LegacyConfig struct {
+	App    LegacyAppConfig    `json:"app" env:"APP" yaml:"app"`
+	Server LegacyServerConfig `json:"server" env:"SERVER" yaml:"server"`
 	Custom map[string]interface{} `json:"custom" env:"CUSTOM" yaml:"custom"`
 }
 
-type AppConfig struct {
+type LegacyAppConfig struct {
 	Name              string `json:"name" env:"NAME" default:"goryu-app"`
 	Version           string `json:"version" env:"VERSION" default:"1.0.0"`
 	ServerHeader      string `json:"server_header" env:"SERVER_HEADER"`
@@ -46,7 +41,7 @@ type AppConfig struct {
 	DisableStartupMsg bool   `json:"disable_startup_msg" env:"DISABLE_STARTUP_MSG" default:"false"`
 }
 
-type ServerConfig struct {
+type LegacyServerConfig struct {
 	Host            string        `json:"host" env:"HOST" default:"localhost"`
 	Port            int           `json:"port" env:"PORT" default:"8080"`
 	ReadTimeout     time.Duration `json:"read_timeout" env:"READ_TIMEOUT" default:"30s"`
@@ -54,27 +49,70 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration `json:"shutdown_timeout" env:"SHUTDOWN_TIMEOUT" default:"30s"`
 }
 
-// GoryuConfig represents the configuration for goryu.New()
-type GoryuConfig struct {
-	AppName               string
-	ServerHeader          string
-	StrictRouting         bool
-	CaseSensitive         bool
-	DisableStartupMessage bool
+// ToNewConfig converts legacy config to new config structure
+func (c *LegacyConfig) ToNewConfig() *Config {
+	config := &Config{
+		App: AppConfig{
+			Name:        c.App.Name,
+			Version:     c.App.Version,
+			Environment: "development", // default
+			LogLevel:    "info",        // default
+			Custom:      c.Custom,
+		},
+		Server: ServerConfig{
+			Host:            c.Server.Host,
+			Port:            c.Server.Port,
+			ReadTimeout:     c.Server.ReadTimeout,
+			WriteTimeout:    c.Server.WriteTimeout,
+			ShutdownTimeout: c.Server.ShutdownTimeout,
+		},
+		Framework: FrameworkConfig{
+			ServerHeader:          c.App.ServerHeader,
+			StrictRouting:         c.App.StrictRouting,
+			CaseSensitive:         c.App.CaseSensitive,
+			DisableStartupMessage: c.App.DisableStartupMsg,
+		},
+		Database: DatabaseConfig{
+			Driver: "sqlite3", // default (sqlite pretty good)
+			Path:   "./app.db",
+		},
+	}
+	
+	if dbConfig, ok := c.Custom["database"].(map[string]interface{}); ok {
+		migrateDBConfig(&config.Database, dbConfig)
+	}
+	
+	return config
 }
 
-// ToGoryuConfig converts this config to GoryuConfig for framework initialization
-func (c *Config) ToGoryuConfig() GoryuConfig {
-	return GoryuConfig{
-		AppName:               c.App.Name,
-		ServerHeader:          c.App.ServerHeader,
-		StrictRouting:         c.App.StrictRouting,
-		CaseSensitive:         c.App.CaseSensitive,
-		DisableStartupMessage: c.App.DisableStartupMsg,
+// migrateDBConfig migrates a database config from custom map to the new structure
+func migrateDBConfig(target *DatabaseConfig, source map[string]interface{}) {
+	if driver, ok := source["driver"].(string); ok {
+		target.Driver = driver
+	}
+	if host, ok := source["host"].(string); ok {
+		target.Host = host
+	}
+	if port, ok := source["port"].(float64); ok {
+		target.Port = int(port)
+	}
+	if database, ok := source["database"].(string); ok {
+		target.Database = database
+	}
+	if username, ok := source["username"].(string); ok {
+		target.Username = username
+	}
+	if password, ok := source["password"].(string); ok {
+		target.Password = password
+	}
+	if path, ok := source["path"].(string); ok {
+		target.Path = path
+	}
+	if sslMode, ok := source["sslmode"].(string); ok {
+		target.SSLMode = sslMode
 	}
 }
 
-// NewManager creates a new configuration manager
 func NewManager() *Manager {
 	return &Manager{
 		sources: make([]Source, 0),
@@ -82,25 +120,22 @@ func NewManager() *Manager {
 	}
 }
 
-// AddSource adds a configuration source to the manager
 func (m *Manager) AddSource(source Source) *Manager {
 	m.sources = append(m.sources, source)
 	return m
 }
 
-// Load loads configuration from all sources and returns a merged config
 func (m *Manager) Load() (*Config, error) {
-	// Create default config
 	config := &Config{
-		Custom: make(map[string]interface{}), // Initialize Custom field
+		App: AppConfig{
+			Custom: make(map[string]interface{}),
+		},
 	}
 
-	// Apply defaults first
 	if err := applyDefaults(config); err != nil {
 		return nil, fmt.Errorf("failed to apply defaults: %w", err)
 	}
 
-	// Load from sources in priority order (lower priority first)
 	sources := m.getSortedSources()
 	for _, source := range sources {
 		data, err := source.Load()
@@ -108,26 +143,52 @@ func (m *Manager) Load() (*Config, error) {
 			return nil, fmt.Errorf("failed to load from source %s: %w", source.Name(), err)
 		}
 
-		// Merge data into config
 		if err := mergeData(config, data); err != nil {
 			return nil, fmt.Errorf("failed to merge data from source %s: %w", source.Name(), err)
 		}
 	}
 
-	// Validate configuration
-	if err := validateConfig(config); err != nil {
+	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	return config, nil
 }
 
-// getSortedSources returns sources sorted by priority (lowest first)
+func (m *Manager) LoadLegacy() (*LegacyConfig, error) {
+	config := &LegacyConfig{
+		Custom: make(map[string]interface{}),
+	}
+
+	if err := applyDefaults(config); err != nil {
+		return nil, fmt.Errorf("failed to apply defaults: %w", err)
+	}
+
+	sources := m.getSortedSources()
+	for _, source := range sources {
+		data, err := source.Load()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load from source %s: %w", source.Name(), err)
+		}
+
+		if err := mergeData(config, data); err != nil {
+			return nil, fmt.Errorf("failed to merge data from source %s: %w", source.Name(), err)
+		}
+	}
+
+	if err := validateLegacyConfig(config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
+	return config, nil
+}
+
 func (m *Manager) getSortedSources() []Source {
 	sources := make([]Source, len(m.sources))
 	copy(sources, m.sources)
 
-	// Simple bubble sort by priority
+	// bubble sort by priority 
+	// if I grind leetcode I will make it quickSort
 	for i := 0; i < len(sources)-1; i++ {
 		for j := 0; j < len(sources)-i-1; j++ {
 			if sources[j].Priority() > sources[j+1].Priority() {
@@ -139,7 +200,6 @@ func (m *Manager) getSortedSources() []Source {
 	return sources
 }
 
-// applyDefaults applies default values to the config struct
 func applyDefaults(config interface{}) error {
 	return applyDefaultsToValue(reflect.ValueOf(config).Elem())
 }
@@ -155,7 +215,6 @@ func applyDefaultsToValue(v reflect.Value) error {
 			continue
 		}
 
-		// Handle nested structs
 		if field.Kind() == reflect.Struct && fieldType.Type.Name() != "Duration" {
 			if err := applyDefaultsToValue(field); err != nil {
 				return err
@@ -163,13 +222,11 @@ func applyDefaultsToValue(v reflect.Value) error {
 			continue
 		}
 
-		// Get default value from tag
 		defaultValue := fieldType.Tag.Get("default")
 		if defaultValue == "" {
 			continue
 		}
 
-		// Set default value based on field type
 		if err := setFieldValue(field, defaultValue); err != nil {
 			return fmt.Errorf("failed to set default for field %s: %w", fieldType.Name, err)
 		}
@@ -230,7 +287,6 @@ func setFieldValue(field reflect.Value, value string) error {
 	return nil
 }
 
-// mergeData merges configuration data into the target struct
 func mergeData(target interface{}, data map[string]interface{}) error {
 	return mergeDataToValue(reflect.ValueOf(target).Elem(), data, "")
 }
@@ -246,7 +302,6 @@ func mergeDataToValue(v reflect.Value, data map[string]interface{}, prefix strin
 			continue
 		}
 
-		// Get field name from json tag or use field name
 		jsonTag := fieldType.Tag.Get("json")
 		fieldName := strings.Split(jsonTag, ",")[0]
 		if fieldName == "" {
@@ -258,7 +313,7 @@ func mergeDataToValue(v reflect.Value, data map[string]interface{}, prefix strin
 			fullName = prefix + "." + fieldName
 		}
 
-		// Handle nested structs
+		
 		if field.Kind() == reflect.Struct && fieldType.Type.Name() != "Duration" {
 			if nestedData, exists := data[fieldName]; exists {
 				if nestedMap, ok := nestedData.(map[string]interface{}); ok {
@@ -270,7 +325,6 @@ func mergeDataToValue(v reflect.Value, data map[string]interface{}, prefix strin
 			continue
 		}
 
-		// Set field value from data
 		if value, exists := data[fieldName]; exists {
 			if err := setFieldFromInterface(field, value); err != nil {
 				return fmt.Errorf("failed to set field %s: %w", fullName, err)
@@ -367,9 +421,7 @@ func setFieldFromInterface(field reflect.Value, value interface{}) error {
 	return nil
 }
 
-// validateConfig validates the configuration
-func validateConfig(config *Config) error {
-	// Basic validation
+func validateLegacyConfig(config *LegacyConfig) error {
 	if config.Server.Port < 1 || config.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", config.Server.Port)
 	}
@@ -381,7 +433,6 @@ func validateConfig(config *Config) error {
 	return nil
 }
 
-// ToJSON returns the configuration as a JSON string
 func (c *Config) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
@@ -390,7 +441,3 @@ func (c *Config) ToJSON() (string, error) {
 	return string(data), nil
 }
 
-// GetServerAddress returns the full server address
-func (c *Config) GetServerAddress() string {
-	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
-}

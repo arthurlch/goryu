@@ -25,8 +25,8 @@ func TestConfigDefaults(t *testing.T) {
 	if config.App.Name != "goryu-app" {
 		t.Errorf("Expected default app name 'goryu-app', got '%s'", config.App.Name)
 	}
-	if config.Environment != "development" {
-		t.Errorf("Expected default environment 'development', got '%s'", config.Environment)
+	if config.App.Environment != "development" {
+		t.Errorf("Expected default environment 'development', got '%s'", config.App.Environment)
 	}
 }
 
@@ -55,12 +55,12 @@ func TestConfigBuilder(t *testing.T) {
 		_ = os.Setenv("TEST_SERVER_PORT", "9090")
 		_ = os.Setenv("TEST_SERVER_HOST", "0.0.0.0")
 		_ = os.Setenv("TEST_APP_NAME", "test-app")
-		_ = os.Setenv("TEST_ENVIRONMENT", "production")
+		_ = os.Setenv("TEST_APP_ENVIRONMENT", "production")
 		defer func() {
 			_ = os.Unsetenv("TEST_SERVER_PORT")
 			_ = os.Unsetenv("TEST_SERVER_HOST")
 			_ = os.Unsetenv("TEST_APP_NAME")
-			_ = os.Unsetenv("TEST_ENVIRONMENT")
+			_ = os.Unsetenv("TEST_APP_ENVIRONMENT")
 		}()
 
 		config, err := NewBuilder().
@@ -82,8 +82,8 @@ func TestConfigBuilder(t *testing.T) {
 		if config.App.Name != "test-app" {
 			t.Errorf("Expected app name 'test-app' from env, got '%s'", config.App.Name)
 		}
-		if config.Environment != "production" {
-			t.Errorf("Expected environment 'production' from env, got '%s'", config.Environment)
+		if config.App.Environment != "production" {
+			t.Errorf("Expected environment 'production' from env, got '%s'", config.App.Environment)
 		}
 	})
 
@@ -95,10 +95,10 @@ func TestConfigBuilder(t *testing.T) {
 				"port": 3000,
 			},
 			"app": map[string]interface{}{
-				"name":    "file-app",
-				"version": "2.0.0",
+				"name":        "file-app",
+				"version":     "2.0.0",
+				"environment": "staging",
 			},
-			"environment": "staging",
 		}
 
 		tempFile := createTempConfigFile(t, configData)
@@ -123,8 +123,8 @@ func TestConfigBuilder(t *testing.T) {
 		if config.App.Name != "file-app" {
 			t.Errorf("Expected app name 'file-app' from file, got '%s'", config.App.Name)
 		}
-		if config.Environment != "staging" {
-			t.Errorf("Expected environment 'staging' from file, got '%s'", config.Environment)
+		if config.App.Environment != "staging" {
+			t.Errorf("Expected environment 'staging' from file, got '%s'", config.App.Environment)
 		}
 	})
 
@@ -164,12 +164,12 @@ func TestEnvironmentSource(t *testing.T) {
 	t.Run("LoadBasic", func(t *testing.T) {
 		// Set test environment variables
 		_ = os.Setenv("TEST_SIMPLE", "value")
-		os.Setenv("TEST_SERVER_HOST", "localhost")
-		os.Setenv("TEST_SERVER_PORT", "8080")
+		_ = os.Setenv("TEST_SERVER_HOST", "localhost")
+		_ = os.Setenv("TEST_SERVER_PORT", "8080")
 		defer func() {
 			_ = os.Unsetenv("TEST_SIMPLE")
-			os.Unsetenv("TEST_SERVER_HOST")
-			os.Unsetenv("TEST_SERVER_PORT")
+			_ = os.Unsetenv("TEST_SERVER_HOST")
+			_ = os.Unsetenv("TEST_SERVER_PORT")
 		}()
 
 		source := NewEnvironmentSource("TEST")
@@ -249,13 +249,19 @@ func TestConfigValidation(t *testing.T) {
 		config := &Config{
 			App: AppConfig{
 				Name: "test-app",
+				Environment: "development",
+				LogLevel: "info",
 			},
 			Server: ServerConfig{
 				Port: 8080,
 			},
+			Database: DatabaseConfig{
+				Driver: "sqlite3",
+				Path: "./test.db",
+			},
 		}
 
-		err := validateConfig(config)
+		err := config.Validate()
 		if err != nil {
 			t.Errorf("Valid config should not error: %v", err)
 		}
@@ -265,13 +271,19 @@ func TestConfigValidation(t *testing.T) {
 		config := &Config{
 			App: AppConfig{
 				Name: "test",
+				Environment: "development",
+				LogLevel: "info",
 			},
 			Server: ServerConfig{
 				Port: 99999, // Invalid port
 			},
+			Database: DatabaseConfig{
+				Driver: "sqlite3",
+				Path: "./test.db",
+			},
 		}
 
-		err := validateConfig(config)
+		err := config.Validate()
 		if err == nil {
 			t.Error("Invalid port should cause validation error")
 		}
@@ -279,20 +291,23 @@ func TestConfigValidation(t *testing.T) {
 
 	t.Run("MissingAppName", func(t *testing.T) {
 		config := &Config{
+			App: AppConfig{
+				// Missing name - should cause error
+				Environment: "development",
+				LogLevel: "info",
+			},
 			Server: ServerConfig{
 				Port: 8080,
 			},
-			// Missing app name - should get default
+			Database: DatabaseConfig{
+				Driver: "sqlite3",
+				Path: "./test.db",
+			},
 		}
 
-		err := validateConfig(config)
-		if err != nil {
-			t.Errorf("Config with missing app name should get default: %v", err)
-		}
-
-		// Should have been set to default
-		if config.App.Name != "goryu-app" {
-			t.Error("App name should have been set to default")
+		err := config.Validate()
+		if err == nil {
+			t.Error("Missing app name should cause validation error")
 		}
 	})
 }
@@ -300,12 +315,18 @@ func TestConfigValidation(t *testing.T) {
 func TestConfigHelpers(t *testing.T) {
 	config := &Config{
 		App: AppConfig{
-			Name:    "test-app",
-			Version: "1.0.0",
+			Name:        "test-app",
+			Version:     "1.0.0",
+			Environment: "development",
+			LogLevel:    "info",
 		},
 		Server: ServerConfig{
 			Host: "api.example.com",
 			Port: 8080,
+		},
+		Database: DatabaseConfig{
+			Driver: "sqlite3",
+			Path:   "./test.db",
 		},
 	}
 
@@ -318,21 +339,43 @@ func TestConfigHelpers(t *testing.T) {
 	})
 
 	t.Run("ToGoryuConfig", func(t *testing.T) {
-		goryuCfg := config.ToGoryuConfig()
-		if goryuCfg.AppName != "test-app" {
-			t.Errorf("Expected AppName 'test-app', got '%s'", goryuCfg.AppName)
+		// Use the new adapter
+		adapter := NewFrameworkAdapter(config)
+		goryuCfg := adapter.ToGoryuConfig()
+		
+		// Type assert the interface{} back to a struct for testing
+		if goryuStruct, ok := goryuCfg.(struct {
+			AppName               string
+			ServerHeader          string
+			StrictRouting         bool
+			CaseSensitive         bool
+			DisableStartupMessage bool
+			RedirectTrailingSlash *bool
+			EnableHEADFallback    *bool
+		}); ok {
+			if goryuStruct.AppName != "test-app" {
+				t.Errorf("Expected AppName 'test-app', got '%s'", goryuStruct.AppName)
+			}
+		} else {
+			t.Error("Failed to type assert goryu config")
 		}
 	})
 }
 
 func TestConfigJSON(t *testing.T) {
 	config := &Config{
+		App: AppConfig{
+			Name:        "test",
+			Environment: "development",
+			LogLevel:    "info",
+		},
 		Server: ServerConfig{
 			Host: "localhost",
 			Port: 8080,
 		},
-		App: AppConfig{
-			Name: "test",
+		Database: DatabaseConfig{
+			Driver: "sqlite3",
+			Path:   "./test.db",
 		},
 	}
 
@@ -343,7 +386,7 @@ func TestConfigJSON(t *testing.T) {
 
 	// Verify it's valid JSON by parsing it back
 	var parsed map[string]interface{}
-	if err := _ = json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
 		t.Fatalf("Generated JSON is invalid: %v", err)
 	}
 

@@ -1,0 +1,47 @@
+{
+  "app": {
+    "name": "blasingly-fast-goryu-api",
+    "version": "2.0.0",
+    "environment": "production",
+    "log_level": "warn",
+    "custom": {
+      "api_timeout": "60s",
+      "feature_flags": {
+        "enable_cache": true,
+        "enable_metrics": true
+      }
+    }
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "read_timeout": "30s",
+    "write_timeout": "30s",
+    "shutdown_timeout": "15s",
+    "tls": {
+      "enabled": false,
+      "auto_tls": false
+    }
+  },
+  "database": {
+    "driver": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "database": "goryu_db",
+    "username": "goryu_user",
+    "password": "secure_password",
+    "ssl_mode": "require",
+    "max_open_conns": 25,
+    "max_idle_conns": 5,
+    "conn_max_lifetime": "1h",
+    "conn_max_idle_time": "30m"
+  },
+  "framework": {
+    "server_header": "Goryu/2.0",
+    "strict_routing": false,
+    "case_sensitive": false,
+    "redirect_trailing_slash": true,
+    "enable_head_fallback": true,
+    "disable_startup_msg": false
+  }
+}
