@@ -231,4 +231,6 @@ func (a *Agent) InsecureSkipVerify() *Agent {
 	return a
 }
 
-// might add more methods need proposal
+// NOTE: might add more methods need proposal
+// I think that Goryu should focus on more deep features for web servers and less feature for the clients. 
+// it will depend the feedback and tests from the users.
