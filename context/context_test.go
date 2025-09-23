@@ -131,8 +131,11 @@ func TestContext_RemoteIP(t *testing.T) {
 
 	t.Run("X-Real-IP", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.1:12345" // Simulate proxy
 		req.Header.Set("X-Real-IP", "192.168.1.1")
 		ctx := context.NewContext(nil, req)
+		// Configure trusted proxy to enable header parsing
+		ctx.Set("trusted_proxies", []string{"192.0.2.1"})
 		if ctx.RemoteIP() != "192.168.1.1" {
 			t.Errorf("Expected IP 192.168.1.1, got %s", ctx.RemoteIP())
 		}
@@ -140,8 +143,11 @@ func TestContext_RemoteIP(t *testing.T) {
 
 	t.Run("X-Forwarded-For", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.1:12345" // Simulate proxy
 		req.Header.Set("X-Forwarded-For", "203.0.113.195, 70.41.3.18, 150.172.238.178")
 		ctx := context.NewContext(nil, req)
+		// Configure trusted proxy to enable header parsing
+		ctx.Set("trusted_proxies", []string{"192.0.2.1"})
 		if ctx.RemoteIP() != "203.0.113.195" {
 			t.Errorf("Expected IP 203.0.113.195, got %s", ctx.RemoteIP())
 		}
