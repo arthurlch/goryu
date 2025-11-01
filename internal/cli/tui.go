@@ -158,7 +158,8 @@ func RunTUI() {
 	p := tea.NewProgram(initialMainMenuModel())
 	if _, err := p.Run(); err != nil {
 		// If TUI fails, fall back to help
-		showHelp()
+		fmt.Printf("Goryu CLI v%s - A powerful web framework for Go\n\n", VERSION)
+		fmt.Println("Unable to start interactive mode. Use 'goryu --help' for command list.")
 		return
 	}
 }

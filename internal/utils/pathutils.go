@@ -50,3 +50,30 @@ func ExtractParams(pattern, path string) map[string]string {
 	}
 	return params
 }
+
+// ToGoIdentifier converts a string to a valid Go identifier (PascalCase)
+func ToGoIdentifier(s string) string {
+	// Split by common separators
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == '_' || r == '-' || r == ' ' || r == '.'
+	})
+	
+	var result strings.Builder
+	for _, part := range parts {
+		if len(part) > 0 {
+			// Capitalize first letter and make rest lowercase
+			result.WriteString(strings.ToUpper(string(part[0])))
+			if len(part) > 1 {
+				result.WriteString(strings.ToLower(part[1:]))
+			}
+		}
+	}
+	
+	identifier := result.String()
+	// Ensure it starts with a letter
+	if len(identifier) > 0 && !((identifier[0] >= 'A' && identifier[0] <= 'Z') || (identifier[0] >= 'a' && identifier[0] <= 'z')) {
+		identifier = "Item" + identifier
+	}
+	
+	return identifier
+}

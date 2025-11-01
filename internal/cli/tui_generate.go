@@ -135,7 +135,7 @@ func (m GenerateMenuModel) handleGenEnter() (tea.Model, tea.Cmd) {
 			}
 		}
 	case genStepOptions:
-		if m.generatorType == "handler" {
+		if m.generatorType == "handler" { // lets ignore warning for that block 
 			m.handlerType = handlerTypes[m.cursor]
 			m.step = genStepConfirm
 		} else if m.generatorType == "model" {
@@ -253,7 +253,7 @@ func (m GenerateMenuModel) View() string {
 		b.WriteString(helpStyle.Render("Type name • enter: next • esc: back"))
 
 	case genStepOptions:
-		if m.generatorType == "handler" {
+		if m.generatorType == "handler" { // for that block too
 			b.WriteString("Choose handler type:")
 			b.WriteString("\n\n")
 

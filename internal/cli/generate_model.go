@@ -17,6 +17,7 @@ func runGenerateModel(args []string) error {
 	path := "internal/models"
 	modelType := "basic" // basic, db
 	dbTool := "sqlc"     // sqlc, ent, gorm
+	fields := ""
 
 	// Parse arguments
 	for _, arg := range args[1:] {
@@ -26,10 +27,11 @@ func runGenerateModel(args []string) error {
 			modelType = strings.TrimPrefix(arg, "--type=")
 		} else if strings.HasPrefix(arg, "--db-tool=") {
 			dbTool = strings.TrimPrefix(arg, "--db-tool=")
+		} else if strings.HasPrefix(arg, "--fields=") {
+			fields = strings.TrimPrefix(arg, "--fields=")
 		}
 	}
 
-	// Validate db-tool when using db type
 	if modelType == "db" {
 		validDBTools := []string{"sqlc", "ent", "gorm"}
 		isValid := false
@@ -47,20 +49,18 @@ func runGenerateModel(args []string) error {
 		fmt.Printf("🚀 Generating %s model: %s\n", modelType, name)
 	}
 
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Generate model file based on type
 	filename := filepath.Join(path, strings.ToLower(name)+".go")
 	var content string
 
 	switch modelType {
 	case "basic":
-		content = generateBasicModelContent(name)
+		content = generateBasicModelContent(name, fields)
 	case "db":
-		content = generateDBModelContent(name, dbTool)
+		content = generateDBModelContent(name, dbTool, fields)
 	default:
 		return fmt.Errorf("unknown model type: %s (available: basic, db)", modelType)
 	}

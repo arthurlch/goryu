@@ -3,44 +3,51 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
+	"path/filepath"
 )
 
 func newInitCommand() *Command {
 	return &Command{
 		Name:        "init",
 		Description: "Initialize a new Goryu project",
-		Usage:       "goryu init [project-name] [--template=basic|api|web]",
-		Action:      runInit,
+		Usage:       "goryu init [project-name] [flags]",
+		Flags: []Flag{
+			{Name: "template", Shorthand: "t", Description: "Project template (basic, api, db)", Default: "basic"},
+			{Name: "path", Shorthand: "p", Description: "Project path", Default: "."},
+			{Name: "module", Shorthand: "m", Description: "Go module name"},
+			{Name: "git", Description: "Initialize git repository", Default: true},
+			{Name: "docker", Description: "Include Docker files", Default: false},
+			{Name: "ci", Description: "Include CI/CD configs", Default: false},
+			{Name: "db-tool", Description: "Database tool (sqlc, ent, gorm) - only for db template", Default: "sqlc"},
+		},
+		Action: cmdInit,
 	}
 }
 
-func runInit(args []string) error {
-	var projectName string
-	template := "basic"
-	// Parse arguments
-	for i, arg := range args {
-		if strings.HasPrefix(arg, "--template=") {
-			template = strings.TrimPrefix(arg, "--template=")
-		} else if i == 0 {
-			projectName = arg
-		}
-	}
-
+func runInit(projectName string, template string, projectPath string, module string, dbTool string) error {
 	if projectName == "" {
 		projectName = "goryu-app"
 	}
 
-	// Check if directory already exists
-	if _, err := os.Stat(projectName); err == nil {
-		return fmt.Errorf("directory %s already exists", projectName)
+	targetPath := projectName
+	if projectPath != "." && projectPath != "" {
+		targetPath = filepath.Join(projectPath, projectName)
+	}
+	
+	if _, err := os.Stat(targetPath); err == nil {
+		return fmt.Errorf("directory %s already exists", targetPath)
 	}
 
-	// Use FlexibleArchitecture for all templates
 	fa := NewFlexibleArchitecture()
 	if err := fa.LoadArchitectures(); err != nil {
 		return fmt.Errorf("failed to load architectures: %w", err)
 	}
 
-	return fa.GenerateProject(projectName, template, nil)
+	customOptions := map[string]string{
+		"module": module,
+		"path":   targetPath,
+		"db_tool": dbTool,
+	}
+
+	return fa.GenerateProject(projectName, template, customOptions)
 }

@@ -15,7 +15,6 @@ func runGenerateMiddleware(args []string) error {
 	name := args[0]
 	path := "internal/middleware"
 
-	// Parse arguments
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "--path=") {
 			path = strings.TrimPrefix(arg, "--path=")
@@ -24,12 +23,10 @@ func runGenerateMiddleware(args []string) error {
 
 	fmt.Printf("🚀 Generating middleware: %s\n", name)
 
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Generate middleware file
 	filename := filepath.Join(path, strings.ToLower(name)+".go")
 	content := generateMiddlewareContent(name)
 

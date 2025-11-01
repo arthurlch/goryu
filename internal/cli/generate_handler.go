@@ -14,7 +14,7 @@ func runGenerateHandler(args []string) error {
 
 	name := args[0]
 	path := "internal/handlers"
-	handlerType := "basic" // basic, crud, api
+	handlerType := "basic" // basic, crud, api (websocket later), crud default ;/
 
 	// Parse arguments
 	for _, arg := range args[1:] {
@@ -27,12 +27,10 @@ func runGenerateHandler(args []string) error {
 
 	fmt.Printf("🚀 Generating %s handler: %s\n", handlerType, name)
 
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Generate handler file based on type
 	filename := filepath.Join(path, strings.ToLower(name)+".go")
 	var content string
 
@@ -77,5 +75,6 @@ func printHandlerTips(handlerType string) {
 		fmt.Printf("  • Customize Request/Response structs\n")
 		fmt.Printf("  • Add validation tags and business logic\n")
 		fmt.Printf("  • Consider adding authentication middleware\n")
+		// MEMRO: recheck for websocket later ...
 	}
 }

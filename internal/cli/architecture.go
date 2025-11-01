@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// ProjectArchitecture defines the structure of a project
 type ProjectArchitecture struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
@@ -17,7 +16,7 @@ type ProjectArchitecture struct {
 	Variables   map[string]string `json:"variables"`
 }
 
-// Built-in architectures - simplified to avoid boilerplate
+// built in architectures
 var defaultArchitectures = map[string]ProjectArchitecture{
 	"basic": {
 		Name:        "Basic Web Application",
@@ -66,15 +65,44 @@ var defaultArchitectures = map[string]ProjectArchitecture{
 			"framework": "github.com/arthurlch/goryu",
 		},
 	},
+	"db": {
+		Name:        "Database Application",
+		Description: "Web application with database integration (PostgreSQL by default)",
+		Folders: []string{
+			"cmd/server",
+			"internal/handlers",
+			"internal/models",
+			"internal/repository",
+			"internal/db",
+			"sql/migrations",
+			"sql/queries",
+			"config",
+		},
+		Files: map[string]string{
+			"go.mod":                            "gomod_db",
+			"README.md":                         "readme_db",
+			"config/config.json":                "api_config",
+			"cmd/server/main.go":                "main_db",
+			"internal/handlers/health.go":       "health_handler",
+			"internal/handlers/home.go":         "home_handler",
+			"internal/db/connection.go":         "db_connection",
+			"internal/repository/base.go":       "base_repository",
+			".gitignore":                        "gitignore",
+			"Makefile":                          "makefile",
+			"Dockerfile":                        "dockerfile",
+		},
+		Variables: map[string]string{
+			"app_name":  "{{.ProjectName}}",
+			"framework": "github.com/arthurlch/goryu",
+		},
+	},
 }
 
-// FlexibleArchitecture allows for custom architectures
 type FlexibleArchitecture struct {
 	architectures map[string]ProjectArchitecture
 	customPath    string
 }
 
-// NewFlexibleArchitecture creates a new flexible architecture manager
 func NewFlexibleArchitecture() *FlexibleArchitecture {
 	return &FlexibleArchitecture{
 		architectures: make(map[string]ProjectArchitecture),
@@ -82,31 +110,28 @@ func NewFlexibleArchitecture() *FlexibleArchitecture {
 	}
 }
 
-// LoadArchitectures loads both default and custom architectures
 func (fa *FlexibleArchitecture) LoadArchitectures() error {
-	// Load default architectures
 	for name, arch := range defaultArchitectures {
 		fa.architectures[name] = arch
 	}
 
 	// TODO: Load custom architectures from .goryu/architectures/
-	// This would allow users to define their own project templates
+	// So we would allow users to define their own project templates and structures
+	// I dont want to be too restrictive as Golang conv are about freedom
+	// its not rails after all. ..
 
 	return nil
 }
 
-// GetArchitecture returns an architecture by name
 func (fa *FlexibleArchitecture) GetArchitecture(name string) (ProjectArchitecture, bool) {
 	arch, exists := fa.architectures[name]
 	return arch, exists
 }
 
-// ListArchitectures returns all available architectures
 func (fa *FlexibleArchitecture) ListArchitectures() map[string]ProjectArchitecture {
 	return fa.architectures
 }
 
-// GenerateProject creates a project using the specified architecture
 func (fa *FlexibleArchitecture) GenerateProject(projectName, archName string, customOptions map[string]string) error {
 	arch, exists := fa.GetArchitecture(archName)
 	if !exists {
@@ -116,12 +141,11 @@ func (fa *FlexibleArchitecture) GenerateProject(projectName, archName string, cu
 	fmt.Printf("🏗️  Generating project with '%s' architecture\n", arch.Name)
 	fmt.Printf("📋 %s\n", arch.Description)
 
-	// Create project directory
+	// pro direct
 	if err := os.MkdirAll(projectName, 0755); err != nil {
 		return fmt.Errorf("failed to create project directory: %w", err)
 	}
 
-	// Create folder structure
 	for _, folder := range arch.Folders {
 		folderPath := filepath.Join(projectName, folder)
 		if err := os.MkdirAll(folderPath, 0755); err != nil {
@@ -129,60 +153,122 @@ func (fa *FlexibleArchitecture) GenerateProject(projectName, archName string, cu
 		}
 	}
 
-	// Prepare template variables
 	variables := make(map[string]string)
 	for k, v := range arch.Variables {
 		variables[k] = v
 	}
-	// Override with custom options
 	for k, v := range customOptions {
 		variables[k] = v
 	}
 	variables["ProjectName"] = projectName
 
-	// Generate files
 	for filePath, templateName := range arch.Files {
 		fullPath := filepath.Join(projectName, filePath)
 
-		// Ensure directory exists
 		dir := filepath.Dir(fullPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 
-		// Generate file content
 		content, err := fa.generateFileContent(templateName, variables)
 		if err != nil {
 			return fmt.Errorf("failed to generate content for %s: %w", filePath, err)
 		}
 
-		// Write file
 		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to write file %s: %w", filePath, err)
 		}
+	}
+
+	if archName == "db" && customOptions["db_tool"] != "" {
+		dbTool := customOptions["db_tool"]
+		switch dbTool {
+		case "sqlc":
+			sqlcFile := filepath.Join(projectName, "sqlc.yaml")
+			sqlcContent := generateSQLCConfig()
+			if err := os.WriteFile(sqlcFile, []byte(sqlcContent), 0644); err != nil {
+				return fmt.Errorf("failed to write sqlc.yaml: %w", err)
+			}
+		case "ent":
+			entDir := filepath.Join(projectName, "ent", "schema")
+			if err := os.MkdirAll(entDir, 0755); err != nil {
+				return fmt.Errorf("failed to create ent directory: %w", err)
+			}
+			entConfigFile := filepath.Join(projectName, "ent.go")
+			entConfigContent := generateEntConfig()
+			if err := os.WriteFile(entConfigFile, []byte(entConfigContent), 0644); err != nil {
+				return fmt.Errorf("failed to write ent.go: %w", err)
+			}
+		case "gorm":
+			// GORM doesn't need a specific config file
+			gormReadmeFile := filepath.Join(projectName, "GORM.md")
+			gormContent := generateGormConfig()
+			if err := os.WriteFile(gormReadmeFile, []byte(gormContent), 0644); err != nil {
+				return fmt.Errorf("failed to write GORM.md: %w", err)
+			}
+		}
+		
+		fmt.Printf("   ✓ Configured for %s\n", dbTool)
 	}
 
 	fmt.Printf("✅ Project '%s' created successfully!\n", projectName)
 	return nil
 }
 
-// generateFileContent generates content for a file based on template name and variables
 func (fa *FlexibleArchitecture) generateFileContent(templateName string, variables map[string]string) (string, error) {
 	switch templateName {
 	case "gomod":
-		return fa.replaceVariables(generateGoMod(variables["ProjectName"]), variables), nil
+		moduleName := variables["module"]
+		if moduleName == "" {
+			moduleName = variables["ProjectName"]
+		}
+		return fa.replaceVariables(generateGoMod(moduleName), variables), nil
+	case "gomod_db":
+		moduleName := variables["module"]
+		if moduleName == "" {
+			moduleName = variables["ProjectName"]
+		}
+		dbTool := variables["db_tool"]
+		if dbTool == "" {
+			dbTool = "sqlc"
+		}
+		return fa.replaceVariables(generateGoModWithDB(moduleName, dbTool), variables), nil
 	case "readme":
 		return fa.replaceVariables(generateReadme(variables["ProjectName"]), variables), nil
+	case "readme_db":
+		return fa.replaceVariables(generateDBReadme(variables["ProjectName"]), variables), nil
 	case "basic_config":
 		return generateBasicConfig(), nil
 	case "api_config":
 		return generateAPIConfig(), nil
 	case "main":
-		return fa.replaceVariables(generateMainFile(variables["ProjectName"]), variables), nil
+		moduleName := variables["module"]
+		if moduleName == "" {
+			moduleName = variables["ProjectName"]
+		}
+		return fa.replaceVariables(generateMainFile(moduleName), variables), nil
+	case "main_db":
+		moduleName := variables["module"]
+		if moduleName == "" {
+			moduleName = variables["ProjectName"]
+		}
+		return fa.replaceVariables(generateDBMainFile(moduleName), variables), nil
 	case "health_handler":
 		return fa.replaceVariables(generateHealthHandler(variables["ProjectName"]), variables), nil
 	case "home_handler":
 		return fa.replaceVariables(generateHomeHandler(variables["ProjectName"]), variables), nil
+	case "db_connection":
+		return fa.replaceVariables(generateDBConnection(variables["ProjectName"]), variables), nil
+	case "base_repository":
+		return fa.replaceVariables(generateBaseRepository(variables["ProjectName"]), variables), nil
+	case "makefile":
+		return generateMakefile(), nil
+	case "dockerfile":
+		return generateDockerfile(), nil
+	case "sqlc_config":
+		return generateSQLCConfig(), nil
+	case "keep_file":
+		return "", nil
 	case "gitignore":
 		return generateGitignore(), nil
 	default:
@@ -190,7 +276,6 @@ func (fa *FlexibleArchitecture) generateFileContent(templateName string, variabl
 	}
 }
 
-// replaceVariables replaces template variables in content
 func (fa *FlexibleArchitecture) replaceVariables(content string, variables map[string]string) string {
 	result := content
 	for key, value := range variables {

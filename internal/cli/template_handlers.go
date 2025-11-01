@@ -2,11 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/arthurlch/goryu/internal/utils"
 	"strings"
+
+	"github.com/arthurlch/goryu/internal/utils"
 )
 
-// Handler template generators
 func generateBasicHandlerContent(name string) string {
 	handlerName := utils.ToGoIdentifier(name)
 

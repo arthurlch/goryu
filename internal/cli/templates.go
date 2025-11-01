@@ -10,7 +10,7 @@ func generateGoMod(projectName string) string {
 go 1.21
 
 require (
-	github.com/arthurlch/goryu v1.0.0
+	github.com/arthurlch/goryu v0.1.0
 )
 `, projectName)
 }
@@ -20,19 +20,19 @@ func generateGoModWithDB(projectName, dbTool string) string {
 
 	switch dbTool {
 	case "sqlc":
-		dependencies = `	github.com/arthurlch/goryu v1.0.0
+		dependencies = `	github.com/arthurlch/goryu v0.1.0
 	github.com/jackc/pgx/v5 v5.4.3
 	github.com/golang-migrate/migrate/v4 v4.16.2`
 	case "ent":
-		dependencies = `	github.com/arthurlch/goryu v1.0.0
+		dependencies = `	github.com/arthurlch/goryu v0.1.0
 	entgo.io/ent v0.12.4
 	github.com/jackc/pgx/v5 v5.4.3`
 	case "gorm":
-		dependencies = `	github.com/arthurlch/goryu v1.0.0
+		dependencies = `	github.com/arthurlch/goryu v0.1.0
 	gorm.io/gorm v1.25.5
 	gorm.io/driver/postgres v1.5.3`
 	default:
-		dependencies = `	github.com/arthurlch/goryu v1.0.0
+		dependencies = `	github.com/arthurlch/goryu v0.1.0
 	github.com/jackc/pgx/v5 v5.4.3`
 	}
 
@@ -111,7 +111,7 @@ func main() {
 	app.GET("/health", handlers.Health)
 
 	log.Printf("Starting server on %%s", cfg.GetServerAddress())
-	if err := app.Listen(cfg.GetServerAddress()); err != nil {
+	if err := app.Run(cfg.GetServerAddress()); err != nil {
 		log.Fatalf("Server failed to start: %%v", err)
 	}
 }
@@ -488,7 +488,7 @@ export GORYU_DATABASE_PASSWORD=pass
 `, projectName)
 }
 
-func generateDBMainFile(projectName string) string {
+func generateDBMainFile(projectName string) string { // hmmm 
 	return fmt.Sprintf(`package main
 
 import (
@@ -548,7 +548,7 @@ func main() {
 	app.GET("/health", handlers.Health)
 
 	log.Printf("🚀 Starting server on %%s", cfg.GetServerAddress())
-	if err := app.Listen(cfg.GetServerAddress()); err != nil {
+	if err := app.Run(cfg.GetServerAddress()); err != nil {
 		log.Fatalf("Server failed to start: %%v", err)
 	}
 }
@@ -559,41 +559,49 @@ func generateDBConnection(projectName string) string {
 	return fmt.Sprintf(`package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
+	"github.com/arthurlch/goryu/db"
 	"github.com/arthurlch/goryu/config"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+var conn *db.Connection
+
 // Connect creates a database connection using the provided config
 func Connect(cfg *config.Config) (*sql.DB, error) {
-	// Get database config from custom section
-	dbConfig, ok := cfg.Custom["database"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("database configuration not found in custom config")
-	}
-	
-	host := getStringFromConfig(dbConfig, "host", "localhost")
-	port := getIntFromConfig(dbConfig, "port", 5432)
-	database := getStringFromConfig(dbConfig, "database", "goryu")
-	username := getStringFromConfig(dbConfig, "username", "goryu")
-	password := getStringFromConfig(dbConfig, "password", "")
-	sslmode := getStringFromConfig(dbConfig, "ssl_mode", "prefer")
-	
-	dsn := fmt.Sprintf("postgres://%%s:%%s@%%s:%%d/%%s?sslmode=%%s",
-		username, password, host, port, database, sslmode)
-	
-	db, err := sql.Open("pgx", dsn)
+	// Use goryu's db package to connect
+	connection, err := db.Connect(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %%w", err)
+		return nil, err
 	}
+	
+	conn = connection
+	return connection.DB, nil
+}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
+// Connection returns the current database connection
+func Connection() *db.Connection {
+	return conn
+}
 
-	return db, nil
+// Close closes the database connection
+func Close() error {
+	if conn != nil {
+		return conn.Close()
+	}
+	return nil
+}
+
+// Ping tests the database connection
+func Ping() error {
+	ctx := context.Background()
+	if conn == nil || conn.DB == nil {
+		return fmt.Errorf("database connection not established")
+	}
+	return conn.DB.PingContext(ctx)
 }
 `)
 }
