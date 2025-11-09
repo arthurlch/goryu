@@ -1,86 +1,133 @@
 package timeout
-
 import (
 	"context"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/arthurlch/goryu"
+	goryuContext "github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/base"
 )
-
-// Config defines the configuration for timeout middleware
 type Config struct {
-	// Timeout for request processing. Default: 30 seconds
+	base.BaseConfig
 	Timeout time.Duration
-	// Handler to call when timeout occurs. If nil, returns 408 Request Timeout
-	TimeoutHandler goryu.HandlerFunc
-	// Skip defines when to skip timeout middleware
-	Skip func(c *goryu.Context) bool
+	TimeoutHandler goryuContext.HandlerFunc
 }
-
-// New creates a new timeout middleware
-func New(config ...Config) goryu.Middleware {
-	cfg := Config{
-		Timeout: 30 * time.Second,
-		TimeoutHandler: func(c *goryu.Context) {
-			c.Status(http.StatusRequestTimeout).Text(http.StatusRequestTimeout, "Request Timeout")
-		},
+type timeoutWriter struct {
+	http.ResponseWriter
+	mu         sync.Mutex
+	timedOut   int32 
+	headerSent int32 
+}
+func (tw *timeoutWriter) WriteHeader(status int) {
+	if atomic.LoadInt32(&tw.timedOut) == 1 {
+		return 
 	}
-
-	if len(config) > 0 {
-		provided := config[0]
-		if provided.Timeout > 0 {
-			cfg.Timeout = provided.Timeout
-		}
-		if provided.TimeoutHandler != nil {
-			cfg.TimeoutHandler = provided.TimeoutHandler
-		}
-		cfg.Skip = provided.Skip
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+	if atomic.CompareAndSwapInt32(&tw.headerSent, 0, 1) {
+		tw.ResponseWriter.WriteHeader(status)
 	}
-
-	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
-		return func(c *goryu.Context) {
-			if cfg.Skip != nil && cfg.Skip(c) {
+}
+func (tw *timeoutWriter) Write(data []byte) (int, error) {
+	if atomic.LoadInt32(&tw.timedOut) == 1 {
+		return 0, http.ErrHandlerTimeout 
+	}
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+	if atomic.LoadInt32(&tw.timedOut) == 1 {
+		return 0, http.ErrHandlerTimeout
+	}
+	return tw.ResponseWriter.Write(data)
+}
+func (tw *timeoutWriter) markTimedOut() {
+	atomic.StoreInt32(&tw.timedOut, 1)
+}
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+func (c *Config) Validate() error {
+	if c.Timeout <= 0 {
+		c.Timeout = 30 * time.Second
+	}
+	if c.Timeout > 5*time.Minute {
+		return base.NewConfigError("Timeout", "cannot exceed 5 minutes")
+	}
+	if c.TimeoutHandler == nil {
+		c.TimeoutHandler = func(ctx *goryuContext.Context) {
+			if ctx.Writer.Header().Get("Content-Type") == "" {
+				ctx.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			}
+			ctx.Writer.WriteHeader(http.StatusRequestTimeout)
+			_ = ctx.Text(http.StatusRequestTimeout, "Request Timeout")
+		}
+	}
+	return nil
+}
+func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+	if err := config.Validate(); err != nil {
+		return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+			return func(c *goryuContext.Context) {
+				base.DefaultErrorHandler(c, err, "Timeout")
+			}
+		}
+	}
+	return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+		return func(c *goryuContext.Context) {
+			if config.Skip != nil && config.Skip(c) {
 				next(c)
 				return
 			}
-
-			// Create context with timeout
-			ctx, cancel := context.WithTimeout(c.Request.Context(), cfg.Timeout)
-			defer cancel()
-
-			// Update request context
+			ctx, cancel := context.WithTimeout(c.Request.Context(), config.Timeout)
+			defer cancel() 
+			timeoutWriter := &timeoutWriter{
+				ResponseWriter: c.Writer,
+			}
+			originalWriter := c.Writer
+			c.Writer = timeoutWriter
 			c.Request = c.Request.WithContext(ctx)
-
-			// Channel to signal completion
-			done := make(chan struct{})
-			var panicked bool
-
-			// Run handler in goroutine
+			type result struct {
+				panicked bool
+				panicValue interface{}
+			}
+			done := make(chan result, 1) 
 			go func() {
 				defer func() {
+					res := result{}
 					if r := recover(); r != nil {
-						panicked = true
+						res.panicked = true
+						res.panicValue = r
 					}
-					close(done)
+					select {
+					case done <- res:
+					default:
+					}
 				}()
-				next(c)
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					next(c)
+				}
 			}()
-
 			select {
-			case <-done:
-				// Handler completed normally
-				if panicked {
-					panic("handler panicked") // Re-panic to be caught by recovery middleware
+			case res := <-done:
+				c.Writer = originalWriter 
+				if res.panicked {
+					panic(res.panicValue) 
 				}
 				return
 			case <-ctx.Done():
-				// Timeout occurred
+				timeoutWriter.markTimedOut()
+				c.Writer = originalWriter 
 				if ctx.Err() == context.DeadlineExceeded {
-					cfg.TimeoutHandler(c)
+					config.TimeoutHandler(c)
 				}
 				return
 			}
 		}
 	}
+}
+func Default() func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+	return New(Config{})
 }

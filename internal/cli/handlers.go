@@ -434,6 +434,7 @@ func cmdMiddlewareList(ctx *Context) error {
 		{"cors", "Cross-Origin Resource Sharing"},
 		{"csrf", "CSRF protection"},
 		{"envvar", "Environment variable exposure"},
+		{"errors", "Error handling middleware"},
 		{"expvar", "Expvar metrics"},
 		{"favicon", "Favicon serving"},
 		{"fileserver", "Static file serving"},

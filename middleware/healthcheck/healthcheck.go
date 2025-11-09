@@ -1,114 +1,199 @@
-package middleware
-
+package healthcheck
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"sync"
 	"time"
+	goryuContext "github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/base"
 )
-
 type Probe func(ctx context.Context) error
-
-type HealthChecker struct {
-	liveProbes  map[string]Probe
-	readyProbes map[string]Probe
-	livePath    string
-	readyPath   string
-	timeout     time.Duration
+type Config struct {
+	base.BaseConfig
+	LivenessPath string
+	ReadinessPath string
+	HealthPath string
+	Timeout time.Duration
+	LivenessProbes map[string]Probe
+	ReadinessProbes map[string]Probe
+	HealthProbes map[string]Probe
 }
-
-func NewHealthChecker() *HealthChecker {
-	return &HealthChecker{
-		liveProbes:  make(map[string]Probe),
-		readyProbes: make(map[string]Probe),
-		livePath:    "/live",
-		readyPath:   "/ready",
-		timeout:     5 * time.Second,
+type HealthStatus struct {
+	Status string                 `json:"status"`
+	Errors map[string]string      `json:"errors,omitempty"`
+	Checks map[string]interface{} `json:"checks,omitempty"`
+}
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+func (c *Config) Validate() error {
+	if c.LivenessPath == "" {
+		c.LivenessPath = "/health/live"
+	}
+	if c.ReadinessPath == "" {
+		c.ReadinessPath = "/health/ready"
+	}
+	if c.HealthPath == "" {
+		c.HealthPath = "/health"
+	}
+	if c.Timeout <= 0 {
+		c.Timeout = 5 * time.Second
+	}
+	if c.LivenessProbes == nil {
+		c.LivenessProbes = make(map[string]Probe)
+	}
+	if c.ReadinessProbes == nil {
+		c.ReadinessProbes = make(map[string]Probe)
+	}
+	if c.HealthProbes == nil {
+		c.HealthProbes = make(map[string]Probe)
+	}
+	return nil
+}
+func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+	if err := config.Validate(); err != nil {
+		return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+			return func(c *goryuContext.Context) {
+				base.DefaultErrorHandler(c, err, "HealthCheck")
+			}
+		}
+	}
+	return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+		return func(c *goryuContext.Context) {
+			if config.Skip != nil && config.Skip(c) {
+				next(c)
+				return
+			}
+			path := c.Request.URL.Path
+			var probes map[string]Probe
+			switch path {
+			case config.LivenessPath:
+				probes = config.LivenessProbes
+			case config.ReadinessPath:
+				probes = config.ReadinessProbes
+			case config.HealthPath:
+				probes = config.HealthProbes
+			default:
+				next(c)
+				return
+			}
+			status := runHealthChecks(c.Request.Context(), probes, config.Timeout)
+			c.Writer.Header().Set("Content-Type", "application/json")
+			c.Writer.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			statusCode := http.StatusOK
+			if status.Status == "DOWN" {
+				statusCode = http.StatusServiceUnavailable
+			}
+			c.Writer.WriteHeader(statusCode)
+			if err := json.NewEncoder(c.Writer).Encode(status); err != nil {
+				logger := config.Logger
+				if logger == nil {
+					logger = base.DefaultLogger("HealthCheck")
+				}
+				logger.Printf("could not encode health check response: %v", err)
+			}
+		}
 	}
 }
-
-func (h *HealthChecker) AddLivenessCheck(name string, probe Probe) {
-	h.liveProbes[name] = probe
+func Default() func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+	return New(Config{})
 }
-
-func (h *HealthChecker) AddReadinessCheck(name string, probe Probe) {
-	h.readyProbes[name] = probe
-}
-
-func (h *HealthChecker) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case h.livePath:
-			h.runProbes(w, r, h.liveProbes)
-		case h.readyPath:
-			h.runProbes(w, r, h.readyProbes)
-		default:
-			next.ServeHTTP(w, r)
-		}
+func WithProbes(livenessProbes, readinessProbes map[string]Probe) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+	return New(Config{
+		LivenessProbes:  livenessProbes,
+		ReadinessProbes: readinessProbes,
 	})
 }
-
-func (h *HealthChecker) runProbes(w http.ResponseWriter, r *http.Request, probes map[string]Probe) {
+func runHealthChecks(ctx context.Context, probes map[string]Probe, timeout time.Duration) *HealthStatus {
 	if len(probes) == 0 {
-		h.writeResponse(w, http.StatusOK, map[string]string{"status": "UP"})
-		return
+		return &HealthStatus{
+			Status: "UP",
+		}
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-
 	var wg sync.WaitGroup
-	errsChan := make(chan map[string]string, len(probes))
-
+	results := make(chan probeResult, len(probes))
 	for name, probe := range probes {
 		wg.Add(1)
 		go func(name string, probe Probe) {
 			defer wg.Done()
 			done := make(chan error, 1)
-
 			go func() {
 				done <- probe(ctx)
 			}()
-
+			var err error
 			select {
-			case err := <-done:
-				if err != nil {
-					errsChan <- map[string]string{name: err.Error()}
-				}
+			case err = <-done:
 			case <-ctx.Done():
-				errsChan <- map[string]string{name: ctx.Err().Error()}
+				err = ctx.Err()
+			}
+			results <- probeResult{
+				name: name,
+				err:  err,
 			}
 		}(name, probe)
 	}
-
 	wg.Wait()
-	close(errsChan)
-
-	failedChecks := make(map[string]string)
-	for errMap := range errsChan {
-		for k, v := range errMap {
-			failedChecks[k] = v
+	close(results)
+	status := &HealthStatus{
+		Status: "UP",
+		Errors: make(map[string]string),
+		Checks: make(map[string]interface{}),
+	}
+	for result := range results {
+		if result.err != nil {
+			status.Status = "DOWN"
+			status.Errors[result.name] = result.err.Error()
+			status.Checks[result.name] = map[string]interface{}{
+				"status": "DOWN",
+				"error":  result.err.Error(),
+			}
+		} else {
+			status.Checks[result.name] = map[string]interface{}{
+				"status": "UP",
+			}
 		}
 	}
-
-	if len(failedChecks) > 0 {
-		response := map[string]interface{}{
-			"status": "DOWN",
-			"errors": failedChecks,
-		}
-		h.writeResponse(w, http.StatusServiceUnavailable, response)
-		return
-	}
-
-	h.writeResponse(w, http.StatusOK, map[string]string{"status": "UP"})
+	return status
 }
-
-func (h *HealthChecker) writeResponse(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("Error writing health check response: %v", err)
+type probeResult struct {
+	name string
+	err  error
+}
+func DatabaseProbe(pingFunc func(context.Context) error) Probe {
+	return func(ctx context.Context) error {
+		return pingFunc(ctx)
+	}
+}
+func HTTPProbe(url string, client *http.Client) Probe {
+	if client == nil {
+		client = &http.Client{Timeout: 3 * time.Second}
+	}
+	return func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return base.NewConfigError("HTTP Probe", "received status "+resp.Status)
+		}
+		return nil
+	}
+}
+func AlwaysUpProbe() Probe {
+	return func(ctx context.Context) error {
+		return nil
+	}
+}
+func AlwaysDownProbe(message string) Probe {
+	return func(ctx context.Context) error {
+		return base.NewConfigError("Test Probe", message)
 	}
 }

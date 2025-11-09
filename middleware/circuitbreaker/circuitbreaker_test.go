@@ -1,232 +1,257 @@
-package circuitbreaker_test
-
+package circuitbreaker
 import (
+	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/context"
-	"github.com/arthurlch/goryu/middleware/circuitbreaker"
 )
-
-func newTestContext(req *http.Request) (*goryu.Context, *httptest.ResponseRecorder) {
-	rr := httptest.NewRecorder()
-	return context.NewContext(rr, req), rr
+func TestNewCircuitBreaker(t *testing.T) {
+	config := Config{
+		MaxRequests:  5,
+		Interval:     60 * time.Second,
+		Timeout:      30 * time.Second,
+		FailureRatio: 0.5,
+		MinRequests:  3,
+	}
+	cb := NewCircuitBreaker(config)
+	if cb == nil {
+		t.Fatal("Expected circuit breaker to be created")
+	}
+	if cb.config.MaxRequests != 5 {
+		t.Errorf("Expected MaxRequests=5, got %d", cb.config.MaxRequests)
+	}
+	if cb.state != StateClosed {
+		t.Errorf("Expected initial state to be Closed, got %s", cb.state.String())
+	}
 }
-
+func TestNewCircuitBreakerDefaults(t *testing.T) {
+	config := Config{}
+	cb := NewCircuitBreaker(config)
+	if cb.config.MaxRequests != 1 {
+		t.Errorf("Expected default MaxRequests=1, got %d", cb.config.MaxRequests)
+	}
+	if cb.config.Interval != 60*time.Second {
+		t.Errorf("Expected default Interval=60s, got %v", cb.config.Interval)
+	}
+	if cb.config.Timeout != 60*time.Second {
+		t.Errorf("Expected default Timeout=60s, got %v", cb.config.Timeout)
+	}
+	if cb.config.FailureRatio != 0.6 {
+		t.Errorf("Expected default FailureRatio=0.6, got %f", cb.config.FailureRatio)
+	}
+	if cb.config.MinRequests != 3 {
+		t.Errorf("Expected default MinRequests=3, got %d", cb.config.MinRequests)
+	}
+}
+func TestCircuitBreakerClosedState(t *testing.T) {
+	config := Config{
+		MaxRequests:  1,
+		Timeout:      1 * time.Second,
+		FailureRatio: 0.5,
+		MinRequests:  2,
+	}
+	cb := NewCircuitBreaker(config)
+	err := cb.Execute(func() error {
+		return nil 
+	})
+	if err != nil {
+		t.Errorf("Expected success in closed state, got error: %v", err)
+	}
+	if cb.State() != StateClosed {
+		t.Errorf("Expected state to remain Closed, got %s", cb.State().String())
+	}
+}
+func TestCircuitBreakerOpenState(t *testing.T) {
+	config := Config{
+		MaxRequests:  1,
+		Timeout:      1 * time.Second,
+		FailureRatio: 0.5,
+		MinRequests:  2,
+	}
+	cb := NewCircuitBreaker(config)
+	for i := 0; i < 3; i++ {
+		_ = cb.Execute(func() error {
+			return errors.New("failure")
+		})
+	}
+	if cb.State() != StateOpen {
+		t.Errorf("Expected state to be Open, got %s", cb.State().String())
+	}
+	err := cb.Execute(func() error {
+		return nil
+	})
+	if err == nil {
+		t.Error("Expected request to be rejected in open state")
+	}
+}
+func TestCircuitBreakerHalfOpenState(t *testing.T) {
+	config := Config{
+		MaxRequests:  2,
+		Timeout:      50 * time.Millisecond,
+		FailureRatio: 0.5,
+		MinRequests:  2,
+	}
+	cb := NewCircuitBreaker(config)
+	for i := 0; i < 3; i++ {
+		_ = cb.Execute(func() error {
+			return errors.New("failure")
+		})
+	}
+	time.Sleep(100 * time.Millisecond)
+	err := cb.Execute(func() error {
+		return nil 
+	})
+	if err != nil {
+		t.Errorf("Expected request to be allowed in half-open state, got error: %v", err)
+	}
+	if cb.State() != StateClosed {
+		t.Errorf("Expected state to transition to Closed after success, got %s", cb.State().String())
+	}
+}
+func TestCircuitBreakerStateTransitions(t *testing.T) {
+	var stateChanges []State
+	config := Config{
+		MaxRequests:  1,
+		Timeout:      50 * time.Millisecond,
+		FailureRatio: 0.5,
+		MinRequests:  2,
+		OnStateChange: func(state State) {
+			stateChanges = append(stateChanges, state)
+		},
+	}
+	cb := NewCircuitBreaker(config)
+	for i := 0; i < 3; i++ {
+		_ = cb.Execute(func() error {
+			return errors.New("failure")
+		})
+	}
+	if len(stateChanges) == 0 || stateChanges[len(stateChanges)-1] != StateOpen {
+		t.Error("Expected state change to Open")
+	}
+	time.Sleep(100 * time.Millisecond)
+	_ = cb.Execute(func() error {
+		return nil 
+	})
+	foundHalfOpen := false
+	foundClosed := false
+	for _, state := range stateChanges {
+		if state == StateHalfOpen {
+			foundHalfOpen = true
+		}
+		if state == StateClosed {
+			foundClosed = true
+		}
+	}
+	if !foundHalfOpen {
+		t.Error("Expected transition to HalfOpen state")
+	}
+	if !foundClosed {
+		t.Error("Expected transition back to Closed state")
+	}
+}
+func TestCircuitBreakerMetrics(t *testing.T) {
+	config := Config{
+		MaxRequests:  1,
+		Timeout:      1 * time.Second,
+		FailureRatio: 0.5,
+		MinRequests:  2,
+	}
+	cb := NewCircuitBreaker(config)
+	_ = cb.Execute(func() error {
+		return nil 
+	})
+	_ = cb.Execute(func() error {
+		return errors.New("failure")
+	})
+	metrics := cb.Metrics()
+	state, ok := metrics["state"].(string)
+	if !ok || state != "closed" {
+		t.Errorf("Expected state='closed', got %v", metrics["state"])
+	}
+	requests, ok := metrics["requests"].(uint32)
+	if !ok || requests != 2 {
+		t.Errorf("Expected requests=2, got %v", metrics["requests"])
+	}
+	failures, ok := metrics["failures"].(uint32)
+	if !ok || failures != 1 {
+		t.Errorf("Expected failures=1, got %v", metrics["failures"])
+	}
+	failureRate, ok := metrics["failure_rate"].(float64)
+	if !ok || failureRate != 0.5 {
+		t.Errorf("Expected failure_rate=0.5, got %v", metrics["failure_rate"])
+	}
+}
 func TestCircuitBreakerMiddleware(t *testing.T) {
-	t.Run("SuccessfulRequests", func(t *testing.T) {
-		config := circuitbreaker.Config{
-			Name: "test",
+	config := Config{
+		MaxRequests:  1,
+		Timeout:      1 * time.Second,
+		FailureRatio: 0.5,
+		MinRequests:  1,
+	}
+	_, middleware := WithCircuitBreaker(config)
+	called := false
+	handler := func(c *context.Context) {
+		called = true
+	}
+	wrappedHandler := middleware(handler)
+	ctx := &context.Context{
+		Writer: &mockResponseWriter{},
+	}
+	wrappedHandler(ctx)
+	if !called {
+		t.Error("Expected handler to be called")
+	}
+}
+func TestStateString(t *testing.T) {
+	tests := []struct {
+		state    State
+		expected string
+	}{
+		{StateClosed, "closed"},
+		{StateOpen, "open"},
+		{StateHalfOpen, "half-open"},
+		{State(999), "unknown"},
+	}
+	for _, test := range tests {
+		if test.state.String() != test.expected {
+			t.Errorf("Expected %s, got %s", test.expected, test.state.String())
 		}
-		middleware := circuitbreaker.New(config)
-
-		handler := func(c *goryu.Context) {
-			c.Text(http.StatusOK, "Success")
-		}
-
-		// Send several successful requests
-		for i := 0; i < 5; i++ {
-			req := httptest.NewRequest("GET", "/", nil)
-			ctx, rr := newTestContext(req)
-
-			middleware(handler)(ctx)
-
-			if rr.Code != http.StatusOK {
-				t.Errorf("Request %d: Expected status 200, got %d", i, rr.Code)
-			}
-		}
-	})
-
-	t.Run("FailingRequestsOpenCircuit", func(t *testing.T) {
-		config := circuitbreaker.Config{
-			Name:        "test",
-			Timeout:     100 * time.Millisecond,
-			MaxRequests: 1,
-			ReadyToTrip: func(counts circuitbreaker.Counts) bool {
-				return counts.ConsecutiveFailures >= 3
-			},
-		}
-		middleware := circuitbreaker.New(config)
-
-		handler := func(c *goryu.Context) {
-			c.Text(http.StatusInternalServerError, "Server Error")
-		}
-
-		// Send failing requests to trip the circuit
-		for i := 0; i < 3; i++ {
-			req := httptest.NewRequest("GET", "/", nil)
-			ctx, rr := newTestContext(req)
-
-			middleware(handler)(ctx)
-
-			if rr.Code != http.StatusInternalServerError {
-				t.Errorf("Request %d: Expected status 500, got %d", i, rr.Code)
-			}
-		}
-
-		// Next request should be blocked by open circuit
-		req := httptest.NewRequest("GET", "/", nil)
-		ctx, rr := newTestContext(req)
-
-		middleware(handler)(ctx)
-
-		if rr.Code != http.StatusServiceUnavailable {
-			t.Errorf("Expected status 503 (circuit open), got %d", rr.Code)
-		}
-	})
-
-	t.Run("HalfOpenRecovery", func(t *testing.T) {
-		config := circuitbreaker.Config{
-			Name:        "test",
-			Timeout:     50 * time.Millisecond,
-			MaxRequests: 2,
-			ReadyToTrip: func(counts circuitbreaker.Counts) bool {
-				return counts.ConsecutiveFailures >= 2
-			},
-		}
-		middleware := circuitbreaker.New(config)
-
-		failingHandler := func(c *goryu.Context) {
-			c.Text(http.StatusInternalServerError, "Server Error")
-		}
-
-		successHandler := func(c *goryu.Context) {
-			c.Text(http.StatusOK, "Success")
-		}
-
-		// Trip the circuit with failing requests
-		for i := 0; i < 2; i++ {
-			req := httptest.NewRequest("GET", "/", nil)
-			ctx, _ := newTestContext(req)
-			middleware(failingHandler)(ctx)
-		}
-
-		// Wait for circuit to transition to half-open
-		time.Sleep(60 * time.Millisecond)
-
-		// Send successful request to close the circuit
-		req := httptest.NewRequest("GET", "/", nil)
-		ctx, rr := newTestContext(req)
-
-		middleware(successHandler)(ctx)
-
-		if rr.Code != http.StatusOK {
-			t.Errorf("Expected status 200 (half-open success), got %d", rr.Code)
-		}
-
-		// Circuit should now be closed, allowing more requests
-		req2 := httptest.NewRequest("GET", "/", nil)
-		ctx2, rr2 := newTestContext(req2)
-
-		middleware(successHandler)(ctx2)
-
-		if rr2.Code != http.StatusOK {
-			t.Errorf("Expected status 200 (circuit closed), got %d", rr2.Code)
-		}
-	})
-
-	t.Run("CustomFallbackHandler", func(t *testing.T) {
-		config := circuitbreaker.Config{
-			Name:        "test",
-			Timeout:     100 * time.Millisecond,
-			MaxRequests: 1,
-			ReadyToTrip: func(counts circuitbreaker.Counts) bool {
-				return counts.ConsecutiveFailures >= 1
-			},
-			FallbackHandler: func(c *goryu.Context) {
-				c.Text(http.StatusTooManyRequests, "Custom fallback")
-			},
-		}
-		middleware := circuitbreaker.New(config)
-
-		handler := func(c *goryu.Context) {
-			c.Text(http.StatusInternalServerError, "Server Error")
-		}
-
-		// Trip the circuit
-		req1 := httptest.NewRequest("GET", "/", nil)
-		ctx1, _ := newTestContext(req1)
-		middleware(handler)(ctx1)
-
-		// Next request should use custom fallback
-		req2 := httptest.NewRequest("GET", "/", nil)
-		ctx2, rr2 := newTestContext(req2)
-
-		middleware(handler)(ctx2)
-
-		if rr2.Code != http.StatusTooManyRequests {
-			t.Errorf("Expected status 429, got %d", rr2.Code)
-		}
-
-		if rr2.Body.String() != "Custom fallback" {
-			t.Errorf("Expected 'Custom fallback', got %s", rr2.Body.String())
-		}
-	})
-
-	t.Run("SkipMiddleware", func(t *testing.T) {
-		config := circuitbreaker.Config{
-			Name: "test",
-			Skip: func(c *goryu.Context) bool {
-				return c.Request.URL.Path == "/skip"
-			},
-		}
-		middleware := circuitbreaker.New(config)
-
-		handler := func(c *goryu.Context) {
-			c.Text(http.StatusInternalServerError, "Server Error")
-		}
-
-		req := httptest.NewRequest("GET", "/skip", nil)
-		ctx, rr := newTestContext(req)
-
-		middleware(handler)(ctx)
-
-		// Should execute handler despite being a failing request
-		if rr.Code != http.StatusInternalServerError {
-			t.Errorf("Expected status 500, got %d", rr.Code)
-		}
-	})
-
-	t.Run("StateCallbacks", func(t *testing.T) {
-		var stateChanges []string
-
-		config := circuitbreaker.Config{
-			Name:        "test",
-			Timeout:     50 * time.Millisecond,
-			MaxRequests: 1,
-			ReadyToTrip: func(counts circuitbreaker.Counts) bool {
-				return counts.ConsecutiveFailures >= 2
-			},
-			OnStateChange: func(name string, from circuitbreaker.State, to circuitbreaker.State) {
-				stateChanges = append(stateChanges, name+":"+from.String()+"->"+to.String())
-			},
-		}
-		middleware := circuitbreaker.New(config)
-
-		failingHandler := func(c *goryu.Context) {
-			c.Text(http.StatusInternalServerError, "Server Error")
-		}
-
-		// Trip the circuit
-		for i := 0; i < 2; i++ {
-			req := httptest.NewRequest("GET", "/", nil)
-			ctx, _ := newTestContext(req)
-			middleware(failingHandler)(ctx)
-		}
-
-		// Wait for half-open transition
-		time.Sleep(60 * time.Millisecond)
-
-		// Trigger half-open state
-		req := httptest.NewRequest("GET", "/", nil)
-		ctx, _ := newTestContext(req)
-		middleware(failingHandler)(ctx)
-
-		if len(stateChanges) == 0 {
-			t.Error("Expected state change callbacks to be called")
-		}
-	})
+	}
+}
+func BenchmarkCircuitBreakerExecute(b *testing.B) {
+	config := Config{
+		MaxRequests:  10,
+		Timeout:      1 * time.Second,
+		FailureRatio: 0.9,
+		MinRequests:  10,
+	}
+	cb := NewCircuitBreaker(config)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = cb.Execute(func() error {
+			return nil
+		})
+	}
+}
+type mockResponseWriter struct {
+	statusCode int
+	data       []byte
+	headers    map[string][]string
+}
+func (m *mockResponseWriter) Header() http.Header {
+	if m.headers == nil {
+		m.headers = make(map[string][]string)
+	}
+	return http.Header(m.headers)
+}
+func (m *mockResponseWriter) Write(data []byte) (int, error) {
+	if m.statusCode == 0 {
+		m.statusCode = 200
+	}
+	m.data = append(m.data, data...)
+	return len(data), nil
+}
+func (m *mockResponseWriter) WriteHeader(statusCode int) {
+	m.statusCode = statusCode
 }

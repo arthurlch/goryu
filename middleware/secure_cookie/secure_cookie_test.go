@@ -1,6 +1,4 @@
-// middleware/securecookie_test.go
-package middleware
-
+package securecookie_test
 import (
 	"errors"
 	"net/http"
@@ -8,114 +6,165 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/secure_cookie"
 )
-
-// Test key for AES-256
-// This is a dummy key for testing purpose, do not reuse it !
 const testHexKey = "a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0a1b2"
-
-func TestSecureCookieRoundTrip(t *testing.T) {
-	sc, err := NewSecureCookie(testHexKey, "test-cookie")
-	if err != nil {
-		t.Fatalf("Failed to create SecureCookie: %v", err)
-	}
-
-	originalValue := map[string]string{"user": "gopher", "id": "42"}
-
-	encoded, err := sc.encrypt(originalValue)
-	if err != nil {
-		t.Fatalf("Encryption failed: %v", err)
-	}
-
-	if encoded == "" {
-		t.Fatal("Encoded value is empty")
-	}
-
-	decoded, err := sc.decrypt(encoded)
-	if err != nil {
-		t.Fatalf("Decryption failed: %v", err)
-	}
-
-	if !reflect.DeepEqual(originalValue, decoded) {
-		t.Errorf("Decoded value does not match original. got %v, want %v", decoded, originalValue)
-	}
+func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
+	rr := httptest.NewRecorder()
+	return context.NewContext(rr, req), rr
 }
-
-func TestTamperedCookie(t *testing.T) {
-	sc, err := NewSecureCookie(testHexKey, "test-cookie")
-	if err != nil {
-		t.Fatalf("Failed to create SecureCookie: %v", err)
-	}
-
-	originalValue := map[string]string{"access": "granted"}
-	encoded, err := sc.encrypt(originalValue)
-	if err != nil {
-		t.Fatalf("Encryption failed: %v", err)
-	}
-
-	tampered := encoded + "tamper"
-
-	_, err = sc.decrypt(tampered)
-	if err == nil {
-		t.Error("Expected an error when decrypting tampered cookie, but got nil")
-	}
-	if !errors.Is(err, ErrInvalidValue) {
-		t.Errorf("Expected ErrInvalidValue, got %v", err)
-	}
-}
-
-func TestMiddlewareIntegration(t *testing.T) {
-	sc, err := NewSecureCookie(testHexKey, "integration-test")
-	if err != nil {
-		t.Fatalf("Failed to create SecureCookie: %v", err)
-	}
-
-	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, err := Get(r)
-		if err == nil {
-			expected := map[string]string{"hello": "world"}
-			if !reflect.DeepEqual(data, expected) {
-				t.Errorf("Got unexpected data from cookie: got %v, want %v", data, expected)
-			}
-			w.WriteHeader(http.StatusOK)
-			return
+func TestSecureCookieMiddleware(t *testing.T) {
+	t.Run("BasicFunctionality", func(t *testing.T) {
+		config := securecookie.Config{
+			HexKey:     testHexKey,
+			CookieName: "test-cookie",
 		}
-
-		// Data not found, set it for the next request
-		if errors.Is(err, ErrValueNotFound) {
-			if err := Set(r, w, map[string]string{"hello": "world"}); err != nil {
-				t.Errorf("Failed to set cookie: %v", err)
+		middleware := securecookie.New(config)
+		handler := func(c *context.Context) {
+			data, err := securecookie.Get(c)
+			if err == nil {
+				expected := map[string]string{"hello": "world"}
+				if !reflect.DeepEqual(data, expected) {
+					t.Errorf("Got unexpected data from cookie: got %v, want %v", data, expected)
+				}
+				c.Writer.WriteHeader(http.StatusOK)
+				return
 			}
-			w.WriteHeader(http.StatusCreated)
-			return
+			if errors.Is(err, securecookie.ErrValueNotFound) {
+				if err := securecookie.Set(c, map[string]string{"hello": "world"}); err != nil {
+					t.Errorf("Failed to set cookie: %v", err)
+				}
+				c.Writer.WriteHeader(http.StatusCreated)
+				return
+			}
+			c.Writer.WriteHeader(http.StatusInternalServerError)
 		}
-
-		http.Error(w, "Unexpected error getting cookie", http.StatusInternalServerError)
+		req1 := httptest.NewRequest("GET", "/", nil)
+		ctx1, rr1 := newTestContext(req1)
+		middleware(handler)(ctx1)
+		if rr1.Code != http.StatusCreated {
+			t.Fatalf("First request: expected status %d, got %d", http.StatusCreated, rr1.Code)
+		}
+		cookieHeader := rr1.Header().Get("Set-Cookie")
+		if !strings.Contains(cookieHeader, "test-cookie=") {
+			t.Fatal("First request: cookie was not set in response")
+		}
+		req2 := httptest.NewRequest("GET", "/", nil)
+		req2.Header.Set("Cookie", cookieHeader)
+		ctx2, rr2 := newTestContext(req2)
+		middleware(handler)(ctx2)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("Second request: expected status %d, got %d", http.StatusOK, rr2.Code)
+		}
 	})
-
-	wrappedHandler := sc.Middleware(handler)
-
-	req1 := httptest.NewRequest("GET", "/", nil)
-	rr1 := httptest.NewRecorder()
-	wrappedHandler.ServeHTTP(rr1, req1)
-
-	if rr1.Code != http.StatusCreated {
-		t.Fatalf("First request: expected status %d, got %d", http.StatusCreated, rr1.Code)
-	}
-
-	cookieHeader := rr1.Header().Get("Set-Cookie")
-	if !strings.Contains(cookieHeader, "integration-test=") {
-		t.Fatal("First request: cookie was not set in response")
-	}
-
-	req2 := httptest.NewRequest("GET", "/", nil)
-	// Add the cookie from the first response to the second request
-	req2.Header.Set("Cookie", cookieHeader)
-
-	rr2 := httptest.NewRecorder()
-	wrappedHandler.ServeHTTP(rr2, req2)
-
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("Second request: expected status %d, got %d", http.StatusOK, rr2.Code)
-	}
+	t.Run("TamperedCookie", func(t *testing.T) {
+		config := securecookie.Config{
+			HexKey:     testHexKey,
+			CookieName: "tamper-test",
+		}
+		middleware := securecookie.New(config)
+		handler := func(c *context.Context) {
+			data, err := securecookie.Get(c)
+			if err != nil && errors.Is(err, securecookie.ErrValueNotFound) {
+				c.Writer.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if data != nil {
+				t.Error("Should not have valid data from tampered cookie")
+			}
+			c.Writer.WriteHeader(http.StatusOK)
+		}
+		req1 := httptest.NewRequest("GET", "/", nil)
+		ctx1, rr1 := newTestContext(req1)
+		middleware(func(c *context.Context) {
+			securecookie.Set(c, map[string]string{"valid": "data"})
+		})(ctx1)
+		cookieHeader := rr1.Header().Get("Set-Cookie")
+		tamperedCookie := strings.Replace(cookieHeader, "=", "=TAMPERED", 1)
+		req2 := httptest.NewRequest("GET", "/", nil)
+		req2.Header.Set("Cookie", tamperedCookie)
+		ctx2, rr2 := newTestContext(req2)
+		middleware(handler)(ctx2)
+		if rr2.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status %d for tampered cookie, got %d", http.StatusUnauthorized, rr2.Code)
+		}
+	})
+	t.Run("ClearCookie", func(t *testing.T) {
+		config := securecookie.Config{
+			HexKey:     testHexKey,
+			CookieName: "clear-test",
+		}
+		middleware := securecookie.New(config)
+		handler := func(c *context.Context) {
+			if err := securecookie.Clear(c); err != nil {
+				t.Errorf("Failed to clear cookie: %v", err)
+			}
+			c.Writer.WriteHeader(http.StatusOK)
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		cookieHeader := rr.Header().Get("Set-Cookie")
+		if !strings.Contains(cookieHeader, "clear-test=") {
+			t.Fatal("Clear cookie header not found")
+		}
+		if !strings.Contains(cookieHeader, "Max-Age=0") {
+			t.Fatal("Cookie was not properly expired")
+		}
+	})
+	t.Run("InvalidHexKey", func(t *testing.T) {
+		config := securecookie.Config{
+			HexKey:     "invalid-hex",
+			CookieName: "invalid-test",
+		}
+		middleware := securecookie.New(config)
+		handler := func(c *context.Context) {
+			t.Error("Handler should not be called with invalid config")
+			c.Writer.WriteHeader(http.StatusOK)
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code == http.StatusOK {
+			t.Error("Expected error status for invalid hex key")
+		}
+	})
+	t.Run("DefaultHelper", func(t *testing.T) {
+		middleware := securecookie.Default(testHexKey, "default-test")
+		handler := func(c *context.Context) {
+			c.Writer.WriteHeader(http.StatusOK)
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+	})
+	t.Run("CustomConfig", func(t *testing.T) {
+		config := securecookie.Config{
+			HexKey:     testHexKey,
+			CookieName: "custom-test",
+			CookiePath: "/admin",
+			Secure:     false, 
+			HttpOnly:   false, 
+			SameSite:   http.SameSiteStrictMode,
+		}
+		middleware := securecookie.New(config)
+		handler := func(c *context.Context) {
+			securecookie.Set(c, map[string]string{"test": "data"})
+			c.Writer.WriteHeader(http.StatusOK)
+		}
+		req := httptest.NewRequest("GET", "/admin", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		cookieHeader := rr.Header().Get("Set-Cookie")
+		if !strings.Contains(cookieHeader, "Path=/admin") {
+			t.Error("Cookie path not set correctly")
+		}
+		if !strings.Contains(cookieHeader, "SameSite=Strict") {
+			t.Error("SameSite not set correctly")
+		}
+	})
 }

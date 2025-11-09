@@ -259,6 +259,57 @@ func getMiddlewareInfo(name string) *MiddlewareInfo {
 				{Name: "Checks", Description: "Health check functions", Default: "Basic ping"},
 			},
 		},
+		"errors": {
+			Name:        "Error Handling",
+			Description: "Elegant error handling middleware with structured errors",
+			Category:    "Core",
+			Package:     "github.com/arthurlch/goryu/middleware/errors",
+			Usage:       "app.Use(errors.New()) or app.Use(errors.NewWithConfig(errors.Config{...}))",
+			Example: `// Basic usage
+app.Use(errors.New())
+
+// With custom config
+app.Use(errors.NewWithConfig(errors.Config{
+    ShowDetails:    true,
+    ShowStackTrace: false,
+    LogErrors:      true,
+    DevMode:        false,
+}))
+
+// Using error helpers in handlers
+app.GET("/users/:id", errors.Handle(func(c *goryu.Context) error {
+    id := c.Param("id")
+    user, err := getUserByID(id)
+    if err != nil {
+        return errors.NotFound("user")
+    }
+    return c.JSON(200, user)
+}))
+
+// Using fluent error API
+app.POST("/login", func(c *goryu.Context) {
+    var req LoginRequest
+    if err := c.Bind(&req); err != nil {
+        errors.Error(c).BadRequest("Invalid request body")
+        return
+    }
+    
+    if req.Email == "" {
+        errors.Error(c).Validation("email", "Email is required")
+        return
+    }
+    
+    // Process login...
+})`,
+			Options: []MiddlewareOption{
+				{Name: "ShowDetails", Description: "Show error details in response", Default: "true"},
+				{Name: "ShowStackTrace", Description: "Include stack trace (dev mode only)", Default: "false"},
+				{Name: "LogErrors", Description: "Log errors to console", Default: "true"},
+				{Name: "DevMode", Description: "Development mode with extra debugging", Default: "false"},
+				{Name: "CustomHandler", Description: "Custom error handler function", Default: ""},
+				{Name: "ErrorTransformer", Description: "Transform errors before response", Default: ""},
+			},
+		},
 	}
 	
 	return middlewareData[name]

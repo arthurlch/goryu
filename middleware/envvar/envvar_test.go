@@ -1,86 +1,152 @@
-package middleware
-
+package envvar_test
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/envvar"
 )
-
+func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
+	rr := httptest.NewRecorder()
+	return context.NewContext(rr, req), rr
+}
 func TestEnvvarMiddleware(t *testing.T) {
-	t.Setenv("APP_VERSION", "v1.2.3")
-	t.Setenv("DATABASE_URL", "secret-db-url")
-	t.Setenv("LOG_LEVEL", "debug")
-
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTeapot)
+	os.Setenv("TEST_APP_VERSION", "v1.2.3")
+	os.Setenv("TEST_DATABASE_URL", "secret-db-url")
+	os.Setenv("TEST_LOG_LEVEL", "debug")
+	defer func() {
+		os.Unsetenv("TEST_APP_VERSION")
+		os.Unsetenv("TEST_DATABASE_URL")
+		os.Unsetenv("TEST_LOG_LEVEL")
+	}()
+	t.Run("DefaultEndpoint", func(t *testing.T) {
+		middleware := envvar.New(envvar.Config{})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/envvar", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+			t.Fatalf("Failed to decode json response: %v", err)
+		}
+		if _, exists := body["TEST_APP_VERSION"]; !exists {
+			t.Error("TEST_APP_VERSION should be present in response")
+		}
 	})
-
-	t.Run("exposes only specified variables", func(t *testing.T) {
-		config := EnvvarConfig{
+	t.Run("ExposeOnlySpecified", func(t *testing.T) {
+		config := envvar.Config{
 			Path:   "/config",
-			Expose: []string{"APP_VERSION", "LOG_LEVEL"},
+			Expose: []string{"TEST_APP_VERSION", "TEST_LOG_LEVEL"},
 		}
-		handler := EnvvarMiddleware(config)(nextHandler)
-
+		middleware := envvar.New(config)
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
 		req := httptest.NewRequest("GET", "/config", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
-
 		var body map[string]string
 		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
 			t.Fatalf("Failed to decode json response: %v", err)
 		}
-
-		if len(body) != 2 {
-			t.Errorf("expected 2 env vars, got %d", len(body))
+		if body["TEST_APP_VERSION"] != "v1.2.3" {
+			t.Errorf("Expected TEST_APP_VERSION=v1.2.3, got %s", body["TEST_APP_VERSION"])
 		}
-		if body["APP_VERSION"] != "v1.2.3" {
-			t.Errorf("unexpected APP_VERSION: got %s", body["APP_VERSION"])
+		if body["TEST_LOG_LEVEL"] != "debug" {
+			t.Errorf("Expected TEST_LOG_LEVEL=debug, got %s", body["TEST_LOG_LEVEL"])
 		}
-		if _, exists := body["DATABASE_URL"]; exists {
-			t.Error("DATABASE_URL should not be exposed")
+		if _, exists := body["TEST_DATABASE_URL"]; exists {
+			t.Error("TEST_DATABASE_URL should not be exposed")
 		}
 	})
-
-	t.Run("excludes specified variables", func(t *testing.T) {
-		config := EnvvarConfig{
+	t.Run("ExcludeSpecified", func(t *testing.T) {
+		config := envvar.Config{
 			Path:    "/config",
-			Exclude: []string{"DATABASE_URL"},
+			Exclude: []string{"TEST_DATABASE_URL"},
 		}
-		handler := EnvvarMiddleware(config)(nextHandler)
-
+		middleware := envvar.New(config)
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
 		req := httptest.NewRequest("GET", "/config", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
 		var body map[string]string
 		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
 			t.Fatalf("Failed to decode json response: %v", err)
 		}
-
-		if _, exists := body["DATABASE_URL"]; exists {
-			t.Error("DATABASE_URL should have been excluded")
+		if _, exists := body["TEST_DATABASE_URL"]; exists {
+			t.Error("TEST_DATABASE_URL should have been excluded")
 		}
-		if _, exists := body["LOG_LEVEL"]; !exists {
-			t.Error("LOG_LEVEL should have been included")
+		if _, exists := body["TEST_LOG_LEVEL"]; !exists {
+			t.Error("TEST_LOG_LEVEL should have been included")
 		}
 	})
-
-	t.Run("passes through on non-matching path", func(t *testing.T) {
-		config := EnvvarConfig{Path: "/config"}
-		handler := EnvvarMiddleware(config)(nextHandler)
-
+	t.Run("NonMatchingPath", func(t *testing.T) {
+		config := envvar.Config{Path: "/config"}
+		middleware := envvar.New(config)
+		handler := func(c *context.Context) {
+			c.Text(http.StatusTeapot, "Regular handler")
+		}
 		req := httptest.NewRequest("GET", "/not-config", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusTeapot {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusTeapot)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusTeapot {
+			t.Errorf("Expected status 418, got %d", rr.Code)
+		}
+		if rr.Body.String() != "Regular handler" {
+			t.Errorf("Expected 'Regular handler', got %s", rr.Body.String())
+		}
+	})
+	t.Run("WithPathHelper", func(t *testing.T) {
+		middleware := envvar.WithPath("/custom-env")
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/custom-env", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		contentType := rr.Header().Get("Content-Type")
+		if contentType != "application/json" {
+			t.Errorf("Expected content-type 'application/json', got %s", contentType)
+		}
+	})
+	t.Run("WithExposeHelper", func(t *testing.T) {
+		middleware := envvar.WithExpose([]string{"TEST_APP_VERSION"})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/envvar", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+			t.Fatalf("Failed to decode json response: %v", err)
+		}
+		if len(body) != 1 {
+			t.Errorf("Expected 1 env var, got %d", len(body))
+		}
+		if body["TEST_APP_VERSION"] != "v1.2.3" {
+			t.Errorf("Expected TEST_APP_VERSION=v1.2.3, got %s", body["TEST_APP_VERSION"])
 		}
 	})
 }

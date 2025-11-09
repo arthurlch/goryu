@@ -1,65 +1,58 @@
 package requestid
-
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"io"
-
-	"github.com/arthurlch/goryu"
+	"github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/base"
 )
-
 const DefaultRequestIDHeader = "X-Request-ID"
-
 type Config struct {
-	Next func(c *goryu.Context) bool
-
+	base.BaseConfig
 	Header string
-
 	Generator func() string
-
 	ContextKey string
 }
-
-func New(config ...Config) goryu.Middleware {
-	var cfg Config
-	if len(config) > 0 {
-		cfg = config[0]
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+func (c *Config) Validate() error {
+	if c.Header == "" {
+		c.Header = DefaultRequestIDHeader
 	}
-
-	if cfg.Header == "" {
-		cfg.Header = DefaultRequestIDHeader
+	if c.Generator == nil {
+		c.Generator = defaultGenerator
 	}
-	if cfg.Generator == nil {
-		cfg.Generator = defaultGenerator
+	if c.ContextKey == "" {
+		c.ContextKey = "requestid"
 	}
-	if cfg.ContextKey == "" {
-		cfg.ContextKey = "requestid"
-	}
-
-	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
-		return func(c *goryu.Context) {
-			if cfg.Next != nil && cfg.Next(c) {
-				next(c)
-				return
+	return nil
+}
+func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
+	if err := config.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, err, "RequestID")
 			}
-
-			rid := c.GetHeader(cfg.Header)
-			if rid == "" {
-				rid = cfg.Generator()
-			}
-
-			c.Set(cfg.ContextKey, rid)
-			c.Writer.Header().Set(cfg.Header, rid)
-
-			next(c)
 		}
 	}
+	handler := func(c *context.Context) error {
+		rid := c.Request.Header.Get(config.Header)
+		if rid == "" {
+			rid = config.Generator()
+		}
+		c.Set(config.ContextKey, rid)
+		c.Writer.Header().Set(config.Header, rid)
+		return nil
+	}
+	return base.StandardMiddleware("RequestID", config.BaseConfig, handler)
 }
-
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{})
+}
 func defaultGenerator() string {
 	b := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		// should not happens tho
 		return "could-not-generate-random-string"
 	}
 	return hex.EncodeToString(b)

@@ -1,98 +1,89 @@
 package cors
-
 import (
 	"net/http"
 	"strconv"
 	"strings"
-
-	"github.com/arthurlch/goryu"
+	"github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/base"
 )
-
 type Config struct {
-	Next func(c *goryu.Context) bool
-
-	// AllowOrigins defines a list of origins that are allowed to access the resources.
-	// Default: []string{"*"}
+	base.BaseConfig
 	AllowOrigins []string
-
-	// AllowMethods defines a list of methods that are allowed when accessing the resources.
-	// Default: []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH"}
 	AllowMethods []string
-
-	// AllowHeaders defines a list of headers that are allowed to be sent by the client.
-	// Default: []string{}
 	AllowHeaders []string
-
-	// AllowCredentials indicates whether the request can include user credentials.
-	// Default: false
 	AllowCredentials bool
-
-	// ExposeHeaders defines a list of headers that clients can access.
-	// Default: []string{}
 	ExposeHeaders []string
-
-	// MaxAge indicates how long the results of a preflight request can be cached.
-	// Default: 0
 	MaxAge int
 }
-
-func New(config ...Config) goryu.Middleware {
-	var cfg Config
-	if len(config) > 0 {
-		cfg = config[0]
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+func (c *Config) Validate() error {
+	if len(c.AllowOrigins) == 0 {
+		return base.NewConfigError("AllowOrigins", "must be explicitly configured - avoid using '*' for production")
 	}
-
-	if len(cfg.AllowOrigins) == 0 {
-		cfg.AllowOrigins = []string{"*"}
+	if c.AllowCredentials {
+		for _, origin := range c.AllowOrigins {
+			if origin == "*" {
+				return base.NewConfigError("AllowOrigins", "cannot use '*' when AllowCredentials is true - specify exact origins")
+			}
+		}
 	}
-	if len(cfg.AllowMethods) == 0 {
-		cfg.AllowMethods = []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH"}
+	for _, origin := range c.AllowOrigins {
+		if origin == "*" && c.Logger != nil {
+			c.Logger.Printf("WARNING: CORS allows all origins (*) - this should only be used in development")
+		}
 	}
-
-	allowMethods := strings.Join(cfg.AllowMethods, ",")
-	allowHeaders := strings.Join(cfg.AllowHeaders, ",")
-	exposeHeaders := strings.Join(cfg.ExposeHeaders, ",")
-	maxAge := strconv.Itoa(cfg.MaxAge)
-	allowAllOrigins := cfg.AllowOrigins[0] == "*"
-
-	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
-		return func(c *goryu.Context) {
-			if cfg.Next != nil && cfg.Next(c) {
+	if len(c.AllowMethods) == 0 {
+		c.AllowMethods = []string{"GET", "POST", "HEAD", "PUT", "DELETE", "PATCH"}
+	}
+	return nil
+}
+func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
+	if err := config.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, err, "CORS")
+			}
+		}
+	}
+	allowMethods := strings.Join(config.AllowMethods, ",")
+	allowHeaders := strings.Join(config.AllowHeaders, ",")
+	exposeHeaders := strings.Join(config.ExposeHeaders, ",")
+	maxAge := strconv.Itoa(config.MaxAge)
+	allowAllOrigins := len(config.AllowOrigins) > 0 && config.AllowOrigins[0] == "*"
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if config.Skip != nil && config.Skip(c) {
 				next(c)
 				return
 			}
-
-			origin := c.GetHeader("Origin")
+			origin := c.Request.Header.Get("Origin")
 			if origin == "" {
 				next(c)
 				return
 			}
-
 			allowed := false
 			if allowAllOrigins {
 				allowed = true
 			} else {
-				for _, o := range cfg.AllowOrigins {
+				for _, o := range config.AllowOrigins {
 					if o == origin {
 						allowed = true
 						break
 					}
 				}
 			}
-
 			if allowed {
-				c.Append("Vary", "Origin")
+				c.Writer.Header().Add("Vary", "Origin")
 				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-				if cfg.AllowCredentials {
+				if config.AllowCredentials {
 					c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 				}
 			}
-
-			// preflight req
 			if c.Request.Method == http.MethodOptions {
-				c.Append("Vary", "Access-Control-Request-Method")
-				c.Append("Vary", "Access-Control-Request-Headers")
-
+				c.Writer.Header().Add("Vary", "Access-Control-Request-Method")
+				c.Writer.Header().Add("Vary", "Access-Control-Request-Headers")
 				if allowed {
 					c.Writer.Header().Set("Access-Control-Allow-Methods", allowMethods)
 					if allowHeaders != "" {
@@ -101,16 +92,27 @@ func New(config ...Config) goryu.Middleware {
 					if exposeHeaders != "" {
 						c.Writer.Header().Set("Access-Control-Expose-Headers", exposeHeaders)
 					}
-					if cfg.MaxAge > 0 {
+					if config.MaxAge > 0 {
 						c.Writer.Header().Set("Access-Control-Max-Age", maxAge)
 					}
 				}
-
-				c.Status(http.StatusNoContent)
+				c.Writer.WriteHeader(http.StatusNoContent)
 				return
 			}
-
 			next(c)
 		}
 	}
+}
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{})
+}
+func WithAllowAll() func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{
+		AllowOrigins: []string{"*"},
+	})
+}
+func WithOrigins(origins ...string) func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{
+		AllowOrigins: origins,
+	})
 }

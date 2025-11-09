@@ -1,61 +1,101 @@
 package secure
-
 import (
 	"fmt"
-
-	"github.com/arthurlch/goryu"
+	"github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/middleware/base"
 )
-
 type Config struct {
-	Next                  func(c *goryu.Context) bool
-	XSSProtection         string
-	ContentTypeNosniff    string
-	XFrameOptions         string
-	HSTSMaxAge            int
+	base.BaseConfig
+	XSSProtection string
+	ContentTypeNosniff string
+	XFrameOptions string
+	HSTSMaxAge int
 	HSTSIncludeSubdomains bool
+	HSTSPreload bool
+	ContentSecurityPolicy string
+	ReferrerPolicy string
+	PermissionsPolicy string
 }
-
-func New(config ...Config) goryu.Middleware {
-	var cfg Config
-	if len(config) > 0 {
-		cfg = config[0]
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+func (c *Config) Validate() error {
+	if c.XSSProtection == "" {
+		c.XSSProtection = "1; mode=block"
 	}
-
-	if cfg.XSSProtection == "" {
-		cfg.XSSProtection = "1; mode=block"
+	if c.ContentTypeNosniff == "" {
+		c.ContentTypeNosniff = "nosniff"
 	}
-	if cfg.ContentTypeNosniff == "" {
-		cfg.ContentTypeNosniff = "nosniff"
+	if c.XFrameOptions == "" {
+		c.XFrameOptions = "SAMEORIGIN"
 	}
-	if cfg.XFrameOptions == "" {
-		cfg.XFrameOptions = "SAMEORIGIN"
+	if c.ReferrerPolicy == "" {
+		c.ReferrerPolicy = "strict-origin-when-cross-origin"
 	}
-
-	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
-		return func(c *goryu.Context) {
-			if cfg.Next != nil && cfg.Next(c) {
+	return nil
+}
+func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
+	if err := config.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, err, "Secure")
+			}
+		}
+	}
+	var hstsValue string
+	if config.HSTSMaxAge > 0 {
+		hstsValue = fmt.Sprintf("max-age=%d", config.HSTSMaxAge)
+		if config.HSTSIncludeSubdomains {
+			hstsValue += "; includeSubDomains"
+		}
+		if config.HSTSPreload {
+			hstsValue += "; preload"
+		}
+	}
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if config.Skip != nil && config.Skip(c) {
 				next(c)
 				return
 			}
-
-			if cfg.XSSProtection != "" {
-				c.Writer.Header().Set("X-XSS-Protection", cfg.XSSProtection)
+			headers := c.Writer.Header()
+			if config.XSSProtection != "" {
+				headers.Set("X-XSS-Protection", config.XSSProtection)
 			}
-			if cfg.ContentTypeNosniff != "" {
-				c.Writer.Header().Set("X-Content-Type-Options", cfg.ContentTypeNosniff)
+			if config.ContentTypeNosniff != "" {
+				headers.Set("X-Content-Type-Options", config.ContentTypeNosniff)
 			}
-			if cfg.XFrameOptions != "" {
-				c.Writer.Header().Set("X-Frame-Options", cfg.XFrameOptions)
+			if config.XFrameOptions != "" {
+				headers.Set("X-Frame-Options", config.XFrameOptions)
 			}
-			if c.Request.TLS != nil && cfg.HSTSMaxAge > 0 {
-				subdomains := ""
-				if cfg.HSTSIncludeSubdomains {
-					subdomains = "; includeSubdomains"
-				}
-				c.Writer.Header().Set("Strict-Transport-Security", fmt.Sprintf("max-age=%d%s", cfg.HSTSMaxAge, subdomains))
+			if config.ReferrerPolicy != "" {
+				headers.Set("Referrer-Policy", config.ReferrerPolicy)
 			}
-
+			if config.ContentSecurityPolicy != "" {
+				headers.Set("Content-Security-Policy", config.ContentSecurityPolicy)
+			}
+			if config.PermissionsPolicy != "" {
+				headers.Set("Permissions-Policy", config.PermissionsPolicy)
+			}
+			if c.Request.TLS != nil && hstsValue != "" {
+				headers.Set("Strict-Transport-Security", hstsValue)
+			}
 			next(c)
 		}
 	}
+}
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{})
+}
+func WithXSSProtection(protection string) func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{XSSProtection: protection})
+}
+func WithHSTS(maxAge int, includeSubdomains bool) func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{
+		HSTSMaxAge:            maxAge,
+		HSTSIncludeSubdomains: includeSubdomains,
+	})
+}
+func WithCSP(csp string) func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{ContentSecurityPolicy: csp})
 }
