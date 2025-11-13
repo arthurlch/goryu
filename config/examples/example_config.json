@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "blasingly-fast-goryu-api",
+    "name": "goryu-api",
     "version": "2.0.0",
     "environment": "production",
     "log_level": "warn",

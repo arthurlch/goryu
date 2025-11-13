@@ -1,10 +1,13 @@
 package monitoring
 
 import (
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,7 +15,6 @@ import (
 	"github.com/arthurlch/goryu/context"
 )
 
-// EventType represents the type of monitoring event
 type EventType string
 
 const (
@@ -25,7 +27,6 @@ const (
 	EventCustom    EventType = "custom"
 )
 
-// Event represents a monitoring event
 type Event struct {
 	ID        string                 `json:"id"`
 	Type      EventType              `json:"type"`
@@ -35,7 +36,6 @@ type Event struct {
 	Duration  time.Duration          `json:"duration,omitempty"`
 }
 
-// HealthStatus represents the health status of the application
 type HealthStatus string
 
 const (
@@ -44,7 +44,6 @@ const (
 	StatusDegraded  HealthStatus = "degraded"
 )
 
-// HealthCheck represents a health check function
 type HealthCheck struct {
 	Name     string                                  `json:"name"`
 	Check    func() (status HealthStatus, err error) `json:"-"`
@@ -53,7 +52,6 @@ type HealthCheck struct {
 	Critical bool                                    `json:"critical"`
 }
 
-// HealthResult represents the result of a health check
 type HealthResult struct {
 	Name      string        `json:"name"`
 	Status    HealthStatus  `json:"status"`
@@ -63,18 +61,37 @@ type HealthResult struct {
 	Critical  bool          `json:"critical"`
 }
 
-// Metrics holds application metrics
 type Metrics struct {
+	RequestCount      int64                    `json:"request_count"`
+	ErrorCount        int64                    `json:"error_count"`
+	AvgResponseTime   time.Duration            `json:"avg_response_time"`
+	Uptime            time.Duration            `json:"uptime"`
+	MemoryUsage       uint64                   `json:"memory_usage_bytes"`
+	GoRoutines        int                      `json:"goroutines"`
+	StartTime         time.Time                `json:"start_time"`
+	RouteMetrics      map[string]*RouteMetric  `json:"route_metrics"`
+	MiddlewareMetrics map[string]*MiddlewareMetric `json:"middleware_metrics"`
+	StatusCodeCounts  map[int]int64            `json:"status_code_counts"`
+	ActiveRequests    int64                    `json:"active_requests"`
+	TotalResponseTime int64                    `json:"total_response_time_ms"`
+}
+
+type RouteMetric struct {
+	Pattern         string        `json:"pattern"`
+	Method          string        `json:"method"`
 	RequestCount    int64         `json:"request_count"`
 	ErrorCount      int64         `json:"error_count"`
 	AvgResponseTime time.Duration `json:"avg_response_time"`
-	Uptime          time.Duration `json:"uptime"`
-	MemoryUsage     uint64        `json:"memory_usage_bytes"`
-	GoRoutines      int           `json:"goroutines"`
-	StartTime       time.Time     `json:"start_time"`
+	StatusCodes     map[int]int64 `json:"status_codes"`
 }
 
-// Monitor is the main monitoring system
+type MiddlewareMetric struct {
+	Name            string        `json:"name"`
+	ExecutionCount  int64         `json:"execution_count"`
+	AvgExecutionTime time.Duration `json:"avg_execution_time"`
+	ErrorCount      int64         `json:"error_count"`
+}
+
 type Monitor struct {
 	mu            sync.RWMutex
 	events        []Event
@@ -85,26 +102,39 @@ type Monitor struct {
 	startTime     time.Time
 	eventHandlers []func(Event)
 	enabled       bool
+	safeExecute   bool
 }
 
-// Config holds monitoring configuration
 type Config struct {
 	Enabled        bool          `json:"enabled"`
 	MaxEvents      int           `json:"max_events"`
 	HealthInterval time.Duration `json:"health_interval"`
 	MetricsEnabled bool          `json:"metrics_enabled"`
+	SafeExecute    bool          `json:"safe_execute"`
 }
 
-// New creates a new monitoring system
 func New(config ...Config) *Monitor {
 	cfg := Config{
 		Enabled:        true,
 		MaxEvents:      1000,
 		HealthInterval: 30 * time.Second,
 		MetricsEnabled: true,
+		SafeExecute:    true,
 	}
 	if len(config) > 0 {
 		cfg = config[0]
+		if cfg.MaxEvents == 0 {
+			cfg.MaxEvents = 1000
+		}
+		if cfg.HealthInterval == 0 {
+			cfg.HealthInterval = 30 * time.Second
+		}
+		if !cfg.Enabled {
+			if cfg.MaxEvents != 0 || cfg.HealthInterval != 0 || cfg.MetricsEnabled || cfg.SafeExecute {
+			} else {
+				cfg.Enabled = true
+			}
+		}
 	}
 
 	m := &Monitor{
@@ -114,8 +144,12 @@ func New(config ...Config) *Monitor {
 		healthResults: make(map[string]*HealthResult),
 		startTime:     time.Now(),
 		enabled:       cfg.Enabled,
+		safeExecute:   cfg.SafeExecute,
 		metrics: &Metrics{
-			StartTime: time.Now(),
+			StartTime:         time.Now(),
+			RouteMetrics:      make(map[string]*RouteMetric),
+			MiddlewareMetrics: make(map[string]*MiddlewareMetric),
+			StatusCodeCounts:  make(map[int]int64),
 		},
 	}
 
@@ -131,7 +165,115 @@ func New(config ...Config) *Monitor {
 	return m
 }
 
-// EmitEvent emits a new monitoring event
+func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
+	if !m.safeExecute {
+		handler(event)
+		return
+	}
+	
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Event handler panicked: %v", r)
+			errorEvent := Event{
+				ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+				Type:      EventError,
+				Timestamp: time.Now(),
+				Message:   "Event handler panicked",
+				Data: map[string]interface{}{
+					"original_event": event,
+					"panic_value":    fmt.Sprintf("%v", r),
+					"handler_error":  true,
+				},
+			}
+			m.mu.Lock()
+			if len(m.events) >= m.maxEvents {
+				m.events = m.events[1:]
+			}
+			m.events = append(m.events, errorEvent)
+			m.mu.Unlock()
+		}
+	}()
+	
+	handler(event)
+}
+
+func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
+	if !m.safeExecute {
+		m.executeHealthCheck(name, check)
+		return
+	}
+	
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Health check '%s' panicked: %v", name, r)
+			
+			result := &HealthResult{
+				Name:      name,
+				Status:    StatusUnhealthy,
+				Message:   fmt.Sprintf("Health check panicked: %v", r),
+				Timestamp: time.Now(),
+				Duration:  0,
+				Critical:  check.Critical,
+			}
+			
+			m.mu.Lock()
+			m.healthResults[name] = result
+			m.mu.Unlock()
+			
+			data := map[string]interface{}{
+				"check_name":    name,
+				"status":        string(StatusUnhealthy),
+				"critical":      check.Critical,
+				"panic_value":   fmt.Sprintf("%v", r),
+				"health_error":  true,
+			}
+			m.EmitEvent(EventUnhealthy, fmt.Sprintf("Health check '%s' panicked: %v", name, r), data)
+		}
+	}()
+	
+	m.executeHealthCheck(name, check)
+}
+
+func (m *Monitor) executeHealthCheck(name string, check *HealthCheck) {
+	start := time.Now()
+	status, err := check.Check()
+	duration := time.Since(start)
+
+	result := &HealthResult{
+		Name:      name,
+		Status:    status,
+		Timestamp: time.Now(),
+		Duration:  duration,
+		Critical:  check.Critical,
+	}
+
+	if err != nil {
+		result.Message = err.Error()
+		result.Status = StatusUnhealthy
+	}
+
+	m.mu.Lock()
+	m.healthResults[name] = result
+	m.mu.Unlock()
+
+	eventType := EventHealthy
+	if status != StatusHealthy {
+		eventType = EventUnhealthy
+	}
+
+	data := map[string]interface{}{
+		"check_name": name,
+		"status":     string(status),
+		"duration":   duration.Milliseconds(),
+		"critical":   check.Critical,
+	}
+	if err != nil {
+		data["error"] = err.Error()
+	}
+
+	m.EmitEvent(eventType, fmt.Sprintf("Health check '%s': %s", name, status), data)
+}
+
 func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string]interface{}) {
 	if !m.enabled {
 		return
@@ -152,13 +294,11 @@ func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string
 	m.events = append(m.events, event)
 	m.mu.Unlock()
 
-	// Call event handlers
 	for _, handler := range m.eventHandlers {
-		go handler(event)
+		go m.safeExecuteEventHandler(handler, event)
 	}
 }
 
-// AddHealthCheck adds a health check
 func (m *Monitor) AddHealthCheck(name string, check *HealthCheck) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -166,7 +306,6 @@ func (m *Monitor) AddHealthCheck(name string, check *HealthCheck) {
 	m.healthChecks[name] = check
 }
 
-// RemoveHealthCheck removes a health check
 func (m *Monitor) RemoveHealthCheck(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -174,7 +313,6 @@ func (m *Monitor) RemoveHealthCheck(name string) {
 	delete(m.healthResults, name)
 }
 
-// GetHealthStatus returns the overall health status
 func (m *Monitor) GetHealthStatus() HealthStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -208,7 +346,6 @@ func (m *Monitor) GetHealthStatus() HealthStatus {
 	return StatusHealthy
 }
 
-// GetHealthResults returns all health check results
 func (m *Monitor) GetHealthResults() map[string]*HealthResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -220,7 +357,6 @@ func (m *Monitor) GetHealthResults() map[string]*HealthResult {
 	return results
 }
 
-// GetEvents returns recent events
 func (m *Monitor) GetEvents(limit int) []Event {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -235,24 +371,65 @@ func (m *Monitor) GetEvents(limit int) []Event {
 	return events
 }
 
-// GetMetrics returns current metrics
 func (m *Monitor) GetMetrics() *Metrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	metrics := *m.metrics
 	metrics.Uptime = time.Since(m.startTime)
+	if m.metrics.RequestCount > 0 {
+		metrics.AvgResponseTime = time.Duration(m.metrics.TotalResponseTime/m.metrics.RequestCount) * time.Millisecond
+	}
 	return &metrics
 }
 
-// AddEventHandler adds an event handler
 func (m *Monitor) AddEventHandler(handler func(Event)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.eventHandlers = append(m.eventHandlers, handler)
 }
 
-// responseWrapper wraps http.ResponseWriter to capture status code
+func (m *Monitor) MiddlewareWrapper(name string, middleware context.Middleware) context.Middleware {
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if !m.enabled {
+				middleware(next)(c)
+				return
+			}
+			
+			start := time.Now()
+			
+			middleware(next)(c)
+			
+			duration := time.Since(start)
+			
+			m.mu.Lock()
+			if metric, exists := m.metrics.MiddlewareMetrics[name]; exists {
+				metric.ExecutionCount++
+				totalTime := metric.AvgExecutionTime.Nanoseconds()*metric.ExecutionCount + duration.Nanoseconds()
+				metric.AvgExecutionTime = time.Duration(totalTime / (metric.ExecutionCount + 1))
+			} else {
+				m.metrics.MiddlewareMetrics[name] = &MiddlewareMetric{
+					Name:             name,
+					ExecutionCount:   1,
+					AvgExecutionTime: duration,
+					ErrorCount:       0,
+				}
+			}
+			m.mu.Unlock()
+			
+			if duration > 100*time.Millisecond {
+				data := map[string]interface{}{
+					"middleware_name": name,
+					"duration_ms":     duration.Milliseconds(),
+					"slow_middleware": true,
+				}
+				m.EmitEvent(EventCustom, fmt.Sprintf("Slow middleware '%s': %v", name, duration), data)
+			}
+		}
+	}
+}
+
 type responseWrapper struct {
 	http.ResponseWriter
 	statusCode int
@@ -272,10 +449,9 @@ func (rw *responseWrapper) Write(b []byte) (int, error) {
 		rw.statusCode = 200
 		rw.written = true
 	}
-	return rw._, _ = ResponseWriter.Write(b)
+	return rw.ResponseWriter.Write(b)
 }
 
-// Middleware returns a middleware function for request monitoring
 func (m *Monitor) Middleware() context.Middleware {
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
@@ -286,26 +462,66 @@ func (m *Monitor) Middleware() context.Middleware {
 
 			start := time.Now()
 			atomic.AddInt64(&m.metrics.RequestCount, 1)
+			atomic.AddInt64(&m.metrics.ActiveRequests, 1)
 
-			// Wrap response writer to capture status code
+			correlationID := c.GetHeader("X-Correlation-ID")
+			if correlationID == "" {
+				correlationID = m.generateCorrelationID()
+				c.SetHeader("X-Correlation-ID", correlationID)
+			}
+			c.Set("correlation_id", correlationID)
+
 			wrapper := &responseWrapper{
 				ResponseWriter: c.Writer,
-				statusCode:     200, // default status
+				statusCode:     200,
 			}
 			c.Writer = wrapper
 
-			// Execute the handler
 			next(c)
 
-			// Capture response info
 			duration := time.Since(start)
+			atomic.AddInt64(&m.metrics.ActiveRequests, -1)
+			atomic.AddInt64(&m.metrics.TotalResponseTime, duration.Milliseconds())
+			
+			m.mu.Lock()
+			m.metrics.StatusCodeCounts[wrapper.statusCode]++
+			
+			route, _ := c.Get("route.pattern")
+			if route != nil {
+				routeKey := fmt.Sprintf("%s:%s", c.Request.Method, route)
+				if metric, exists := m.metrics.RouteMetrics[routeKey]; exists {
+					metric.RequestCount++
+					if wrapper.statusCode >= 400 {
+						metric.ErrorCount++
+					}
+					if metric.StatusCodes == nil {
+						metric.StatusCodes = make(map[int]int64)
+					}
+					metric.StatusCodes[wrapper.statusCode]++
+				} else {
+					m.metrics.RouteMetrics[routeKey] = &RouteMetric{
+						Pattern:      fmt.Sprintf("%v", route),
+						Method:       c.Request.Method,
+						RequestCount: 1,
+						ErrorCount:   func() int64 { if wrapper.statusCode >= 400 { return 1 }; return 0 }(),
+						StatusCodes:  map[int]int64{wrapper.statusCode: 1},
+					}
+				}
+			}
+			m.mu.Unlock()
+			
 			data := map[string]interface{}{
-				"method":      c.Request.Method,
-				"path":        c.Request.URL.Path,
-				"status_code": wrapper.statusCode,
-				"duration_ms": duration.Milliseconds(),
-				"user_agent":  c.GetHeader("User-Agent"),
-				"remote_addr": c.Request.RemoteAddr,
+				"method":         c.Request.Method,
+				"path":           c.Request.URL.Path,
+				"status_code":    wrapper.statusCode,
+				"duration_ms":    duration.Milliseconds(),
+				"user_agent":     c.GetHeader("User-Agent"),
+				"remote_addr":    c.Request.RemoteAddr,
+				"correlation_id": correlationID,
+			}
+			
+			if route != nil {
+				data["route_pattern"] = route
 			}
 
 			if wrapper.statusCode >= 400 {
@@ -318,7 +534,6 @@ func (m *Monitor) Middleware() context.Middleware {
 	}
 }
 
-// runHealthChecks runs health checks periodically
 func (m *Monitor) runHealthChecks(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -328,7 +543,6 @@ func (m *Monitor) runHealthChecks(interval time.Duration) {
 	}
 }
 
-// executeHealthChecks executes all registered health checks
 func (m *Monitor) executeHealthChecks() {
 	m.mu.RLock()
 	checks := make(map[string]*HealthCheck)
@@ -338,50 +552,10 @@ func (m *Monitor) executeHealthChecks() {
 	m.mu.RUnlock()
 
 	for name, check := range checks {
-		go func(name string, check *HealthCheck) {
-			start := time.Now()
-			status, err := check.Check()
-			duration := time.Since(start)
-
-			result := &HealthResult{
-				Name:      name,
-				Status:    status,
-				Timestamp: time.Now(),
-				Duration:  duration,
-				Critical:  check.Critical,
-			}
-
-			if err != nil {
-				result.Message = err.Error()
-				result.Status = StatusUnhealthy
-			}
-
-			m.mu.Lock()
-			m.healthResults[name] = result
-			m.mu.Unlock()
-
-			// Emit event
-			eventType := EventHealthy
-			if status != StatusHealthy {
-				eventType = EventUnhealthy
-			}
-
-			data := map[string]interface{}{
-				"check_name": name,
-				"status":     string(status),
-				"duration":   duration.Milliseconds(),
-				"critical":   check.Critical,
-			}
-			if err != nil {
-				data["error"] = err.Error()
-			}
-
-			m.EmitEvent(eventType, fmt.Sprintf("Health check '%s': %s", name, status), data)
-		}(name, check)
+		go m.safeExecuteHealthCheck(name, check)
 	}
 }
 
-// updateMetrics updates system metrics periodically
 func (m *Monitor) updateMetrics() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -397,7 +571,6 @@ func (m *Monitor) updateMetrics() {
 	}
 }
 
-// HealthHandler returns an HTTP handler for health checks
 func (m *Monitor) HealthHandler() context.HandlerFunc {
 	return func(c *context.Context) {
 		status := m.GetHealthStatus()
@@ -420,7 +593,6 @@ func (m *Monitor) HealthHandler() context.HandlerFunc {
 	}
 }
 
-// MetricsHandler returns an HTTP handler for metrics
 func (m *Monitor) MetricsHandler() context.HandlerFunc {
 	return func(c *context.Context) {
 		metrics := m.GetMetrics()
@@ -428,13 +600,12 @@ func (m *Monitor) MetricsHandler() context.HandlerFunc {
 	}
 }
 
-// EventsHandler returns an HTTP handler for events
 func (m *Monitor) EventsHandler() context.HandlerFunc {
 	return func(c *context.Context) {
 		limit := 100
 		if l := c.Query("limit"); l != "" {
-			if parsed, err := json.Marshal(l); err == nil {
-				limit = int(parsed[0])
+			if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+				limit = parsed
 			}
 		}
 
@@ -444,4 +615,12 @@ func (m *Monitor) EventsHandler() context.HandlerFunc {
 			"total":  len(m.events),
 		})
 	}
+}
+
+func (m *Monitor) generateCorrelationID() string {
+	bytes := make([]byte, 8)
+	if _, err := rand.Read(bytes); err != nil {
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(bytes)
 }

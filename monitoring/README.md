@@ -1,12 +1,14 @@
 # Goryu Monitoring System
 
-A comprehensive monitoring and health check system for Goryu applications.
+A comprehensive monitoring and health check system for Goryu applications with automatic integration.
 
 ## Features
 
-- **Event Monitoring**: Track application events (requests, errors, custom events)
-- **Health Checks**: Monitor the health of your application components
-- **Metrics Collection**: Collect and expose application metrics
+- **Automatic Integration**: Built into every Goryu app by default
+- **Event Monitoring**: Track requests, errors, and custom events with correlation IDs
+- **Health Checks**: Monitor application components with panic recovery
+- **Advanced Metrics**: Route-level, middleware performance, and system metrics
+- **Request Tracing**: Correlation ID generation and propagation
 - **Built-in Endpoints**: Ready-to-use HTTP endpoints for monitoring data
 - **Event Handlers**: Custom event processing and alerting
 
@@ -23,16 +25,17 @@ import (
 func main() {
     app := goryu.New()
     
-    // Enable monitoring endpoints
-    app.EnableMonitoring("/_monitor")
-    
     // Add a health check
     app.AddHealthCheck("database", &monitoring.HealthCheck{
         Check: func() (monitoring.HealthStatus, error) {
-            // Your health check logic here
             return monitoring.StatusHealthy, nil
         },
         Critical: true,
+    })
+    
+    // Emit custom events
+    app.EmitEvent(monitoring.EventCustom, "User login", map[string]interface{}{
+        "user_id": "123",
     })
     
     app.Listen(":8080")
@@ -41,12 +44,11 @@ func main() {
 
 ## Built-in Endpoints
 
-When you call `app.EnableMonitoring("/_monitor")`, the following endpoints become available:
+Monitoring endpoints are automatically registered:
 
-- `GET /_monitor/health` - Health check status
-- `GET /_monitor/metrics` - Application metrics
-- `GET /_monitor/events` - Recent events
-- `GET /_monitor/dashboard` - Complete monitoring overview
+- `GET /_health` - Health check status
+- `GET /_metrics` - Application metrics
+- `GET /_events` - Recent events (with ?limit=N parameter)
 
 ## Health Checks
 
@@ -101,20 +103,82 @@ app.EmitEvent(monitoring.EventCustom, "User registered", map[string]interface{}{
 - `EventShutdown` - Application shutdown
 - `EventCustom` - Your custom events
 
-## Metrics
+## Enhanced Metrics
 
-The system automatically collects metrics:
+The system automatically collects comprehensive metrics:
 
 ```go
 {
     "request_count": 1523,
     "error_count": 12,
     "avg_response_time": "45ms",
+    "active_requests": 5,
     "uptime": "2h30m15s",
     "memory_usage_bytes": 67108864,
     "goroutines": 15,
-    "start_time": "2023-12-07T10:30:00Z"
+    "status_code_counts": {
+        "200": 1400,
+        "404": 15,
+        "500": 8
+    },
+    "route_metrics": {
+        "GET:/users": {
+            "request_count": 800,
+            "error_count": 2,
+            "avg_response_time": "20ms",
+            "status_codes": {"200": 798, "500": 2}
+        },
+        "POST:/users": {
+            "request_count": 100,
+            "error_count": 1,
+            "avg_response_time": "45ms"
+        }
+    },
+    "middleware_metrics": {
+        "auth": {
+            "execution_count": 1500,
+            "avg_execution_time": "5ms",
+            "error_count": 0
+        },
+        "cors": {
+            "execution_count": 1500,
+            "avg_execution_time": "1ms"
+        }
+    }
 }
+```
+
+## Request Tracing
+
+Every request automatically gets a correlation ID for tracing:
+
+```go
+app.GET("/api/data", func(c *context.Context) {
+    // Get the correlation ID
+    correlationID, _ := c.Get("correlation_id")
+    
+    // The correlation ID is also available in response headers
+    // X-Correlation-ID: abc123def456
+    
+    c.JSON(200, map[string]interface{}{
+        "correlation_id": correlationID,
+        "data": "response",
+    })
+})
+```
+
+All events include correlation IDs for request tracing across logs and monitoring systems.
+
+## Middleware Performance Tracking
+
+Monitor individual middleware performance:
+
+```go
+// Wrap any middleware to track its performance
+wrappedAuth := app.Monitor.MiddlewareWrapper("auth", authMiddleware)
+app.Use(wrappedAuth)
+
+// Performance data will be available in middleware_metrics
 ```
 
 ## Event Handlers
@@ -124,7 +188,9 @@ Add custom event handlers for logging, alerting, or integration with external sy
 ```go
 app.Monitor.AddEventHandler(func(event monitoring.Event) {
     if event.Type == monitoring.EventError {
-        // Send alert to Slack, email, etc.
+        // Events now include correlation_id for tracing
+        log.Printf("Error %s: %s (correlation: %s)", 
+            event.ID, event.Message, event.Data["correlation_id"])
         sendAlert(event)
     }
 })

@@ -21,7 +21,51 @@ func MyHandler(ctx *context.Context) {
 }
 ```
 
+## Router Configuration
+
+The Goryu router can be configured with various options to control its behavior:
+
+```go
+app := goryu.New(goryu.Config{
+    AppName:               "MyApp",
+    RedirectTrailingSlash: &[]bool{true}[0],  // Enable trailing slash redirection
+    EnableHEADFallback:    &[]bool{true}[0],  // Enable HEAD fallback to GET
+})
+```
+
+### Trailing Slash Handling
+
+By default, Goryu handles trailing slashes intelligently:
+
+- When `RedirectTrailingSlash` is true (default), requests to `/users/` will redirect to `/users` if only `/users` is defined
+- When `StrictRouting` is enabled, `/users` and `/users/` are treated as different routes
+- Redirects use `301 Moved Permanently` for GET requests and `308 Permanent Redirect` for other methods
+
+### HEAD Method Support
+
+- By default, HEAD requests automatically fall back to GET handlers
+- You can disable this by setting `EnableHEADFallback` to false
+- Explicit HEAD routes take precedence over GET fallback
+
+### ALL Method Enhancement
+
+The `ALL` method now returns a `RouteCollection` containing all registered routes:
+
+```go
+collection := app.ALL("/api", handler)
+collection.SetName("api_endpoints") // Sets names like "api_endpoints_get", "api_endpoints_post", etc.
+```
+
 ## Core Context API
+
+The Context object provides a clean, consistent API for handling HTTP requests and responses. All response methods now include proper error handling and return errors for robust error management.
+
+### Key Improvements
+
+- **Simplified Structure**: Removed redundant `Req` field - use `ctx.Request` instead
+- **Enhanced Error Handling**: All response methods return errors and include detailed logging
+- **Security Enhancements**: File serving includes path traversal protection and proper error handling
+- **Flexible Error Responses**: Multiple error handling methods for different use cases
 
 These are the fundamental methods for passing data through the request lifecycle.
 
@@ -365,13 +409,43 @@ Adds fields to the `Vary` response header, which is important for caching.
 ctx.Vary("Accept-Encoding", "Accept-Language")
 ```
 
-### `Error(err error)`
+### Error Handling Methods
 
-A helper to log an error and send a generic `500 Internal Server Error` response.
+Goryu provides several methods for handling and responding to errors:
+
+#### `Error(err error, statusCode ...int) error`
+
+A flexible helper to log an error and send an HTTP error response. The status code is optional and defaults to 500.
 
 ```go
+// Default 500 error
 data, err := someComplexOperation()
 if err != nil {
-    ctx.Error(err)
+    return ctx.Error(err)
+}
+
+// Custom status code
+if !isValid {
+    return ctx.Error(errors.New("validation failed"), http.StatusBadRequest)
+}
+```
+
+#### `ErrorWithMessage(err error, statusCode int, message string) error`
+
+Send a custom error message to the client while logging the original error.
+
+```go
+if err := validateUser(user); err != nil {
+    return ctx.ErrorWithMessage(err, http.StatusUnprocessableEntity, "Invalid user data provided")
+}
+```
+
+#### `Abort(statusCode int, message ...string)`
+
+Stop request processing and send an error response without requiring an error object.
+
+```go
+if !userHasPermission {
+    ctx.Abort(http.StatusForbidden, "Access denied")
     return
 }

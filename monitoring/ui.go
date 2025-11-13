@@ -503,7 +503,6 @@ const dashboardHTML = `
 </html>
 `
 
-// UIHandler returns an HTTP handler for the monitoring dashboard UI
 func (m *Monitor) UIHandler(appName string) context.HandlerFunc {
 	tmpl := template.New("dashboard").Funcs(template.FuncMap{
 		"title": func(s string) string {
