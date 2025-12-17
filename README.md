@@ -1,5 +1,83 @@
 # Goryu Framework
 
+Goryu is a powerful, developer-friendly Golang web framework designed for building high-performance web applications and microservices. It combines a robust routing engine, a rich middleware ecosystem, and a developer-centric CLI to streamline your workflow.
+
+## Features
+
+*   **Fast & Robust Router**: Intelligent routing with support for parameters, groups, and method-specific handling.
+*   **Rich Middleware Ecosystem**: Built-in middlewares including Auth, CORS, Gzip, Logger, Recovery, and more.
+*   **Developer CLI**: Powerful command-line tool (`goryu`) to scaffold projects, generate code, and manage configurations.
+*   **Context-Driven Design**: A unified `Context` object for easy request/response handling.
+*   **Production Ready**: Built-in support for graceful shutdown, metrics, tracing, and security headers.
+
+## Installation
+
+### Library
+
+To use Goryu in your Go project:
+
+```bash
+go get github.com/arthurlch/goryu
+```
+
+### CLI Tool
+
+To install the Goryu CLI for project scaffolding:
+
+```bash
+go install github.com/arthurlch/goryu/cmd/goryu@latest
+```
+
+## Quick Start
+
+Create a simple server in `main.go`:
+
+```go
+package main
+
+import (
+    "net/http"
+    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/context"
+)
+
+func main() {
+    app := goryu.New()
+
+    app.GET("/", func(ctx *context.Context) {
+        ctx.Text(http.StatusOK, "Hello, Goryu!")
+    })
+
+    app.Run(":8080")
+}
+```
+
+Run it:
+```bash
+go run main.go
+```
+
+Visit `http://localhost:8080` to see your app in action.
+
+## Middleware
+
+Goryu comes with a comprehensive suite of middleware. Check out the [middleware directory](./middleware) for full documentation.
+
+*   **Auth**: Basic Auth, Session
+*   **Security**: CORS, CSRF, Secure Headers, TLS Redirect
+*   **Performance**: Compress, Cache
+*   **Observability**: Logger, Metrics, Tracing, RequestID
+*   **Resilience**: Circuit Breaker, Limiter, Recovery, Timeout
+
+## CLI
+
+The Goryu CLI helps you bootstrap and manage your projects.
+
+*   `goryu init`: Create a new project
+*   `goryu generate`: Generate handlers, middleware, models
+*   `goryu dev`: Run with hot-reload
+
+See [CLI.md](./CLI.md) for the full CLI documentation.
 
 ## Context (Ctx)
 
@@ -449,3 +527,4 @@ if !userHasPermission {
     ctx.Abort(http.StatusForbidden, "Access denied")
     return
 }
+```

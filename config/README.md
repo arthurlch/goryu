@@ -1,16 +1,20 @@
 # Goryu Configuration Management
 
-A simple, flexible configuration management system for Goryu applications supporting multiple configuration sources with priority-based merging.
+A comprehensive, flexible configuration management system for Goryu applications supporting multiple configuration sources with priority-based merging, validation, and advanced features.
 
 ## Features
 
-- **Multiple Sources**: Environment variables, JSON files, and defaults
+- **Multiple Sources**: Environment variables, JSON/YAML files, and defaults
 - **Priority System**: Environment variables override files, files override defaults
-- **Type Safety**: Strongly typed configuration with validation
+- **Type Safety**: Strongly typed configuration with comprehensive validation
 - **Auto-Discovery**: Automatic config file detection in common locations
 - **Fluent Builder**: Chain configuration sources with a fluent API
 - **Framework Integration**: Direct integration with goryu.Config
-- **Custom Config**: Extensible custom configuration section for app-specific needs
+- **Database Support**: Built-in database configuration with connection pooling
+- **Security Features**: TLS, CSRF, HSTS, and security headers configuration
+- **Performance Limits**: Request body size, concurrent requests, and route limits
+- **Static File Serving**: Configurable static file serving with caching
+- **Router Options**: Advanced routing configuration options
 
 ## Quick Start
 
@@ -49,27 +53,119 @@ cfg, err := config.NewBuilder().
 
 ## Configuration Structure
 
-### Basic Configuration
+The configuration system supports two main configuration formats:
+
+### Core Configuration (New Structure)
 ```json
 {
   "app": {
     "name": "my-goryu-app",
     "version": "1.0.0",
-    "server_header": "MyApp/1.0",
-    "strict_routing": false,
-    "case_sensitive": false,
-    "disable_startup_msg": false
+    "environment": "production",
+    "log_level": "info",
+    "custom": {
+      // Add your app-specific configuration here
+    }
   },
   "server": {
     "host": "0.0.0.0",
     "port": 8080,
     "read_timeout": "30s",
     "write_timeout": "30s",
-    "shutdown_timeout": "30s"
+    "shutdown_timeout": "30s",
+    "tls": {
+      "enabled": false,
+      "cert_file": "",
+      "key_file": "",
+      "auto_tls": false
+    }
   },
-  "environment": "production",
-  "custom": {
-    // Add your app-specific configuration here
+  "database": {
+    "driver": "sqlite3",
+    "path": "./app.db",
+    "max_open_conns": 25,
+    "max_idle_conns": 5,
+    "conn_max_lifetime": "1h",
+    "conn_max_idle_time": "30m"
+  },
+  "framework": {
+    "server_header": "MyApp/1.0",
+    "strict_routing": false,
+    "case_sensitive": false,
+    "redirect_trailing_slash": true,
+    "enable_head_fallback": true,
+    "disable_startup_msg": false
+  }
+}
+```
+
+### Advanced Configuration (Builder Pattern)
+```json
+{
+  "app": {
+    "name": "my-goryu-app",
+    "version": "1.0.0",
+    "environment": "production",
+    "disable_startup_message": false,
+    "server_header": "MyApp/1.0"
+  },
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "read_timeout": "30s",
+    "write_timeout": "30s",
+    "idle_timeout": "120s",
+    "shutdown_timeout": "30s",
+    "max_header_size": 1048576,
+    "disable_keepalive": false,
+    "tls": {
+      "enabled": false,
+      "cert_file": "",
+      "key_file": "",
+      "min_version": "TLS1.2"
+    }
+  },
+  "router": {
+    "strict_routing": false,
+    "case_sensitive": false,
+    "redirect_trailing_slash": true,
+    "redirect_fixed_path": true,
+    "handle_method_not_allowed": true,
+    "handle_options": true,
+    "enable_head_fallback": true
+  },
+  "static": {
+    "root": "./public",
+    "index": "index.html",
+    "browse": false,
+    "max_age": "3600s",
+    "compress": true,
+    "byte_range": true,
+    "download": false,
+    "cache_duration": "3600s"
+  },
+  "security": {
+    "csrf_protection": true,
+    "csrf_token_length": 32,
+    "xss_protection": "1; mode=block",
+    "content_type_nosniff": true,
+    "x_frame_options": "DENY",
+    "hsts": {
+      "enabled": true,
+      "max_age": "31536000s",
+      "include_subdomains": true,
+      "preload": false
+    },
+    "allowed_hosts": [],
+    "trusted_proxies": []
+  },
+  "limits": {
+    "max_route_depth": 20,
+    "max_total_routes": 10000,
+    "max_parameters_per_route": 20,
+    "max_request_body_size": 10485760,
+    "max_multipart_memory": 10485760,
+    "max_concurrent_requests": 1000
   }
 }
 ```
@@ -79,11 +175,11 @@ cfg, err := config.NewBuilder().
 **SQLite (Simple - Recommended)**
 ```json
 {
-  "custom": {
-    "database": {
-      "driver": "sqlite3",
-      "path": "./data/app.db"
-    }
+  "database": {
+    "driver": "sqlite3",
+    "path": "./data/app.db",
+    "max_open_conns": 25,
+    "max_idle_conns": 5
   }
 }
 ```
@@ -91,16 +187,17 @@ cfg, err := config.NewBuilder().
 **PostgreSQL**
 ```json
 {
-  "custom": {
-    "database": {
-      "driver": "postgres",
-      "host": "localhost",
-      "port": 5432,
-      "database": "myapp",
-      "username": "user",
-      "password": "password",
-      "sslmode": "prefer"
-    }
+  "database": {
+    "driver": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "database": "myapp",
+    "username": "user",
+    "password": "password",
+    "ssl_mode": "prefer",
+    "max_open_conns": 50,
+    "max_idle_conns": 10,
+    "conn_max_lifetime": "1h"
   }
 }
 ```
@@ -108,29 +205,37 @@ cfg, err := config.NewBuilder().
 **MySQL**
 ```json
 {
-  "custom": {
-    "database": {
-      "driver": "mysql",
-      "host": "localhost", 
-      "port": 3306,
-      "database": "myapp",
-      "username": "user",
-      "password": "password"
-    }
+  "database": {
+    "driver": "mysql",
+    "host": "localhost", 
+    "port": 3306,
+    "database": "myapp",
+    "username": "user",
+    "password": "password",
+    "charset": "utf8mb4",
+    "parse_time": true,
+    "max_open_conns": 50,
+    "max_idle_conns": 10
   }
 }
 ```
 
-**Other Custom Config**
+**Custom App Configuration**
 ```json
 {
-  "custom": {
-    "redis": {
-      "url": "redis://localhost:6379"
-    },
-    "api_keys": {
-      "stripe": "sk_test_...",
-      "sendgrid": "SG..."
+  "app": {
+    "custom": {
+      "redis": {
+        "url": "redis://localhost:6379"
+      },
+      "api_keys": {
+        "stripe": "sk_test_...",
+        "sendgrid": "SG..."
+      },
+      "features": {
+        "enable_analytics": true,
+        "enable_notifications": false
+      }
     }
   }
 }
@@ -144,16 +249,35 @@ Environment variables use the pattern `PREFIX_SECTION_FIELD`:
 # App configuration
 GORYU_APP_NAME=my-service
 GORYU_APP_VERSION=2.0.0
+GORYU_APP_ENVIRONMENT=production
+GORYU_APP_LOG_LEVEL=info
 
 # Server configuration
 GORYU_SERVER_HOST=0.0.0.0
 GORYU_SERVER_PORT=8080
+GORYU_SERVER_READ_TIMEOUT=30s
+GORYU_SERVER_WRITE_TIMEOUT=30s
 
-# Environment
-GORYU_ENVIRONMENT=production
+# TLS configuration
+GORYU_SERVER_TLS_ENABLED=true
+GORYU_SERVER_TLS_CERT_FILE=/path/to/cert.pem
+GORYU_SERVER_TLS_KEY_FILE=/path/to/key.pem
+
+# Database configuration
+GORYU_DATABASE_DRIVER=postgres
+GORYU_DATABASE_HOST=localhost
+GORYU_DATABASE_PORT=5432
+GORYU_DATABASE_DATABASE=myapp
+GORYU_DATABASE_USERNAME=user
+GORYU_DATABASE_PASSWORD=secret
+
+# Framework configuration
+GORYU_FRAMEWORK_SERVER_HEADER=MyApp/1.0
+GORYU_FRAMEWORK_STRICT_ROUTING=false
+GORYU_FRAMEWORK_CASE_SENSITIVE=false
 
 # Custom configuration (as JSON)
-GORYU_CUSTOM={"api_timeout":"30s"}
+GORYU_APP_CUSTOM={"api_timeout":"30s","features":{"analytics":true}}
 ```
 
 ## Configuration Sources Priority
@@ -186,10 +310,12 @@ if err != nil {
 ```
 
 Common validation rules:
-- Server port must be 1-65535
-- JWT secret is required (gets default if missing)
-- Metrics port must be valid if metrics enabled
-- Tracing sample rate must be 0.0-1.0
+- **Server**: Port must be 1-65535, timeouts cannot be negative
+- **Database**: Driver must be sqlite3/postgres/mysql, required fields vary by driver
+- **App**: Environment must be development/staging/production, log level must be debug/info/warn/error
+- **TLS**: If enabled, cert/key files required unless auto_tls is true
+- **Security**: CSRF token length must be positive, HSTS max_age must be valid duration
+- **Limits**: All limits must be positive integers, max_idle_conns cannot exceed max_open_conns
 
 ## Helper Methods
 
@@ -207,8 +333,16 @@ jsonStr, _ := cfg.ToJSON()
 fmt.Println(jsonStr)
 
 // Access custom configuration
-if dbConfig, ok := cfg.Custom["database"].(map[string]interface{}); ok {
-    dbHost := dbConfig["host"].(string)
+customData := cfg.App.Custom["features"].(map[string]interface{})
+
+// Database helpers
+if cfg.Database.Driver != "" {
+    connStr := cfg.Database.ConnectionString()
+}
+
+// Validation
+if err := cfg.Validate(); err != nil {
+    log.Fatal("Configuration invalid:", err)
 }
 ```
 
@@ -255,13 +389,15 @@ cfg, err := config.LoadConfigWithFile("production.json")
 1. **Use Environment Variables for Secrets**: Never put secrets in config files
    ```bash
    GORYU_DATABASE_PASSWORD=secret
-   GORYU_SECURITY_JWT_SECRET=jwt-secret
+   GORYU_SERVER_TLS_CERT_FILE=/secure/cert.pem
+   GORYU_APP_CUSTOM='{"api_keys":{"stripe":"sk_live_..."}}'
    ```
 
 2. **Set Appropriate Defaults**: Provide sensible defaults for development
    ```go
    // Defaults are applied automatically
    cfg, _ := config.LoadConfig()
+   // Development defaults: localhost, SQLite, debug logging
    ```
 
 3. **Validate Early**: Load and validate config at application startup
@@ -275,13 +411,17 @@ cfg, err := config.LoadConfigWithFile("production.json")
    }
    ```
 
-4. **Use Feature Flags**: Control middleware and features via configuration
+4. **Use Feature Flags**: Control features via custom configuration
    ```json
    {
-     "features": {
-       "enable_metrics": true,
-       "enable_tracing": false,
-       "enable_compression": true
+     "app": {
+       "custom": {
+         "features": {
+           "enable_analytics": true,
+           "enable_notifications": false,
+           "enable_beta_features": false
+         }
+       }
      }
    }
    ```
@@ -295,13 +435,31 @@ cfg, err := config.LoadConfigWithFile("production.json")
    GORYU_CONFIG_FILE=config.prod.json
    ```
 
+6. **Security Best Practices**:
+   - Enable TLS in production
+   - Configure HSTS for HTTPS sites
+   - Set appropriate CORS and security headers
+   - Use strong CSRF tokens
+   - Limit request sizes and concurrent connections
+
+7. **Database Connection Pooling**: Configure based on load
+   ```json
+   {
+     "database": {
+       "max_open_conns": 100,    // High-traffic apps
+       "max_idle_conns": 10,     // Keep some connections ready
+       "conn_max_lifetime": "1h" // Refresh connections periodically
+     }
+   }
+   ```
+
 ## Examples
 
 See `examples/config_example.go` for a complete working example and `examples/config.json.example` for a sample configuration file.
 
-## Database Integration
+## Integration Examples
 
-Simple database connection with Goryu:
+### Basic Application Setup
 
 ```go
 package main
@@ -311,45 +469,119 @@ import (
     
     "github.com/arthurlch/goryu"
     "github.com/arthurlch/goryu/config"
-    "github.com/arthurlch/goryu/db"
 )
 
 func main() {
     // Load configuration
     cfg, err := config.LoadConfig()
     if err != nil {
-        log.Fatal(err)
-    }
-    
-    // Connect to database (optional)
-    var database *db.Connection
-    if _, hasDB := cfg.Custom["database"]; hasDB {
-        database, err = db.Connect(cfg)
-        if err != nil {
-            log.Fatal("Database connection failed:", err)
-        }
-        defer database.Close()
-        log.Println("Database connected:", database.Driver)
+        log.Fatal("Configuration error:", err)
     }
     
     // Create app with configuration
-    goryuCfg := cfg.ToGoryuConfig()
     app := goryu.New(goryu.Config{
-        AppName: goryuCfg.AppName,
-        // ... other config fields
+        AppName:           cfg.App.Name,
+        ServerHeader:      cfg.Framework.ServerHeader,
+        StrictRouting:     cfg.Framework.StrictRouting,
+        CaseSensitive:     cfg.Framework.CaseSensitive,
+        DisableStartupMsg: cfg.Framework.DisableStartupMessage,
     })
     
-    // Use database in handlers
-    app.GET("/users", func(c *goryu.Context) {
-        if database != nil {
-            // Query your database
-            rows, err := database.DB.Query("SELECT id, name FROM users")
-            // ... handle rows
-        }
-        c.JSON(200, map[string]string{"status": "ok"})
+    // Configure based on environment
+    if cfg.App.Environment == "production" {
+        app.Use(goryu.Logger())
+        app.Use(goryu.Recover())
+    }
+    
+    // Routes
+    app.GET("/", func(c *goryu.Context) {
+        c.JSON(200, goryu.Map{
+            "app":         cfg.App.Name,
+            "version":     cfg.App.Version,
+            "environment": cfg.App.Environment,
+        })
     })
     
+    // Start server
+    log.Printf("Starting %s on %s", cfg.App.Name, cfg.GetServerAddress())
     app.Listen(cfg.GetServerAddress())
+}
+```
+
+### Advanced Setup with Builder Pattern
+
+```go
+package main
+
+import (
+    "log"
+    
+    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/config/builder"
+    "github.com/arthurlch/goryu/middleware/compress"
+    "github.com/arthurlch/goryu/middleware/cors"
+    "github.com/arthurlch/goryu/middleware/ratelimit"
+)
+
+func main() {
+    // Load advanced configuration
+    cfg, err := builder.NewBuilder().
+        WithDefaults().
+        WithFile("config.json").
+        WithEnvironment("GORYU").
+        Build()
+    
+    if err != nil {
+        log.Fatal("Config error:", err)
+    }
+    
+    // Create app
+    app := goryu.New()
+    
+    // Configure middleware based on config
+    if cfg.Security.CSRFProtection {
+        app.Use(goryu.CSRF())
+    }
+    
+    if cfg.Static.Compress {
+        app.Use(compress.New())
+    }
+    
+    // Configure static files
+    if cfg.Static.Root != "" {
+        app.Static("/", cfg.Static.Root, goryu.Static{
+            Compress: cfg.Static.Compress,
+            ByteRange: cfg.Static.ByteRange,
+            Browse: cfg.Static.Browse,
+            Index: cfg.Static.Index,
+            MaxAge: int(cfg.Static.MaxAge.Seconds()),
+        })
+    }
+    
+    // Configure security headers
+    app.Use(func(c *goryu.Context) error {
+        if cfg.Security.ContentTypeNosniff {
+            c.Set("X-Content-Type-Options", "nosniff")
+        }
+        if cfg.Security.XFrameOptions != "" {
+            c.Set("X-Frame-Options", cfg.Security.XFrameOptions)
+        }
+        if cfg.Security.XSSProtection != "" {
+            c.Set("X-XSS-Protection", cfg.Security.XSSProtection)
+        }
+        return c.Next()
+    })
+    
+    // Start with TLS if configured
+    if cfg.Server.TLS.Enabled {
+        log.Fatal(app.ListenTLS(
+            cfg.GetServerAddress(),
+            cfg.Server.TLS.CertFile,
+            cfg.Server.TLS.KeyFile,
+        ))
+    } else {
+        log.Fatal(app.Listen(cfg.GetServerAddress()))
+    }
 }
 ```
 
