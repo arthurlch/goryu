@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 
 // Test basic router creation and default handlers

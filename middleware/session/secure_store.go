@@ -1,4 +1,5 @@
 package session
+
 import (
 	"crypto/aes"
 	"crypto/cipher"

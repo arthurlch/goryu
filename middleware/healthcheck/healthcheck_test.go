@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	goryuContext "github.com/arthurlch/goryu/context"
+	goryuContext "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/healthcheck"
 )
 func newTestContext(req *http.Request) (*goryuContext.Context, *httptest.ResponseRecorder) {

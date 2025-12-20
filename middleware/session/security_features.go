@@ -1,4 +1,5 @@
 package session
+
 import (
 	"crypto/hmac"
 	"crypto/sha256"
@@ -7,7 +8,8 @@ import (
 	"net"
 	"strings"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 type SecurityConfig struct {
 	RotateOnLogin          bool

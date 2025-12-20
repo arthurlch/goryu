@@ -1,9 +1,11 @@
 package circuitbreaker
+
 import (
 	"errors"
 	"sync"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type State int
@@ -58,8 +60,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "CircuitBreaker")
@@ -67,12 +74,12 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 	}
 	cb := &CircuitBreaker{
-		config: config,
+		config: cfg,
 		state:  StateClosed,
 	}
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
@@ -81,8 +88,8 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return nil
 			})
 			if err != nil {
-				if config.ErrorHandler != nil {
-					config.ErrorHandler(c, base.MiddlewareError{
+				if cfg.ErrorHandler != nil {
+					cfg.ErrorHandler(c, base.MiddlewareError{
 						Middleware: "CircuitBreaker",
 						Err:        err,
 						StatusCode: 503,
@@ -96,7 +103,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func NewCircuitBreaker(config Config) *CircuitBreaker {
 	config.Validate()

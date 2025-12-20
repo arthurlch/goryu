@@ -1,11 +1,13 @@
 package basicauth
+
 import (
 	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
 	"strings"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -42,8 +44,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "BasicAuth")
@@ -53,29 +60,29 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	handler := func(c *context.Context) error {
 		auth := c.Request.Header.Get("Authorization")
 		if auth == "" {
-			return unauthorized(c, config.Realm)
+			return unauthorized(c, cfg.Realm)
 		}
 		const prefix = "Basic "
 		if !strings.HasPrefix(auth, prefix) {
-			return unauthorized(c, config.Realm)
+			return unauthorized(c, cfg.Realm)
 		}
 		encoded, err := base64.StdEncoding.DecodeString(auth[len(prefix):])
 		if err != nil {
-			return unauthorized(c, config.Realm)
+			return unauthorized(c, cfg.Realm)
 		}
 		creds := string(encoded)
 		parts := strings.SplitN(creds, ":", 2)
 		if len(parts) != 2 {
-			return unauthorized(c, config.Realm)
+			return unauthorized(c, cfg.Realm)
 		}
 		username, password := parts[0], parts[1]
-		if config.Validator != nil {
-			if config.Validator(username, password) {
+		if cfg.Validator != nil {
+			if cfg.Validator(username, password) {
 				return nil
 			}
-			return unauthorized(c, config.Realm)
+			return unauthorized(c, cfg.Realm)
 		}
-		if storedHashedPassword, ok := config.Users[username]; ok {
+		if storedHashedPassword, ok := cfg.Users[username]; ok {
 			err := bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(password))
 			if subtle.ConstantTimeCompare([]byte{func() byte { if err == nil { return 1 } else { return 0 } }()}, []byte{1}) == 1 {
 				return nil
@@ -83,9 +90,9 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		} else {
 			_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$dummy.hash.to.prevent.timing.attacks"), []byte(password))
 		}
-		return unauthorized(c, config.Realm)
+		return unauthorized(c, cfg.Realm)
 	}
-	return base.StandardMiddleware("BasicAuth", config.BaseConfig, handler)
+	return base.StandardMiddleware("BasicAuth", cfg.BaseConfig, handler)
 }
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -109,7 +116,7 @@ func WithValidator(validator func(string, string) bool) func(next context.Handle
 	})
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func unauthorized(c *context.Context, realm string) error {
 	c.Writer.Header().Set("WWW-Authenticate", `Basic realm="`+realm+`"`)

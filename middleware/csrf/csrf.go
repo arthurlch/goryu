@@ -1,11 +1,13 @@
 package csrf
+
 import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 const (
@@ -48,8 +50,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "CSRF")
@@ -57,9 +64,9 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 	}
 	handler := func(c *context.Context) error {
-		isSafeMethod := isSafe(c.Request.Method, config.SafeMethods)
+		isSafeMethod := isSafe(c.Request.Method, cfg.SafeMethods)
 		if isSafeMethod {
-			token, err := config.TokenGenerator(config.TokenLength)
+			token, err := cfg.TokenGenerator(cfg.TokenLength)
 			if err != nil {
 				return base.MiddlewareError{
 					Middleware: "CSRF",
@@ -68,18 +75,18 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				}
 			}
 			cookie := &http.Cookie{
-				Name:     config.TokenCookie,
+				Name:     cfg.TokenCookie,
 				Value:    token,
-				Expires:  time.Now().Add(config.TokenExpiry),
-				Secure:   config.Secure,
+				Expires:  time.Now().Add(cfg.TokenExpiry),
+				Secure:   cfg.Secure,
 				HttpOnly: true,
 				Path:     "/",
-				SameSite: config.SameSite,
+				SameSite: cfg.SameSite,
 			}
 			http.SetCookie(c.Writer, cookie)
-			c.Writer.Header().Set(config.TokenHeader, token)
+			c.Writer.Header().Set(cfg.TokenHeader, token)
 		} else {
-			tokenFromHeader := c.Request.Header.Get(config.TokenHeader)
+			tokenFromHeader := c.Request.Header.Get(cfg.TokenHeader)
 			if tokenFromHeader == "" {
 				return base.MiddlewareError{
 					Middleware: "CSRF",
@@ -87,7 +94,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 					StatusCode: http.StatusForbidden,
 				}
 			}
-			cookie, err := c.Request.Cookie(config.TokenCookie)
+			cookie, err := c.Request.Cookie(cfg.TokenCookie)
 			if err != nil {
 				return base.MiddlewareError{
 					Middleware: "CSRF",
@@ -105,10 +112,10 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 		return nil
 	}
-	return base.StandardMiddleware("CSRF", config.BaseConfig, handler)
+	return base.StandardMiddleware("CSRF", cfg.BaseConfig, handler)
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func generateSecureToken(length int) (string, error) {
 	b := make([]byte, length)

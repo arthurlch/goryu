@@ -1,11 +1,13 @@
 package cache
+
 import (
 	"bytes"
 	"container/list"
 	"net/http"
 	"sync"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type cacheEntry struct {
@@ -183,18 +185,23 @@ func (sc *secureCache) cleanup() {
 	}
 	sc.lastCleanup = now
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Cache")
 			}
 		}
 	}
-	cacheStore := newSecureCache(config.MaxSize, config.MaxMemory, config.Expiration, config.CleanupInterval)
+	cacheStore := newSecureCache(cfg.MaxSize, cfg.MaxMemory, cfg.Expiration, cfg.CleanupInterval)
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
@@ -202,10 +209,10 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				next(c)
 				return
 			}
-			if time.Since(cacheStore.lastCleanup) > config.CleanupInterval {
+			if time.Since(cacheStore.lastCleanup) > cfg.CleanupInterval {
 				go cacheStore.cleanup() 
 			}
-			key := config.KeyGenerator(c)
+			key := cfg.KeyGenerator(c)
 			entry, found := cacheStore.get(key)
 			if found {
 				for k, v := range entry.headers {
@@ -213,7 +220,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				}
 				c.Writer.WriteHeader(entry.statusCode)
 				if _, err := c.Writer.Write(entry.body); err != nil {
-					logger := config.Logger
+					logger := cfg.Logger
 					if logger == nil {
 						logger = base.DefaultLogger("Cache")
 					}
@@ -252,7 +259,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			}
 			c.Writer.WriteHeader(newEntry.statusCode)
 			if _, err := c.Writer.Write(newEntry.body); err != nil {
-				logger := config.Logger
+				logger := cfg.Logger
 				if logger == nil {
 					logger = base.DefaultLogger("Cache")
 				}
@@ -262,5 +269,5 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }

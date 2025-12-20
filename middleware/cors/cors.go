@@ -1,9 +1,11 @@
 package cors
+
 import (
 	"net/http"
 	"strconv"
 	"strings"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -39,22 +41,27 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "CORS")
 			}
 		}
 	}
-	allowMethods := strings.Join(config.AllowMethods, ",")
-	allowHeaders := strings.Join(config.AllowHeaders, ",")
-	exposeHeaders := strings.Join(config.ExposeHeaders, ",")
-	maxAge := strconv.Itoa(config.MaxAge)
-	allowAllOrigins := len(config.AllowOrigins) > 0 && config.AllowOrigins[0] == "*"
+	allowMethods := strings.Join(cfg.AllowMethods, ",")
+	allowHeaders := strings.Join(cfg.AllowHeaders, ",")
+	exposeHeaders := strings.Join(cfg.ExposeHeaders, ",")
+	maxAge := strconv.Itoa(cfg.MaxAge)
+	allowAllOrigins := len(cfg.AllowOrigins) > 0 && cfg.AllowOrigins[0] == "*"
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
@@ -67,7 +74,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			if allowAllOrigins {
 				allowed = true
 			} else {
-				for _, o := range config.AllowOrigins {
+				for _, o := range cfg.AllowOrigins {
 					if o == origin {
 						allowed = true
 						break
@@ -77,7 +84,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			if allowed {
 				c.Writer.Header().Add("Vary", "Origin")
 				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-				if config.AllowCredentials {
+				if cfg.AllowCredentials {
 					c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 				}
 			}
@@ -92,7 +99,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 					if exposeHeaders != "" {
 						c.Writer.Header().Set("Access-Control-Expose-Headers", exposeHeaders)
 					}
-					if config.MaxAge > 0 {
+					if cfg.MaxAge > 0 {
 						c.Writer.Header().Set("Access-Control-Max-Age", maxAge)
 					}
 				}
@@ -104,7 +111,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithAllowAll() func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{

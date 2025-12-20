@@ -1,10 +1,12 @@
 package limiter
+
 import (
 	"container/heap"
 	"net/http"
 	"sync"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -157,25 +159,30 @@ func (sl *secureLimiter) evictOldestClients(count int) {
 		}
 	}
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Limiter")
 			}
 		}
 	}
-	limiter := newSecureLimiter(config.MaxClients, config.Expiration, config.CleanupInterval)
+	limiter := newSecureLimiter(cfg.MaxClients, cfg.Expiration, cfg.CleanupInterval)
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-			key := config.KeyGenerator(c)
-			allowed, _ := limiter.checkRate(key, config.Max)
+			key := cfg.KeyGenerator(c)
+			allowed, _ := limiter.checkRate(key, cfg.Max)
 			if !allowed {
-				config.LimitReached(c)
+				cfg.LimitReached(c)
 				return
 			}
 			next(c)
@@ -183,7 +190,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithMax(max int) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{Max: max})

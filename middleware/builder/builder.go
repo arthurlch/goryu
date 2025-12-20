@@ -1,10 +1,15 @@
 package builder
+
 import (
 	"log"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
+// MiddlewareBuilder provides a fluent interface for building middleware.
+// Deprecated: Use the standard middleware packages (e.g. middleware/logger, middleware/cors) instead.
 type MiddlewareBuilder struct {
 	name         string
 	beforeFunc   func(c *context.Context) error

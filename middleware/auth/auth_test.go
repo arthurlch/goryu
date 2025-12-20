@@ -1,4 +1,5 @@
 package auth_test
+
 import (
 	"bytes"
 	"encoding/json"
@@ -6,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
 	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/middleware/auth"
 	"github.com/golang-jwt/jwt/v5"

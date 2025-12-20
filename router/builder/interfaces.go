@@ -1,8 +1,6 @@
 package builder
 
-import (
-	"github.com/arthurlch/goryu/context"
-)
+import context "github.com/arthurlch/goryu/goryuctx"
 
 // SimpleApp interface defines the methods needed from the main App struct
 type SimpleApp interface {

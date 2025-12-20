@@ -1,7 +1,9 @@
 package secure
+
 import (
 	"fmt"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -34,8 +36,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Secure")
@@ -43,39 +50,39 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 	}
 	var hstsValue string
-	if config.HSTSMaxAge > 0 {
-		hstsValue = fmt.Sprintf("max-age=%d", config.HSTSMaxAge)
-		if config.HSTSIncludeSubdomains {
+	if cfg.HSTSMaxAge > 0 {
+		hstsValue = fmt.Sprintf("max-age=%d", cfg.HSTSMaxAge)
+		if cfg.HSTSIncludeSubdomains {
 			hstsValue += "; includeSubDomains"
 		}
-		if config.HSTSPreload {
+		if cfg.HSTSPreload {
 			hstsValue += "; preload"
 		}
 	}
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
 			headers := c.Writer.Header()
-			if config.XSSProtection != "" {
-				headers.Set("X-XSS-Protection", config.XSSProtection)
+			if cfg.XSSProtection != "" {
+				headers.Set("X-XSS-Protection", cfg.XSSProtection)
 			}
-			if config.ContentTypeNosniff != "" {
-				headers.Set("X-Content-Type-Options", config.ContentTypeNosniff)
+			if cfg.ContentTypeNosniff != "" {
+				headers.Set("X-Content-Type-Options", cfg.ContentTypeNosniff)
 			}
-			if config.XFrameOptions != "" {
-				headers.Set("X-Frame-Options", config.XFrameOptions)
+			if cfg.XFrameOptions != "" {
+				headers.Set("X-Frame-Options", cfg.XFrameOptions)
 			}
-			if config.ReferrerPolicy != "" {
-				headers.Set("Referrer-Policy", config.ReferrerPolicy)
+			if cfg.ReferrerPolicy != "" {
+				headers.Set("Referrer-Policy", cfg.ReferrerPolicy)
 			}
-			if config.ContentSecurityPolicy != "" {
-				headers.Set("Content-Security-Policy", config.ContentSecurityPolicy)
+			if cfg.ContentSecurityPolicy != "" {
+				headers.Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
 			}
-			if config.PermissionsPolicy != "" {
-				headers.Set("Permissions-Policy", config.PermissionsPolicy)
+			if cfg.PermissionsPolicy != "" {
+				headers.Set("Permissions-Policy", cfg.PermissionsPolicy)
 			}
 			if c.Request.TLS != nil && hstsValue != "" {
 				headers.Set("Strict-Transport-Security", hstsValue)
@@ -85,7 +92,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithXSSProtection(protection string) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{XSSProtection: protection})

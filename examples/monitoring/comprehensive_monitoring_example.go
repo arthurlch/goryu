@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/arthurlch/goryu"
-	"github.com/arthurlch/goryu/context"
 	"github.com/arthurlch/goryu/monitoring"
 )
 
@@ -35,22 +34,22 @@ func main() {
 	})
 
 	// Add some test routes
-	app.GET("/", func(c *context.Context) {
+	app.GET("/", func(c *goryu.Ctx) {
 		c.JSON(200, map[string]string{"message": "Welcome to monitored Goryu!"})
 	})
 
-	app.GET("/slow", func(c *context.Context) {
+	app.GET("/slow", func(c *goryu.Ctx) {
 		// Simulate slow endpoint
 		time.Sleep(200 * time.Millisecond)
 		c.JSON(200, map[string]string{"message": "This was a slow response"})
 	})
 
-	app.GET("/error", func(c *context.Context) {
+	app.GET("/error", func(c *goryu.Ctx) {
 		// Simulate error
 		c.JSON(500, map[string]string{"error": "Something went wrong"})
 	})
 
-	app.POST("/users", func(c *context.Context) {
+	app.POST("/users", func(c *goryu.Ctx) {
 		// Emit custom event
 		app.EmitEvent(monitoring.EventCustom, "User created", map[string]interface{}{
 			"user_id": 123,

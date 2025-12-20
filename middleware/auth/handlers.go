@@ -1,9 +1,11 @@
 package auth
+
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+
 	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/middleware/errors"
 	"github.com/golang-jwt/jwt/v5"

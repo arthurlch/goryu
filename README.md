@@ -38,13 +38,13 @@ package main
 import (
     "net/http"
     "github.com/arthurlch/goryu"
-    "github.com/arthurlch/goryu/context"
+    goryuContext "github.com/arthurlch/goryu/goryuctx"
 )
 
 func main() {
     app := goryu.New()
 
-    app.GET("/", func(ctx *context.Context) {
+    app.GET("/", func(ctx *goryuContext.Context) {
         ctx.Text(http.StatusOK, "Hello, Goryu!")
     })
 
@@ -90,10 +90,10 @@ Instead of interacting directly with the low-level `http.ResponseWriter` and `*h
 * Manipulate headers, cookies, and status codes.
 * Pass data between middleware and your final handler.
 
-Every handler function in Goryu receives a pointer to the `Context`:
+Every handler function in Goryu receives a pointer to the `Context`. You can use the `goryu.Ctx` alias for convenience:
 
 ```go
-func MyHandler(ctx *context.Context) {
+func MyHandler(ctx *goryu.Ctx) {
     // Use the context to handle the request and send a response
     ctx.Text(http.StatusOK, "Hello, World!")
 }
@@ -160,8 +160,8 @@ Here's how you can use `Set` and `Get` to create a simple authentication middlew
 
 ```go
 // auth_middleware.go
-func AuthMiddleware(next context.HandlerFunc) context.HandlerFunc {
-    return func(ctx *context.Context) {
+func AuthMiddleware(next goryu.Handler) goryu.Handler {
+    return func(ctx *goryu.Ctx) {
         // Imagine you validate a token from the "Authorization" header
         token := ctx.GetHeader("Authorization")
         if user, valid := validateToken(token); valid {
@@ -175,7 +175,7 @@ func AuthMiddleware(next context.HandlerFunc) context.HandlerFunc {
 }
 
 // user_handler.go
-func GetUserProfile(ctx *context.Context) {
+func GetUserProfile(ctx *goryu.Ctx) {
     // Retrieve the user data set by the middleware
     user, exists := ctx.Get("user")
     if !exists {
@@ -222,7 +222,7 @@ type CreateUserRequest struct {
     Email string `json:"email"`
 }
 
-func CreateUser(ctx *context.Context) {
+func CreateUser(ctx *goryu.Ctx) {
     var req CreateUserRequest
     if err := ctx.BindJSON(&req); err != nil {
         ctx.Status(http.StatusBadRequest).JSON(map[string]string{"error": "Invalid request"})
@@ -245,7 +245,7 @@ type SearchFilters struct {
 }
 
 // Request: /articles?topic=golang&limit=20&strict=true
-func SearchArticles(ctx *context.Context) {
+func SearchArticles(ctx *goryu.Ctx) {
     var filters SearchFilters
     if err := ctx.QueryParser(&filters); err != nil {
         ctx.Status(http.StatusBadRequest).JSON(map[string]string{"error": "Invalid query params"})
@@ -297,7 +297,7 @@ url := ctx.BaseURL()
 Returns the raw request body as a byte slice. This is useful when you need to process the body directly, without parsing it as JSON or a form.
 
 ```go
-func WebhookHandler(ctx *context.Context) {
+func WebhookHandler(ctx *goryu.Ctx) {
     body, err := ctx.BodyRaw()
     if err != nil {
         ctx.Status(http.StatusInternalServerError).JSON(map[string]string{"error": "Could not read body"})
@@ -343,7 +343,7 @@ if ctx.Is("json") {
 Handles file uploads from a multipart form.
 
 ```go
-func UploadHandler(ctx *context.Context) {
+func UploadHandler(ctx *goryu.Ctx) {
     file, header, err := ctx.FormFile("profile_picture")
     if err != nil {
         ctx.Status(http.StatusBadRequest).JSON(map[string]string{"error": "File upload failed"})
@@ -408,7 +408,7 @@ ctx.JSON(http.StatusNotFound, map[string]string{"error": "Not Found"})
 Streams a file to the client, automatically setting the correct `Content-Type`.
 
 ```go
-func DownloadHandler(ctx *context.Context) {
+func DownloadHandler(ctx *goryu.Ctx) {
     ctx.SendFile("./static/downloads/document.pdf")
 }
 ```
@@ -452,7 +452,7 @@ ctx.Append("Link", "[http://example.com/docs](http://example.com/docs); rel=\"do
 Tells the browser to prompt a download for the response.
 
 ```go
-func DownloadHandler(ctx *context.Context) {
+func DownloadHandler(ctx *goryu.Ctx) {
     ctx.Attachment("user-report.csv")
     ctx.SendFile("./reports/report123.csv")
 }
@@ -463,7 +463,7 @@ func DownloadHandler(ctx *context.Context) {
 Sets the `Location` header, typically used with a `201 Created` status.
 
 ```go
-func CreateResource(ctx *context.Context) {
+func CreateResource(ctx *goryu.Ctx) {
     // ... create a new resource with ID 456 ...
     ctx.Location("/api/resources/456")
     ctx.Status(http.StatusCreated)
@@ -528,3 +528,22 @@ if !userHasPermission {
     return
 }
 ```
+
+## Best Practices
+
+### Context Reuse
+
+Goryu uses a `sync.Pool` to reuse `Context` objects. This reduces Garbage Collection pressure and improves performance. However, it means:
+
+*   **Do not store** `Context` objects across goroutines.
+*   The `Context` is only valid during the execution of the handler.
+*   If you need to pass data to a background goroutine, extract the necessary values from the `Context` first.
+
+### Error Handling
+
+Always check errors returned by context methods (like `JSON`, `Text`, `BindJSON`). Even though Goryu handles many errors internally, checking them allows for better observability and custom error responses.
+
+### Configuration
+
+Use `goryu.Config` to fine-tune your application settings, such as `MaxMultipartMemory` for form uploads, which defaults to 10MB to prevent memory exhaustion attacks.
+

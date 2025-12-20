@@ -1,9 +1,11 @@
 package trustproxy
+
 import (
 	"net"
 	"strings"
+
 	"github.com/arthurlch/goryu"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -25,35 +27,40 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "TrustProxy")
 			}
 		}
 	}
-	trustedNetworks := parseTrustedProxies(config.TrustedProxies)
+	trustedNetworks := parseTrustedProxies(cfg.TrustedProxies)
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
 			remoteIP, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 			clientIP := remoteIP
 			if isTrustedProxy(remoteIP, trustedNetworks) {
-				if proxyHeader := c.Request.Header.Get(config.ProxyHeader); proxyHeader != "" {
-					clientIP = extractClientIP(proxyHeader, config.ProxyHeader)
+				if proxyHeader := c.Request.Header.Get(cfg.ProxyHeader); proxyHeader != "" {
+					clientIP = extractClientIP(proxyHeader, cfg.ProxyHeader)
 				}
 			}
-			c.Set(config.ContextKey, clientIP)
+			c.Set(cfg.ContextKey, clientIP)
 			next(c)
 		}
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithProxies(proxies []string) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{TrustedProxies: proxies})

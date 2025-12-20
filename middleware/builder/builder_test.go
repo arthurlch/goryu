@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 func TestMiddlewareBuilder_Before(t *testing.T) {
 	beforeCalled := false

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 func TestStandardMiddleware(t *testing.T) {
 	t.Run("Normal execution", func(t *testing.T) {

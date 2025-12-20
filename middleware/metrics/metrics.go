@@ -1,8 +1,10 @@
 package metrics
+
 import (
 	"strconv"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Metrics interface {
@@ -32,8 +34,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Metrics")
@@ -45,7 +52,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		c.Writer = rw
 		c.Set("metrics.start_time", time.Now())
 		c.Set("metrics.response_writer", rw)
-		config.Metrics.AddToGauge(config.Prefix+"_requests_active", 1, map[string]string{})
+		cfg.Metrics.AddToGauge(cfg.Prefix+"_requests_active", 1, map[string]string{})
 		return nil
 	}
 	postHandler := func(c *context.Context) error {
@@ -64,29 +71,29 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			"method": c.Request.Method,
 			"path":   c.Request.URL.Path,
 		}
-		if config.GroupStatusCode {
+		if cfg.GroupStatusCode {
 			tags["status_class"] = getStatusClass(rw.Status())
 		} else {
 			tags["status"] = strconv.Itoa(rw.Status())
 		}
-		if config.CustomTags != nil {
-			for k, v := range config.CustomTags(c) {
+		if cfg.CustomTags != nil {
+			for k, v := range cfg.CustomTags(c) {
 				tags[k] = v
 			}
 		}
-		config.Metrics.IncrementCounter(config.Prefix+"_requests_total", tags)
-		config.Metrics.RecordHistogram(config.Prefix+"_request_duration_seconds", duration.Seconds(), tags)
-		if config.RecordBody {
-			config.Metrics.RecordHistogram(config.Prefix+"_request_size_bytes", float64(c.Request.ContentLength), tags)
-			config.Metrics.RecordHistogram(config.Prefix+"_response_size_bytes", float64(rw.Size()), tags)
+		cfg.Metrics.IncrementCounter(cfg.Prefix+"_requests_total", tags)
+		cfg.Metrics.RecordHistogram(cfg.Prefix+"_request_duration_seconds", duration.Seconds(), tags)
+		if cfg.RecordBody {
+			cfg.Metrics.RecordHistogram(cfg.Prefix+"_request_size_bytes", float64(c.Request.ContentLength), tags)
+			cfg.Metrics.RecordHistogram(cfg.Prefix+"_response_size_bytes", float64(rw.Size()), tags)
 		}
-		config.Metrics.AddToGauge(config.Prefix+"_requests_active", -1, map[string]string{})
+		cfg.Metrics.AddToGauge(cfg.Prefix+"_requests_active", -1, map[string]string{})
 		return nil
 	}
-	return base.PostProcessMiddleware("Metrics", config.BaseConfig, preHandler, postHandler)
+	return base.PostProcessMiddleware("Metrics", cfg.BaseConfig, preHandler, postHandler)
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func getStatusClass(statusCode int) string {
 	switch {

@@ -1,9 +1,11 @@
 package requestid
+
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"io"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 const DefaultRequestIDHeader = "X-Request-ID"
@@ -28,8 +30,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "RequestID")
@@ -37,18 +44,18 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 	}
 	handler := func(c *context.Context) error {
-		rid := c.Request.Header.Get(config.Header)
+		rid := c.Request.Header.Get(cfg.Header)
 		if rid == "" {
-			rid = config.Generator()
+			rid = cfg.Generator()
 		}
-		c.Set(config.ContextKey, rid)
-		c.Writer.Header().Set(config.Header, rid)
+		c.Set(cfg.ContextKey, rid)
+		c.Writer.Header().Set(cfg.Header, rid)
 		return nil
 	}
-	return base.StandardMiddleware("RequestID", config.BaseConfig, handler)
+	return base.StandardMiddleware("RequestID", cfg.BaseConfig, handler)
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func defaultGenerator() string {
 	b := make([]byte, 16)

@@ -1,11 +1,13 @@
 package basicauth_test
+
 import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
 	"github.com/arthurlch/goryu"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/basicauth"
 )
 func newTestContext(req *http.Request) (*goryu.Ctx, *httptest.ResponseRecorder) {

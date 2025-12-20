@@ -1,11 +1,13 @@
 package session
+
 import (
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	"github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 	"github.com/google/uuid"
 )
@@ -67,10 +69,15 @@ const (
 	sessionCfgKey       = "goryu.session.config"
 	sessionDestroyedKey = "goryu.session.destroyed"
 )
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
-		return func(next context.HandlerFunc) context.HandlerFunc {
-			return func(c *context.Context) {
+func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+			return func(c *goryuctx.Context) {
 				base.DefaultErrorHandler(c, base.MiddlewareError{
 					Middleware: "Session",
 					Err:        err,
@@ -79,14 +86,14 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			}
 		}
 	}
-	preHandler := func(c *context.Context) error {
-		c.Set(sessionCfgKey, &config)
-		cookie, err := c.Cookie(config.CookieName)
+	preHandler := func(c *goryuctx.Context) error {
+		c.Set(sessionCfgKey, &cfg)
+		cookie, err := c.Cookie(cfg.CookieName)
 		var session *Session
 		if err == nil {
 			sessionID, decodeErr := base64.StdEncoding.DecodeString(cookie.Value)
 			if decodeErr == nil {
-				s, storeErr := config.Store.Get(string(sessionID))
+				s, storeErr := cfg.Store.Get(string(sessionID))
 				if storeErr == nil && s != nil {
 					session = s
 					c.Set(sessionIDKey, s.ID)
@@ -105,7 +112,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		c.Set(sessionKey, session)
 		return nil
 	}
-	postHandler := func(c *context.Context) error {
+	postHandler := func(c *goryuctx.Context) error {
 		if destroyed, _ := c.Get(sessionDestroyedKey); destroyed == true {
 			return nil 
 		}
@@ -115,58 +122,58 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 		finalSession, ok := finalSessionVal.(*Session)
 		if !ok {
-			return errors.New("invalid session type in context")
+			return errors.New("invalid session type in goryuctx")
 		}
 		if finalSession.modified {
-			if err := config.Store.Save(finalSession); err != nil {
-				if config.Logger != nil {
-					config.Logger.Printf("Error saving session: %v", err)
+			if err := cfg.Store.Save(finalSession); err != nil {
+				if cfg.Logger != nil {
+					cfg.Logger.Printf("Error saving session: %v", err)
 				}
 				return nil 
 			}
 		}
 		cookie := &http.Cookie{
-			Name:     config.CookieName,
+			Name:     cfg.CookieName,
 			Value:    base64.StdEncoding.EncodeToString([]byte(finalSession.ID)),
-			Expires:  time.Now().Add(config.Expiration),
-			Path:     config.Path,
-			Domain:   config.Domain,
+			Expires:  time.Now().Add(cfg.Expiration),
+			Path:     cfg.Path,
+			Domain:   cfg.Domain,
 			HttpOnly: true,           
-			Secure:   *config.Secure, 
-			SameSite: config.SameSite, 
+			Secure:   *cfg.Secure, 
+			SameSite: cfg.SameSite, 
 		}
 		c.SetCookie(cookie)
 		return nil
 	}
-	return base.PostProcessMiddleware("Session", config.BaseConfig, preHandler, postHandler)
+	return base.PostProcessMiddleware("Session", cfg.BaseConfig, preHandler, postHandler)
 }
-func Get(c *context.Context) (*Session, error) {
+func Get(c *goryuctx.Context) (*Session, error) {
 	s, exists := c.Get(sessionKey)
 	if !exists {
-		return nil, errors.New("session not found in context")
+		return nil, errors.New("session not found in goryuctx")
 	}
 	session, ok := s.(*Session)
 	if !ok {
-		return nil, errors.New("invalid session type in context")
+		return nil, errors.New("invalid session type in goryuctx")
 	}
 	return session, nil
 }
-func Destroy(c *context.Context) error {
+func Destroy(c *goryuctx.Context) error {
 	cfgVal, exists := c.Get(sessionCfgKey)
 	if !exists {
-		return errors.New("session config not found in context")
+		return errors.New("session config not found in goryuctx")
 	}
 	cfg, ok := cfgVal.(*Config)
 	if !ok {
-		return errors.New("session config is of invalid type in context")
+		return errors.New("session config is of invalid type in goryuctx")
 	}
 	sessionIDVal, exists := c.Get(sessionIDKey)
 	if !exists {
-		return errors.New("session ID not found in context")
+		return errors.New("session ID not found in goryuctx")
 	}
 	sessionID, ok := sessionIDVal.(string)
 	if !ok {
-		return errors.New("session ID is of invalid type in context")
+		return errors.New("session ID is of invalid type in goryuctx")
 	}
 	c.SetCookie(&http.Cookie{
 		Name:     cfg.CookieName,
@@ -181,26 +188,26 @@ func Destroy(c *context.Context) error {
 	c.Set(sessionDestroyedKey, true)
 	return cfg.Store.Destroy(sessionID)
 }
-func Regenerate(c *context.Context) error {
+func Regenerate(c *goryuctx.Context) error {
 	session, err := Get(c)
 	if err != nil {
 		return err
 	}
 	cfgVal, exists := c.Get(sessionCfgKey)
 	if !exists {
-		return errors.New("session config not found in context")
+		return errors.New("session config not found in goryuctx")
 	}
 	cfg, ok := cfgVal.(*Config)
 	if !ok {
-		return errors.New("session config is of invalid type in context")
+		return errors.New("session config is of invalid type in goryuctx")
 	}
 	oldSessionIDVal, exists := c.Get(sessionIDKey)
 	if !exists {
-		return errors.New("session ID not found in context")
+		return errors.New("session ID not found in goryuctx")
 	}
 	oldSessionID, ok := oldSessionIDVal.(string)
 	if !ok {
-		return errors.New("session ID is of invalid type in context")
+		return errors.New("session ID is of invalid type in goryuctx")
 	}
 	newSessionID := uuid.New().String()
 	newSession := &Session{
@@ -242,11 +249,11 @@ func Regenerate(c *context.Context) error {
 	}()
 	return nil
 }
-func Default(store Store) func(next context.HandlerFunc) context.HandlerFunc {
+func Default(store Store) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
 	return New(Config{
 		Store: store,
 	})
 }
-func Middleware(config Config) func(next context.HandlerFunc) context.HandlerFunc {
+func Middleware(config Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
 	return New(config)
 }

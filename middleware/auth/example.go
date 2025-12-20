@@ -1,8 +1,10 @@
 package auth
+
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"time"
+
 	"github.com/arthurlch/goryu"
 )
 func SetupAuthMiddleware(app *goryu.App, secretKey string) (*AuthService, *AuthHandlers) {

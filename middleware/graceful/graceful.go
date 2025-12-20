@@ -1,6 +1,7 @@
 package graceful
+
 import (
-	"context"
+	stdContext "context"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,8 +10,9 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
 	"github.com/arthurlch/goryu"
-	goryuContext "github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type ShutdownConfig struct {
@@ -85,7 +87,7 @@ func (gs *GracefulServer) shutdown() error {
 	if gs.config.OnShutdownStart != nil {
 		gs.config.OnShutdownStart()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), gs.config.Timeout)
+	ctx, cancel := stdContext.WithTimeout(stdContext.Background(), gs.config.Timeout)
 	defer cancel()
 	gs.logger.Printf("Shutting down server with timeout: %v", gs.config.Timeout)
 	if err := gs.server.Shutdown(ctx); err != nil {
@@ -129,30 +131,35 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	if err := config.Validate(); err != nil {
-		return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-			return func(c *goryuContext.Context) {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Graceful")
 			}
 		}
 	}
 	activeConnections := &connectionCounter{}
-	return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-		return func(c *goryuContext.Context) {
-			if config.Skip != nil && config.Skip(c) {
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
 			activeConnections.increment()
 			defer activeConnections.decrement()
-			c.Set(config.ContextKey, activeConnections.count())
+			c.Set(cfg.ContextKey, activeConnections.count())
 			next(c)
 		}
 	}
 }
-func Default() func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	return New(Config{})
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New()
 }
 func Middleware() goryu.Middleware {
 	activeConnections := &connectionCounter{}

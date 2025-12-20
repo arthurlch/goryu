@@ -1,4 +1,5 @@
 package securecookie
+
 import (
 	"crypto/aes"
 	"crypto/cipher"
@@ -10,7 +11,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type contextKey string
@@ -66,15 +68,20 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "SecureCookie")
 			}
 		}
 	}
-	key, err := hex.DecodeString(config.HexKey)
+	key, err := hex.DecodeString(cfg.HexKey)
 	if err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
@@ -123,16 +130,16 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 	sc := &SecureCookie{
 		gcm:        gcm,
-		cookieName: config.CookieName,
-		cookiePath: config.CookiePath,
-		cookieTTL:  config.CookieTTL,
-		secure:     config.Secure,
-		sameSite:   config.SameSite,
-		httpOnly:   config.HttpOnly,
+		cookieName: cfg.CookieName,
+		cookiePath: cfg.CookiePath,
+		cookieTTL:  cfg.CookieTTL,
+		secure:     cfg.Secure,
+		sameSite:   cfg.SameSite,
+		httpOnly:   cfg.HttpOnly,
 	}
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
@@ -141,7 +148,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			if err == nil {
 				value, err = sc.decrypt(cookie.Value)
 				if err != nil {
-					logger := config.Logger
+					logger := cfg.Logger
 					if logger == nil {
 						logger = base.DefaultLogger("SecureCookie")
 					}

@@ -1,4 +1,5 @@
 package structlog
+
 import (
 	"fmt"
 	"io"
@@ -6,7 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 	"github.com/google/uuid"
 )
@@ -49,8 +51,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "StructLog")
@@ -58,14 +65,14 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 	}
 	preHandler := func(c *context.Context) error {
-		requestID := c.Request.Header.Get(config.RequestIDHeader)
+		requestID := c.Request.Header.Get(cfg.RequestIDHeader)
 		if requestID == "" {
 			requestID = uuid.New().String()
 		}
 		c.Set(RequestIDKey, requestID)
-		c.Set(LoggerKey, config.Logger)
+		c.Set(LoggerKey, cfg.Logger)
 		c.Set(StartTimeKey, time.Now())
-		c.Writer.Header().Set(config.RequestIDHeader, requestID)
+		c.Writer.Header().Set(cfg.RequestIDHeader, requestID)
 		rw := base.NewStandardResponseWriter(c.Writer)
 		c.Writer = rw
 		c.Set("structlog.response_writer", rw)
@@ -103,8 +110,8 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			slog.String("remote_ip", remoteIP),
 			slog.Int("response_size", responseSize),
 		}
-		if config.CustomFields != nil {
-			customFields := config.CustomFields(c)
+		if cfg.CustomFields != nil {
+			customFields := cfg.CustomFields(c)
 			attrs = append(attrs, slog.Any("custom", customFields))
 		}
 		var level slog.Level
@@ -116,13 +123,13 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		default:
 			level = slog.LevelInfo
 		}
-		config.Logger.LogAttrs(c.Request.Context(), level, message, attrs...)
+		cfg.Logger.LogAttrs(c.Request.Context(), level, message, attrs...)
 		return nil
 	}
-	return base.PostProcessMiddleware("StructLog", config.BaseConfig, preHandler, postHandler)
+	return base.PostProcessMiddleware("StructLog", cfg.BaseConfig, preHandler, postHandler)
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func getClientIP(c *context.Context) string {
 	if xff := c.Request.Header.Get("X-Forwarded-For"); xff != "" {

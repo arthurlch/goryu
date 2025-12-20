@@ -1,4 +1,5 @@
 package logger
+
 import (
 	"bytes"
 	"crypto/rand"
@@ -12,7 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 const (
@@ -50,15 +52,20 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Logger")
 			}
 		}
 	}
-	logger := log.New(config.Output, "", 0)
+	logger := log.New(cfg.Output, "", 0)
 	var mu sync.Mutex
 	handler := func(c *context.Context) error {
 		start := time.Now()
@@ -102,7 +109,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				errMsg = e.Error()
 			}
 		}
-		isColorEnabled := !config.DisableColors
+		isColorEnabled := !cfg.DisableColors
 		statusColor := colorForStatus(statusCode, isColorEnabled)
 		methodColor := colorForMethod(method, isColorEnabled)
 		resetColor := colorReset
@@ -110,9 +117,9 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 			resetColor = ""
 		}
 		var buf bytes.Buffer
-		template := config.Format
+		template := cfg.Format
 		replacer := strings.NewReplacer(
-			"${time}", stop.Format(config.TimeFormat),
+			"${time}", stop.Format(cfg.TimeFormat),
 			"${request_id}", requestID,
 			"${status}", fmt.Sprintf("%s%d%s", statusColor, statusCode, resetColor),
 			"${latency}", latency.String(),
@@ -130,10 +137,10 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		logger.Print(buf.String())
 		return nil
 	}
-	return base.PostProcessMiddleware("Logger", config.BaseConfig, handler, postHandler)
+	return base.PostProcessMiddleware("Logger", cfg.BaseConfig, handler, postHandler)
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func getClientIP(c *context.Context) string {
 	if xff := c.Request.Header.Get("X-Forwarded-For"); xff != "" {

@@ -260,12 +260,48 @@ func generateMiddlewareContent(name string) string {
 
 import (
 	"github.com/arthurlch/goryu"
+	"github.com/arthurlch/goryu/middleware/base"
 )
 
-// %s creates a new %s middleware
-func %s() goryu.Middleware {
+// %sConfig defines the configuration for the %s middleware
+type %sConfig struct {
+	base.BaseConfig
+	// TODO: Add custom config fields here
+}
+
+// Configure implements the Config interface
+func (c *%sConfig) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+
+// Validate validates the configuration
+func (c *%sConfig) Validate() error {
+	// TODO: Add validation logic
+	return nil
+}
+
+// New%s creates a new %s middleware
+func New%s(config ...%sConfig) goryu.Middleware {
+	cfg := %sConfig{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return func(next goryu.HandlerFunc) goryu.HandlerFunc {
+			return func(c *goryu.Context) {
+				base.DefaultErrorHandler(c, err, "%s")
+			}
+		}
+	}
+
 	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
 		return func(c *goryu.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
+				next(c)
+				return
+			}
+
 			// TODO: Add middleware logic before request
 			
 			// Call next handler
@@ -275,5 +311,5 @@ func %s() goryu.Middleware {
 		}
 	}
 }
-`, middlewareName, name, middlewareName)
+`, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName, middlewareName)
 }

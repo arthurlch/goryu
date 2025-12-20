@@ -1,17 +1,19 @@
 package timeout
+
 import (
-	"context"
+	stdContext "context"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
-	goryuContext "github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
 	base.BaseConfig
 	Timeout time.Duration
-	TimeoutHandler goryuContext.HandlerFunc
+	TimeoutHandler context.HandlerFunc
 }
 type timeoutWriter struct {
 	http.ResponseWriter
@@ -54,7 +56,7 @@ func (c *Config) Validate() error {
 		return base.NewConfigError("Timeout", "cannot exceed 5 minutes")
 	}
 	if c.TimeoutHandler == nil {
-		c.TimeoutHandler = func(ctx *goryuContext.Context) {
+		c.TimeoutHandler = func(ctx *context.Context) {
 			if ctx.Writer.Header().Get("Content-Type") == "" {
 				ctx.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			}
@@ -64,21 +66,26 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	if err := config.Validate(); err != nil {
-		return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-			return func(c *goryuContext.Context) {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Timeout")
 			}
 		}
 	}
-	return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-		return func(c *goryuContext.Context) {
-			if config.Skip != nil && config.Skip(c) {
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-			ctx, cancel := context.WithTimeout(c.Request.Context(), config.Timeout)
+			ctx, cancel := stdContext.WithTimeout(c.Request.Context(), cfg.Timeout)
 			defer cancel() 
 			timeoutWriter := &timeoutWriter{
 				ResponseWriter: c.Writer,
@@ -120,14 +127,14 @@ func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.Handler
 			case <-ctx.Done():
 				timeoutWriter.markTimedOut()
 				c.Writer = originalWriter 
-				if ctx.Err() == context.DeadlineExceeded {
-					config.TimeoutHandler(c)
+				if ctx.Err() == stdContext.DeadlineExceeded {
+					cfg.TimeoutHandler(c)
 				}
 				return
 			}
 		}
 	}
 }
-func Default() func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	return New(Config{})
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New()
 }

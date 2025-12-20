@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/arthurlch/goryu/context"
+	"github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/route"
 )
 
@@ -29,7 +29,7 @@ func (router *Router) SetRouteName(r *Route, name string) *Route {
 // Group allows for grouping routes with a common prefix and middlewares.
 type Group struct {
 	prefix      string
-	middlewares []context.Middleware
+	middlewares []goryuctx.Middleware
 	router      *Router
 }
 
@@ -72,8 +72,8 @@ type RouterConfig struct {
 type Router struct {
 	trees            map[string]*node
 	namedRoutes      map[string]*Route
-	NotFound         context.HandlerFunc
-	MethodNotAllowed context.HandlerFunc
+	NotFound         goryuctx.HandlerFunc
+	MethodNotAllowed goryuctx.HandlerFunc
 	PanicHandler     func(http.ResponseWriter, *http.Request, interface{})
 	Config           RouterConfig
 	totalRoutes      int // SECURITY: Track total routes for limits
@@ -125,10 +125,10 @@ func New(config ...RouterConfig) *Router {
 		namedRoutes: make(map[string]*Route),
 		Config:      cfg,
 	}
-	r.NotFound = func(ctx *context.Context) {
+	r.NotFound = func(ctx *goryuctx.Context) {
 		http.NotFound(ctx.Writer, ctx.Request)
 	}
-	r.MethodNotAllowed = func(ctx *context.Context) {
+	r.MethodNotAllowed = func(ctx *goryuctx.Context) {
 		http.Error(ctx.Writer, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
 	r.PanicHandler = func(w http.ResponseWriter, r *http.Request, err interface{}) {
@@ -139,7 +139,7 @@ func New(config ...RouterConfig) *Router {
 }
 
 // Add registers a new route with the given method, path, and handler.
-func (router *Router) Add(method, path string, handler context.HandlerFunc) *Route {
+func (router *Router) Add(method, path string, handler goryuctx.HandlerFunc) *Route {
 	// SECURITY: Check total route limit
 	if router.totalRoutes >= router.Config.MaxTotalRoutes {
 		router.handleRouterError("Add", fmt.Sprintf("exceeded maximum number of routes (%d)", router.Config.MaxTotalRoutes))
@@ -205,25 +205,25 @@ func (router *Router) Add(method, path string, handler context.HandlerFunc) *Rou
 }
 
 // --- HTTP Method Helpers ---
-func (router *Router) GET(path string, handler context.HandlerFunc) *Route {
+func (router *Router) GET(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("GET", path, handler)
 }
-func (router *Router) POST(path string, handler context.HandlerFunc) *Route {
+func (router *Router) POST(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("POST", path, handler)
 }
-func (router *Router) PUT(path string, handler context.HandlerFunc) *Route {
+func (router *Router) PUT(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("PUT", path, handler)
 }
-func (router *Router) DELETE(path string, handler context.HandlerFunc) *Route {
+func (router *Router) DELETE(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("DELETE", path, handler)
 }
-func (router *Router) PATCH(path string, handler context.HandlerFunc) *Route {
+func (router *Router) PATCH(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("PATCH", path, handler)
 }
-func (router *Router) HEAD(path string, handler context.HandlerFunc) *Route {
+func (router *Router) HEAD(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("HEAD", path, handler)
 }
-func (router *Router) OPTIONS(path string, handler context.HandlerFunc) *Route {
+func (router *Router) OPTIONS(path string, handler goryuctx.HandlerFunc) *Route {
 	return router.Add("OPTIONS", path, handler)
 }
 
@@ -245,7 +245,7 @@ func (rc *RouteCollection) SetName(name string) *RouteCollection {
 
 // ALL registers a handler for all HTTP methods
 // Returns a RouteCollection that contains all created routes
-func (router *Router) ALL(path string, handler context.HandlerFunc) *RouteCollection {
+func (router *Router) ALL(path string, handler goryuctx.HandlerFunc) *RouteCollection {
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 	routes := make([]*Route, 0, len(methods))
 	
@@ -261,7 +261,7 @@ func (router *Router) ALL(path string, handler context.HandlerFunc) *RouteCollec
 }
 
 // Group creates a new route group with a common prefix.
-func (router *Router) Group(prefix string, middlewares ...context.Middleware) *Group {
+func (router *Router) Group(prefix string, middlewares ...goryuctx.Middleware) *Group {
 	return &Group{
 		prefix:      prefix,
 		router:      router,
@@ -296,7 +296,8 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	ctx := context.NewContext(w, r)
+	ctx := goryuctx.NewContext(w, r)
+	defer ctx.Release()
 	path := r.URL.Path
 	method := r.Method
 
@@ -309,7 +310,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if foundNode, params, foundRoute := tree.find(parts, 0, hasTrailingSlash, router.Config.StrictRouting); foundNode != nil && foundRoute != nil {
 			ctx.Params = params
 			ctx.Route = foundRoute
-			if handler, ok := foundRoute.Handler.(context.HandlerFunc); ok {
+			if handler, ok := foundRoute.Handler.(goryuctx.HandlerFunc); ok {
 				handler(ctx)
 			}
 			return
@@ -323,7 +324,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if foundNode, params, foundRoute := tree.find(parts, 0, hasTrailingSlash, router.Config.StrictRouting); foundNode != nil && foundRoute != nil {
 				ctx.Params = params
 				ctx.Route = foundRoute
-				if handler, ok := foundRoute.Handler.(context.HandlerFunc); ok {
+				if handler, ok := foundRoute.Handler.(goryuctx.HandlerFunc); ok {
 					handler(ctx)
 				}
 				return
@@ -433,7 +434,7 @@ func (router *Router) calculateAllowedMethods(path string) []string {
 
 // --- Group Methods ---
 
-func (g *Group) Group(prefix string, middlewares ...context.Middleware) *Group {
+func (g *Group) Group(prefix string, middlewares ...goryuctx.Middleware) *Group {
 	return &Group{
 		prefix:      g.prefix + prefix,
 		router:      g.router,
@@ -441,21 +442,21 @@ func (g *Group) Group(prefix string, middlewares ...context.Middleware) *Group {
 	}
 }
 
-func (g *Group) add(method, path string, handler context.HandlerFunc) *Route {
+func (g *Group) add(method, path string, handler goryuctx.HandlerFunc) *Route {
 	fullPath := g.prefix + path
 	wrappedHandler := g.wrapWithMiddleware(handler)
 	return g.router.Add(method, fullPath, wrappedHandler)
 }
 
-func (g *Group) GET(path string, handler context.HandlerFunc) *Route     { return g.add("GET", path, handler) }
-func (g *Group) POST(path string, handler context.HandlerFunc) *Route    { return g.add("POST", path, handler) }
-func (g *Group) PUT(path string, handler context.HandlerFunc) *Route     { return g.add("PUT", path, handler) }
-func (g *Group) DELETE(path string, handler context.HandlerFunc) *Route  { return g.add("DELETE", path, handler) }
-func (g *Group) PATCH(path string, handler context.HandlerFunc) *Route   { return g.add("PATCH", path, handler) }
-func (g *Group) HEAD(path string, handler context.HandlerFunc) *Route    { return g.add("HEAD", path, handler) }
-func (g *Group) OPTIONS(path string, handler context.HandlerFunc) *Route { return g.add("OPTIONS", path, handler) }
+func (g *Group) GET(path string, handler goryuctx.HandlerFunc) *Route     { return g.add("GET", path, handler) }
+func (g *Group) POST(path string, handler goryuctx.HandlerFunc) *Route    { return g.add("POST", path, handler) }
+func (g *Group) PUT(path string, handler goryuctx.HandlerFunc) *Route     { return g.add("PUT", path, handler) }
+func (g *Group) DELETE(path string, handler goryuctx.HandlerFunc) *Route  { return g.add("DELETE", path, handler) }
+func (g *Group) PATCH(path string, handler goryuctx.HandlerFunc) *Route   { return g.add("PATCH", path, handler) }
+func (g *Group) HEAD(path string, handler goryuctx.HandlerFunc) *Route    { return g.add("HEAD", path, handler) }
+func (g *Group) OPTIONS(path string, handler goryuctx.HandlerFunc) *Route { return g.add("OPTIONS", path, handler) }
 
-func (g *Group) wrapWithMiddleware(handler context.HandlerFunc) context.HandlerFunc {
+func (g *Group) wrapWithMiddleware(handler goryuctx.HandlerFunc) goryuctx.HandlerFunc {
 	for i := len(g.middlewares) - 1; i >= 0; i-- {
 		handler = g.middlewares[i](handler)
 	}

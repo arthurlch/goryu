@@ -1,4 +1,4 @@
-package context_test
+package goryuctx_test
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 
 func TestContext_Query(t *testing.T) {

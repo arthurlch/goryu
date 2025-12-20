@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 
 // Controller interface that resources can implement

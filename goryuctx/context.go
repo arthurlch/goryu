@@ -1,4 +1,4 @@
-package context
+package goryuctx
 
 // core context
 
@@ -9,6 +9,15 @@ import (
 
 	"github.com/arthurlch/goryu/route"
 )
+
+var contextPool = sync.Pool{
+	New: func() interface{} {
+		return &Context{
+			Params: make(map[string]string),
+			Keys:   make(map[string]interface{}),
+		}
+	},
+}
 
 // I had a mental breakdown to think about context package name conflict, fluent API and all that stuff
 // So I need to come back here !
@@ -33,12 +42,35 @@ type HandlerFunc func(*Context)
 type Middleware func(HandlerFunc) HandlerFunc
 
 func NewContext(writer http.ResponseWriter, request *http.Request) *Context {
-	return &Context{
-		Writer:  writer,
-		Request: request,
-		Params:  make(map[string]string),
-		Keys:    make(map[string]interface{}),
+	c := contextPool.Get().(*Context)
+	c.Reset(writer, request)
+	return c
+}
+
+// Reset resets the context for a new request.
+func (c *Context) Reset(writer http.ResponseWriter, request *http.Request) {
+	c.Writer = writer
+	c.Request = request
+	c.Route = nil
+	// Reset Params map (reuse existing map to reduce allocation)
+	for k := range c.Params {
+		delete(c.Params, k)
 	}
+	// Reset Keys map
+	for k := range c.Keys {
+		delete(c.Keys, k)
+	}
+	
+	c.mu.Lock()
+	c.responseSent = 0
+	c.errors = c.errors[:0] // keep capacity
+	c.errorHandler = nil
+	c.mu.Unlock()
+}
+
+// Release puts the context back into the pool.
+func (c *Context) Release() {
+	contextPool.Put(c)
 }
 
 // SECUCHECK: Thread-safe Set method

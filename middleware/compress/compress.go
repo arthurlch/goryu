@@ -1,4 +1,5 @@
 package compress
+
 import (
 	"bufio"
 	"compress/flate"
@@ -6,7 +7,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type CompressionLevel int

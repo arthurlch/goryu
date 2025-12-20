@@ -1,10 +1,12 @@
 package envvar
+
 import (
 	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -26,15 +28,20 @@ func (c *Config) Validate() error {
 	c.Path = "/" + strings.Trim(c.Path, "/")
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Envvar")
 			}
 		}
 	}
-	envMap := collectEnvVars(config.Expose, config.Exclude)
+	envMap := collectEnvVars(cfg.Expose, cfg.Exclude)
 	jsonResponse, err := json.Marshal(envMap)
 	if err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
@@ -49,15 +56,15 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-			if c.Request.URL.Path == config.Path {
+			if c.Request.URL.Path == cfg.Path {
 				c.Writer.Header().Set("Content-Type", "application/json")
 				c.Writer.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				if _, err := c.Writer.Write(jsonResponse); err != nil {
-					logger := config.Logger
+					logger := cfg.Logger
 					if logger == nil {
 						logger = base.DefaultLogger("Envvar")
 					}
@@ -70,7 +77,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithPath(path string) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{Path: path})

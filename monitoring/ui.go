@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 
 const dashboardHTML = `

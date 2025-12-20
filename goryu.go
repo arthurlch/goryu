@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/arthurlch/goryu/config/builder"
-	goryu_context "github.com/arthurlch/goryu/context"
+	goryu_context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/monitoring"
 	"github.com/arthurlch/goryu/router"
 )
@@ -48,6 +48,9 @@ type Config struct {
 	// EnableHEADFallback allows HEAD requests to fall back to GET handlers.
 	// Default: true
 	EnableHEADFallback *bool
+	// MaxMultipartMemory is the maximum amount of memory to use for multipart form parsing.
+	// Default: 10MB
+	MaxMultipartMemory int64
 }
 
 type App struct {
@@ -67,6 +70,7 @@ func New(config ...Config) *App {
 		ServerHeader: "",
 		ServerPort: 3000,
 		ServerHost: "",
+		MaxMultipartMemory: 10 << 20, // 10 MB default
 	}
 
 	if len(config) > 0 {
@@ -134,15 +138,22 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Server", app.Config.ServerHeader)
 	}
 	
-	const maxFormSize = 10 << 20 // 10MB default limit
+	const defaultMaxMemory = 32 << 20 // 32 MB
+	maxMemory := app.Config.MaxMultipartMemory
+	if maxMemory == 0 {
+		maxMemory = defaultMaxMemory
+	}
 	
 	if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data") {
-		if err := req.ParseMultipartForm(maxFormSize); err != nil {
+		if err := req.ParseMultipartForm(maxMemory); err != nil {
 			http.Error(w, "Form data too large or invalid", http.StatusBadRequest)
 			return
 		}
 	} else {
-		if req.ContentLength > maxFormSize {
+		// For non-multipart, we don't strictly enforce memory limit on ParseForm as it parses into url.Values
+		// but we might want to check ContentLength if we want to be strict.
+		// Standard ParseForm reads the body.
+		if req.ContentLength > maxMemory {
 			http.Error(w, "Form data too large", http.StatusRequestEntityTooLarge)
 			return
 		}

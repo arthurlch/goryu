@@ -3,7 +3,7 @@ import (
 	"errors"
 	"net/http"
 	"time"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 type ExampleConfig struct {
 	BaseConfig

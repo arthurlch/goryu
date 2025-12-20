@@ -1,14 +1,16 @@
 package healthcheck
+
 import (
-	"context"
+	stdContext "context"
 	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
-	goryuContext "github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
-type Probe func(ctx context.Context) error
+type Probe func(ctx stdContext.Context) error
 type Config struct {
 	base.BaseConfig
 	LivenessPath string
@@ -51,34 +53,39 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	if err := config.Validate(); err != nil {
-		return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-			return func(c *goryuContext.Context) {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "HealthCheck")
 			}
 		}
 	}
-	return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-		return func(c *goryuContext.Context) {
-			if config.Skip != nil && config.Skip(c) {
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
 			path := c.Request.URL.Path
 			var probes map[string]Probe
 			switch path {
-			case config.LivenessPath:
-				probes = config.LivenessProbes
-			case config.ReadinessPath:
-				probes = config.ReadinessProbes
-			case config.HealthPath:
-				probes = config.HealthProbes
+			case cfg.LivenessPath:
+				probes = cfg.LivenessProbes
+			case cfg.ReadinessPath:
+				probes = cfg.ReadinessProbes
+			case cfg.HealthPath:
+				probes = cfg.HealthProbes
 			default:
 				next(c)
 				return
 			}
-			status := runHealthChecks(c.Request.Context(), probes, config.Timeout)
+			status := runHealthChecks(c.Request.Context(), probes, cfg.Timeout)
 			c.Writer.Header().Set("Content-Type", "application/json")
 			c.Writer.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			statusCode := http.StatusOK
@@ -87,7 +94,7 @@ func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.Handler
 			}
 			c.Writer.WriteHeader(statusCode)
 			if err := json.NewEncoder(c.Writer).Encode(status); err != nil {
-				logger := config.Logger
+				logger := cfg.Logger
 				if logger == nil {
 					logger = base.DefaultLogger("HealthCheck")
 				}
@@ -96,22 +103,22 @@ func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.Handler
 		}
 	}
 }
-func Default() func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	return New(Config{})
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New()
 }
-func WithProbes(livenessProbes, readinessProbes map[string]Probe) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
+func WithProbes(livenessProbes, readinessProbes map[string]Probe) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{
 		LivenessProbes:  livenessProbes,
 		ReadinessProbes: readinessProbes,
 	})
 }
-func runHealthChecks(ctx context.Context, probes map[string]Probe, timeout time.Duration) *HealthStatus {
+func runHealthChecks(ctx stdContext.Context, probes map[string]Probe, timeout time.Duration) *HealthStatus {
 	if len(probes) == 0 {
 		return &HealthStatus{
 			Status: "UP",
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := stdContext.WithTimeout(ctx, timeout)
 	defer cancel()
 	var wg sync.WaitGroup
 	results := make(chan probeResult, len(probes))
@@ -162,8 +169,8 @@ type probeResult struct {
 	name string
 	err  error
 }
-func DatabaseProbe(pingFunc func(context.Context) error) Probe {
-	return func(ctx context.Context) error {
+func DatabaseProbe(pingFunc func(stdContext.Context) error) Probe {
+	return func(ctx stdContext.Context) error {
 		return pingFunc(ctx)
 	}
 }
@@ -171,7 +178,7 @@ func HTTPProbe(url string, client *http.Client) Probe {
 	if client == nil {
 		client = &http.Client{Timeout: 3 * time.Second}
 	}
-	return func(ctx context.Context) error {
+	return func(ctx stdContext.Context) error {
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return err
@@ -188,12 +195,12 @@ func HTTPProbe(url string, client *http.Client) Probe {
 	}
 }
 func AlwaysUpProbe() Probe {
-	return func(ctx context.Context) error {
+	return func(ctx stdContext.Context) error {
 		return nil
 	}
 }
 func AlwaysDownProbe(message string) Probe {
-	return func(ctx context.Context) error {
+	return func(ctx stdContext.Context) error {
 		return base.NewConfigError("Test Probe", message)
 	}
 }

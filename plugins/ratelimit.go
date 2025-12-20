@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/limiter"
 )
 

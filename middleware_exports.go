@@ -4,6 +4,7 @@ import (
 	"github.com/arthurlch/goryu/middleware/builder"
 )
 
+// Deprecated: Use middleware/builder directly if needed, but standard middleware packages are preferred.
 type MiddlewareBuilder = builder.MiddlewareBuilder
 
 func NewMiddleware(name ...string) *MiddlewareBuilder {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 	"github.com/arthurlch/goryu"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/cache"
 )
 func newTestContext(req *http.Request) (*goryu.Ctx, *httptest.ResponseRecorder) {

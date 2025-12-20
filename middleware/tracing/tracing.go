@@ -1,16 +1,18 @@
 package tracing
+
 import (
-	"context"
+	stdContext "context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"time"
-	goryuContext "github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Tracer interface {
-	StartSpan(ctx context.Context, name string) (Span, context.Context)
+	StartSpan(ctx stdContext.Context, name string) (Span, stdContext.Context)
 	Extract(headers http.Header) (SpanContext, error)
 	Inject(spanContext SpanContext, headers http.Header) error
 }
@@ -35,8 +37,8 @@ const (
 type Config struct {
 	base.BaseConfig
 	Tracer Tracer
-	SpanNameGenerator func(c *goryuContext.Context) string
-	CustomTags func(c *goryuContext.Context) map[string]interface{}
+	SpanNameGenerator func(c *context.Context) string
+	CustomTags func(c *context.Context) map[string]interface{}
 	SampleRate float64
 }
 type contextKey string
@@ -49,7 +51,7 @@ func (c *Config) Validate() error {
 		c.Tracer = &noopTracer{}
 	}
 	if c.SpanNameGenerator == nil {
-		c.SpanNameGenerator = func(ctx *goryuContext.Context) string {
+		c.SpanNameGenerator = func(ctx *context.Context) string {
 			return fmt.Sprintf("HTTP %s %s", ctx.Request.Method, ctx.Request.URL.Path)
 		}
 	}
@@ -58,27 +60,32 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	if err := config.Validate(); err != nil {
-		return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-			return func(c *goryuContext.Context) {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Tracing")
 			}
 		}
 	}
-	return func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-		return func(c *goryuContext.Context) {
-			if config.Skip != nil && config.Skip(c) {
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-			parentSpanCtx, _ := config.Tracer.Extract(c.Request.Header)
-			ctx := context.Background()
+			parentSpanCtx, _ := cfg.Tracer.Extract(c.Request.Header)
+			ctx := stdContext.Background()
 			if parentSpanCtx != nil {
-				ctx = context.WithValue(ctx, traceContextKey, parentSpanCtx)
+				ctx = stdContext.WithValue(ctx, traceContextKey, parentSpanCtx)
 			}
-			spanName := config.SpanNameGenerator(c)
-			span, spanCtx := config.Tracer.StartSpan(ctx, spanName)
+			spanName := cfg.SpanNameGenerator(c)
+			span, spanCtx := cfg.Tracer.StartSpan(ctx, spanName)
 			defer span.End()
 			c.Set("trace_context", spanCtx)
 			c.Set("span", span)
@@ -88,8 +95,8 @@ func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.Handler
 			span.SetTag("http.host", c.Request.Host)
 			span.SetTag("http.user_agent", c.Request.UserAgent())
 			span.SetTag("http.remote_addr", c.Request.RemoteAddr)
-			if config.CustomTags != nil {
-				for k, v := range config.CustomTags(c) {
+			if cfg.CustomTags != nil {
+				for k, v := range cfg.CustomTags(c) {
 					span.SetTag(k, v)
 				}
 			}
@@ -116,8 +123,8 @@ func New(config Config) func(next goryuContext.HandlerFunc) goryuContext.Handler
 		}
 	}
 }
-func Default() func(next goryuContext.HandlerFunc) goryuContext.HandlerFunc {
-	return New(Config{})
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New()
 }
 type tracingResponseWriter struct {
 	http.ResponseWriter
@@ -137,17 +144,17 @@ func (w *tracingResponseWriter) Write(data []byte) (int, error) {
 	w.responseSize += n
 	return n, err
 }
-func GetTraceContext(c *goryuContext.Context) (context.Context, bool) {
+func GetTraceContext(c *context.Context) (stdContext.Context, bool) {
 	ctx, exists := c.Get("trace_context")
 	if !exists {
 		return nil, false
 	}
-	if traceCtx, ok := ctx.(context.Context); ok {
+	if traceCtx, ok := ctx.(stdContext.Context); ok {
 		return traceCtx, true
 	}
 	return nil, false
 }
-func GetSpan(c *goryuContext.Context) (Span, bool) {
+func GetSpan(c *context.Context) (Span, bool) {
 	span, exists := c.Get("span")
 	if !exists {
 		return nil, false
@@ -165,7 +172,7 @@ func NewSimpleTracer() *SimpleTracer {
 		spans: make([]*SimpleSpan, 0),
 	}
 }
-func (t *SimpleTracer) StartSpan(ctx context.Context, name string) (Span, context.Context) {
+func (t *SimpleTracer) StartSpan(ctx stdContext.Context, name string) (Span, stdContext.Context) {
 	span := &SimpleSpan{
 		Name:      name,
 		TraceID:   generateID(),
@@ -180,7 +187,7 @@ func (t *SimpleTracer) StartSpan(ctx context.Context, name string) (Span, contex
 		span.ParentSpanID = parentCtx.SpanID()
 	}
 	t.spans = append(t.spans, span)
-	newCtx := context.WithValue(ctx, traceContextKey, span)
+	newCtx := stdContext.WithValue(ctx, traceContextKey, span)
 	return span, newCtx
 }
 func (t *SimpleTracer) Extract(headers http.Header) (SpanContext, error) {
@@ -276,7 +283,7 @@ func generateID() string {
 	return hex.EncodeToString(bytes)
 }
 type noopTracer struct{}
-func (n *noopTracer) StartSpan(ctx context.Context, name string) (Span, context.Context) {
+func (n *noopTracer) StartSpan(ctx stdContext.Context, name string) (Span, stdContext.Context) {
 	return &noopSpan{}, ctx
 }
 func (n *noopTracer) Extract(headers http.Header) (SpanContext, error) {

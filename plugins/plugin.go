@@ -1,8 +1,6 @@
 package plugins
 
-import (
-	"github.com/arthurlch/goryu/context"
-)
+import context "github.com/arthurlch/goryu/goryuctx"
 
 type Plugin interface {
 	// Name returns the plugin name

@@ -1,9 +1,11 @@
 package session_test
+
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
 	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/middleware/session"
 )

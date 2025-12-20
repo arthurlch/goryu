@@ -1,10 +1,12 @@
 package errors
+
 import (
 	"fmt"
 	"log"
 	"net/http"
 	"runtime/debug"
 	"strings"
+
 	"github.com/arthurlch/goryu"
 )
 type Config struct {
@@ -17,28 +19,34 @@ type Config struct {
 	DevMode bool
 }
 type ErrorHandlerFunc func(c *goryu.Ctx) error
-func New() goryu.Middleware {
-	return NewWithConfig(Config{
+func New(config ...Config) goryu.Middleware {
+	cfg := Config{
 		ShowDetails:    true,
 		ShowStackTrace: false,
 		LogErrors:      true,
 		DevMode:        false,
-	})
-}
-func NewWithConfig(config Config) goryu.Middleware {
+	}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
 	return func(next goryu.Handler) goryu.Handler {
 		return func(c *goryu.Ctx) {
+			c.Set("error.config", cfg)
 			defer func() {
 				if r := recover(); r != nil {
-					handlePanic(c, r, config)
+					handlePanic(c, r, cfg)
 				}
 			}()
 			next(c)
 			if c.HasErrors() {
-				handleContextErrors(c, config)
+				handleContextErrors(c, cfg)
 			}
 		}
 	}
+}
+func Default() goryu.Middleware {
+	return New()
 }
 func Handle(fn ErrorHandlerFunc) goryu.Handler {
 	return func(c *goryu.Ctx) {

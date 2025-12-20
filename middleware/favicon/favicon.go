@@ -1,11 +1,13 @@
 package favicon
+
 import (
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -32,8 +34,13 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Favicon")
@@ -41,9 +48,9 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 	}
 	var cache *faviconCache
-	if config.File != "" && config.CacheFile {
+	if cfg.File != "" && cfg.CacheFile {
 		cache = &faviconCache{}
-		if err := loadFaviconFile(config.File, cache); err != nil {
+		if err := loadFaviconFile(cfg.File, cache); err != nil {
 			return func(next context.HandlerFunc) context.HandlerFunc {
 				return func(c *context.Context) {
 					base.DefaultErrorHandler(c, base.MiddlewareError{
@@ -57,18 +64,18 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-			if c.Request.URL.Path != config.URL {
+			if c.Request.URL.Path != cfg.URL {
 				next(c)
 				return
 			}
-			if config.MaxAge > 0 {
+			if cfg.MaxAge > 0 {
 				c.Writer.Header().Set("Cache-Control", "max-age=86400, public")
 			}
-			if config.File == "" {
+			if cfg.File == "" {
 				c.Writer.WriteHeader(http.StatusNoContent)
 				return
 			}
@@ -79,20 +86,20 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				cache.mu.RUnlock()
 				c.Writer.Header().Set("Content-Type", contentType)
 				if _, err := c.Writer.Write(data); err != nil {
-					logger := config.Logger
+					logger := cfg.Logger
 					if logger == nil {
 						logger = base.DefaultLogger("Favicon")
 					}
 					logger.Printf("could not write favicon data: %v", err)
 				}
 			} else {
-				http.ServeFile(c.Writer, c.Request, config.File)
+				http.ServeFile(c.Writer, c.Request, cfg.File)
 			}
 		}
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithFile(file string) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{

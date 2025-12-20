@@ -1,7 +1,7 @@
 package builder
 import (
 	"net/http"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/router"
 )
 type testApp struct {

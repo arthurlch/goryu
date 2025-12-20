@@ -8,90 +8,66 @@ import (
 // Any good framework needs a big yaml or json file with many config to tweak for fun
 
 func generateRouteBuilderContent(name, group, middleware, methods string) string {
-	routeName := strings.Title(strings.ToLower(name)) // deprecated but fine
+	routeName := strings.Title(strings.ToLower(name))
 	varName := strings.ToLower(name)
 
-	middlewareSetup := ""
-	if middleware != "" {
-		mws := strings.Split(middleware, ",")
-		for _, mw := range mws {
-			middlewareSetup += fmt.Sprintf("\t\t\t.Middleware(middleware.%s())\n", strings.Title(strings.TrimSpace(mw)))
-		}
-	}
+	// middlewareSetup := "" // No longer needed in this form
+	// if middleware != "" {
+	// 	mws := strings.Split(middleware, ",")
+	// 	for _, mw := range mws {
+	// 		middlewareSetup += fmt.Sprintf("\t\t\t.Middleware(middleware.%s())\n", strings.Title(strings.TrimSpace(mw)))
+	// 	}
+	// }
 
-	methodSetup := ""
-	for _, method := range strings.Split(methods, ",") {
-		m := strings.TrimSpace(method)
-		handlerName := fmt.Sprintf("handle%s%s", routeName, strings.Title(strings.ToLower(m)))
-		methodSetup += fmt.Sprintf("\t\t\t.%s(handlers.%s)\n", strings.Title(strings.ToLower(m)), handlerName)
-	}
+	// methodSetup := "" // No longer needed in this form
+	// for _, method := range strings.Split(methods, ",") {
+	// 	m := strings.TrimSpace(method)
+	// 	handlerName := fmt.Sprintf("handle%s%s", routeName, strings.Title(strings.ToLower(m)))
+	// 	methodSetup += fmt.Sprintf("\t\t\t.%s(handlers.%s)\n", strings.Title(strings.ToLower(m)), handlerName)
+	// }
 
 	content := fmt.Sprintf(`package routes
 
 import (
 	"github.com/arthurlch/goryu"
-	"github.com/arthurlch/goryu/router/builder"
 	"myapp/internal/handlers"
 	"myapp/internal/middleware"
 )
 
-// Register%sRoutes registers all %s routes using the builder pattern
+// Register%sRoutes registers all %s routes
 func Register%sRoutes(app *goryu.App) {
-	%sRoutes := app.Route()`,
-		routeName, varName, routeName, varName)
+	// Create a group for %s routes
+	group := app.Group("/%s")`,
+		routeName, varName, routeName, varName, group)
 
-	if group != "" {
-		content += fmt.Sprintf(`
-		.Group("%s")`, group)
+	if middleware != "" {
+		mws := strings.Split(middleware, ",")
+		for _, mw := range mws {
+			content += fmt.Sprintf("\n\tgroup.Use(middleware.%s())", strings.Title(strings.TrimSpace(mw)))
+		}
 	}
 
+	content += fmt.Sprintf("\n\n\t// Register routes")
+	for _, method := range strings.Split(methods, ",") {
+		m := strings.TrimSpace(method)
+		handlerName := fmt.Sprintf("handle%s%s", routeName, strings.Title(strings.ToLower(m)))
+		content += fmt.Sprintf("\n\tgroup.%s(\"/\", handlers.%s)", strings.ToUpper(m), handlerName)
+	}
+
+	content += "\n}\n"
+
+	// Add ConfigureAPI function
 	content += fmt.Sprintf(`
-		.Path("/%s")
-%s%s		.Build()
-
-	// Alternative: Using the router builder directly
-	app.Router.Mount("%s", func(r *builder.RouteBuilder) {
-		r.Route("/{id}", func(r *builder.RouteBuilder) {
-			r.Get(handlers.Get%sById)
-			r.Put(handlers.Update%s)
-			r.Delete(handlers.Delete%s)
-		})
-		
-		r.Route("/search", func(r *builder.RouteBuilder) {
-			r.Get(handlers.Search%s)
-		})
-	})
-}
-
 // Configure%sAPI sets up the complete API configuration
 func Configure%sAPI(app *goryu.App) {
-	// Using the fluent configuration API
-	app.ConfigureWith(
-		goryu.Configuration().
-			Router().
-				StrictRouting(true).
-				CaseSensitive(false).
-			End().
-			Middleware().
-				Add(goryu.Logger().
-					Format("combined").
-					SkipPaths("/health", "/metrics").
-					Build()).
-				Add(goryu.Recovery().
-					StackTrace(true).
-					Build()).
-				Add(goryu.RateLimit(100).
-					Per("1m").
-					ByIP().
-					Build()).
-			End().
-			Build(),
-	)
+	// Configure global middleware
+	app.Use(goryu.Logger())
+	app.Use(goryu.Recovery())
 	
 	// Register routes
 	Register%sRoutes(app)
 }
-`, varName, middlewareSetup, methodSetup, group+"/"+varName, routeName, routeName, routeName, routeName, routeName, routeName, routeName)
+`, routeName, routeName, routeName)
 
 	return content
 }
@@ -131,52 +107,37 @@ func Register%sRoutes(app *goryu.App) {
 func generateConfigBuilderContent(name, configType string) string {
 	configName := strings.Title(strings.ToLower(name))
 	
-	var builderExample string
+	var configStruct string
 	switch configType {
 	case "server":
-		builderExample = `	config := goryu.Configuration().
-		Server().
-			Host("0.0.0.0").
-			Port(8080).
-			ReadTimeout(30 * time.Second).
-			WriteTimeout(30 * time.Second).
-		End().
-		App().
-			Name("My Goryu App").
-			Version("1.0.0").
-			DisableStartupMessage(false).
-		End().
-		Router().
-			StrictRouting(false).
-			CaseSensitive(false).
-			MaxParamLength(1024).
-		End().
-		Build()`
+		configStruct = `	config := &%sConfig{
+		Config: &builder.Config{
+			Server: builder.ServerConfig{
+				Host: "0.0.0.0",
+				Port: 8080,
+				ReadTimeout: 30 * time.Second,
+				WriteTimeout: 30 * time.Second,
+			},
+			App: builder.AppConfig{
+				Name: "My Goryu App",
+				Version: "1.0.0",
+			},
+		},
+	}`
 		
 	case "database":
-		builderExample = `	dbConfig := builder.NewDatabaseConfig().
-		Driver("postgres").
-		Host("localhost").
-		Port(5432).
-		Database("myapp").
-		Username("user").
-		Password(os.Getenv("DB_PASSWORD")).
-		MaxConnections(25).
-		MaxIdleConnections(5).
-		ConnectionTimeout(5 * time.Second).
-		Build()`
+		configStruct = `	config := &%sConfig{
+		Config: &builder.Config{
+			// Initialize database config here
+		},
+	}`
 		
 	case "cache":
-		builderExample = `	cacheConfig := builder.NewCacheConfig().
-		Driver("redis").
-		Host("localhost").
-		Port(6379).
-		Password(os.Getenv("REDIS_PASSWORD")).
-		Database(0).
-		PoolSize(10).
-		MinIdleConns(5).
-		MaxRetries(3).
-		Build()`
+		configStruct = `	config := &%sConfig{
+		Config: &builder.Config{
+			// Initialize cache config here
+		},
+	}`
 	}
 
 	return fmt.Sprintf(`package config
@@ -185,7 +146,6 @@ import (
 	"os"
 	"time"
 	
-	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/config/builder"
 )
 
@@ -194,21 +154,17 @@ type %sConfig struct {
 	*builder.Config
 }
 
-// New%sConfig creates a new %s configuration using the builder pattern
+// New%sConfig creates a new %s configuration
 func New%sConfig() (*%sConfig, error) {
 %s
 
-	if err != nil {
-		return nil, err
-	}
-
-	return &%sConfig{Config: config}, nil
+	return config, nil
 }
 
 // LoadFrom%s loads configuration from %s sources
 func (c *%sConfig) LoadFrom%s() error {
 	// Load from environment variables
-	c.Config.LoadFromEnv("APP_")
+	// c.Config.LoadFromEnv("APP_")
 	
 	// Load from config file if exists
 	if _, err := os.Stat("config.json"); err == nil {
@@ -217,9 +173,6 @@ func (c *%sConfig) LoadFrom%s() error {
 		}
 	}
 	
-	// Load from remote config source (optional)
-	// c.Config.LoadFromRemote("consul://localhost:8500/config")
-	
 	return nil
 }
 
@@ -227,7 +180,7 @@ func (c *%sConfig) LoadFrom%s() error {
 func (c *%sConfig) Validate() error {
 	return c.Config.Validate()
 }
-`, configName, configType, configName, configName, configType, configName, configName, builderExample, configName, configName, configType, configName, configName, configName)
+`, configName, configType, configName, configName, configType, configName, configName, fmt.Sprintf(configStruct, configName), configName, configName, configName, configName, configName)
 }
 
 func generateStandardConfigContent(name, configType string) string {

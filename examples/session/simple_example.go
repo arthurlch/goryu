@@ -1,10 +1,13 @@
 package main
+
 import (
 	"log"
 	"net/http"
 	"time"
+
 	"github.com/arthurlch/goryu"
-	"github.com/arthurlch/goryu/context"
+	goryuContext "github.com/arthurlch/goryu/goryuctx"
+
 	"github.com/arthurlch/goryu/internal/utils"
 	"github.com/arthurlch/goryu/middleware/session"
 )
@@ -33,10 +36,10 @@ func main() {
 	app.Use(session.New(sessionConfig))
 	integration := session.NewAuthIntegration(&sessionConfig, nil)
 	_ = integration 
-	app.GET("/", func(c *context.Context) {
+	app.GET("/", func(c *goryuContext.Context) {
 		c.JSON(200, map[string]string{"message": "Welcome"})
 	})
-	app.GET("/profile", func(c *context.Context) {
+	app.GET("/profile", func(c *goryuContext.Context) {
 		sess, err := session.Get(c)
 		if err != nil || sess.Get("user_id") == nil {
 			c.JSON(401, map[string]string{"error": "Valid session required"})
@@ -57,7 +60,7 @@ func main() {
 			"last_activity": user.LastActivity,
 		})
 	})
-	app.GET("/session", func(c *context.Context) {
+	app.GET("/session", func(c *goryuContext.Context) {
 		sess, err := session.Get(c)
 		if err != nil {
 			c.JSON(500, map[string]string{"error": "Failed to get session"})

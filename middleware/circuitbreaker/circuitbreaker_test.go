@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 	"time"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 func TestNewCircuitBreaker(t *testing.T) {
 	config := Config{

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 	"github.com/arthurlch/goryu"
-	goryu_context "github.com/arthurlch/goryu/context"
+	goryu_context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/graceful"
 )
 func newTestApp() *goryu.App {

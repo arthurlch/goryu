@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"github.com/arthurlch/goryu/context"
+	context "github.com/arthurlch/goryu/goryuctx"
 	expvarMW "github.com/arthurlch/goryu/middleware/expvar"
 )
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {

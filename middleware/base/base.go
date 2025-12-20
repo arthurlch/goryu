@@ -1,9 +1,11 @@
 package base
+
 import (
 	"log"
 	"net/http"
 	"os"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 )
 type Logger interface {
 	Printf(format string, v ...interface{})

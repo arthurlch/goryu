@@ -1,4 +1,5 @@
 package fileserver
+
 import (
 	"fmt"
 	"net/http"
@@ -6,7 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"github.com/arthurlch/goryu/context"
+
+	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
 type Config struct {
@@ -37,31 +39,36 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-	if err := config.Validate(); err != nil {
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if err := cfg.Validate(); err != nil {
 		return func(next context.HandlerFunc) context.HandlerFunc {
 			return func(c *context.Context) {
 				base.DefaultErrorHandler(c, err, "Fileserver")
 			}
 		}
 	}
-	cleanRoot := filepath.Clean(config.Root)
+	cleanRoot := filepath.Clean(cfg.Root)
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			if config.Skip != nil && config.Skip(c) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-			if !strings.HasPrefix(c.Request.URL.Path, config.PathPrefix) {
+			if !strings.HasPrefix(c.Request.URL.Path, cfg.PathPrefix) {
 				next(c)
 				return
 			}
-			urlPath := strings.TrimPrefix(c.Request.URL.Path, config.PathPrefix)
+			urlPath := strings.TrimPrefix(c.Request.URL.Path, cfg.PathPrefix)
 			urlPath = strings.TrimPrefix(urlPath, "/")
 			cleanFullPath, err := validateAndSanitizeFilePath(cleanRoot, urlPath)
 			if err != nil {
-				if config.Logger != nil {
-					config.Logger.Printf("Fileserver security violation: %s (path: %s)", err.Error(), c.Request.URL.Path)
+				if cfg.Logger != nil {
+					cfg.Logger.Printf("Fileserver security violation: %s (path: %s)", err.Error(), c.Request.URL.Path)
 				}
 				c.Status(http.StatusForbidden).Text(http.StatusForbidden, "Forbidden")
 				return
@@ -80,8 +87,8 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return
 			}
 			if info.IsDir() {
-				if !config.Browse {
-					for _, indexFile := range config.Index {
+				if !cfg.Browse {
+					for _, indexFile := range cfg.Index {
 						indexPath := filepath.Join(cleanFullPath, indexFile)
 						if indexInfo, indexErr := os.Stat(indexPath); indexErr == nil && !indexInfo.IsDir() {
 							http.ServeFile(c.Writer, c.Request, indexPath)
@@ -89,7 +96,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 						}
 					}
 				}
-				if config.Browse {
+				if cfg.Browse {
 					http.ServeFile(c.Writer, c.Request, cleanFullPath)
 					return
 				}
@@ -101,7 +108,7 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
-	return New(Config{})
+	return New()
 }
 func WithRoot(root string) func(next context.HandlerFunc) context.HandlerFunc {
 	return New(Config{Root: root})

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-	goryucontext "github.com/arthurlch/goryu/context"
+	goryucontext "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 	"github.com/arthurlch/goryu/middleware/tracing"
 )

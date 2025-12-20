@@ -1,10 +1,12 @@
 package errors
+
 import (
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
 	"github.com/arthurlch/goryu"
 )
 func TestErrorTypes(t *testing.T) {
@@ -91,7 +93,7 @@ func TestErrorMiddleware(t *testing.T) {
 	app := goryu.New(goryu.Config{
 		DisableStartupMessage: true,
 	})
-	app.Use(NewWithConfig(Config{
+	app.Use(New(Config{
 		ShowDetails:    true,
 		ShowStackTrace: false,
 		LogErrors:      false, 
