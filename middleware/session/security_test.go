@@ -115,6 +115,7 @@ func TestSessionSecurity(t *testing.T) {
 		TrackActivity:   true,
 		IdleTimeout:     100 * time.Millisecond, 
 		AbsoluteTimeout: 1 * time.Hour,
+		BindToUserAgent: true,
 	}))
 	app.GET("/test", func(c *goryu.Ctx) {
 		sess, _ := session.Get(c)
@@ -122,7 +123,7 @@ func TestSessionSecurity(t *testing.T) {
 		c.JSON(200, map[string]string{"status": "ok"})
 	})
 	t.Run("IdleTimeout", func(t *testing.T) {
-		t.Skip("Session middleware integration needs debugging - cookie not being set")
+		// t.Skip("Session middleware integration needs debugging - cookie not being set")
 		req := httptest.NewRequest("GET", "/test", nil)
 		rr := httptest.NewRecorder()
 		app.ServeHTTP(rr, req)
@@ -150,6 +151,46 @@ func TestSessionSecurity(t *testing.T) {
 		app.ServeHTTP(rr2, req2)
 		if rr2.Code != http.StatusUnauthorized {
 			t.Errorf("Expected status 401 due to idle timeout, got %d", rr2.Code)
+		}
+	})
+	t.Run("UserAgentBinding", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		rr := httptest.NewRecorder()
+		app.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+
+		var sessionCookie *http.Cookie
+		for _, cookie := range rr.Result().Cookies() {
+			if cookie.Name == "test_session" {
+				sessionCookie = cookie
+				break
+			}
+		}
+		if sessionCookie == nil {
+			t.Fatal("Session cookie not found")
+		}
+
+		// Same User-Agent -> Should pass
+		req2 := httptest.NewRequest("GET", "/test", nil)
+		req2.Header.Set("User-Agent", "Mozilla/5.0")
+		req2.AddCookie(sessionCookie)
+		rr2 := httptest.NewRecorder()
+		app.ServeHTTP(rr2, req2)
+		if rr2.Code != http.StatusOK {
+			t.Errorf("Expected status 200 with same UA, got %d", rr2.Code)
+		}
+
+		// Different User-Agent -> Should fail (401)
+		req3 := httptest.NewRequest("GET", "/test", nil)
+		req3.Header.Set("User-Agent", "EvilBot/1.0")
+		req3.AddCookie(sessionCookie)
+		rr3 := httptest.NewRecorder()
+		app.ServeHTTP(rr3, req3)
+		if rr3.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401 with different UA, got %d", rr3.Code)
 		}
 	})
 }

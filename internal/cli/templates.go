@@ -556,7 +556,7 @@ func main() {
 }
 
 func generateDBConnection(projectName string) string {
-	return fmt.Sprintf(`package db
+	return `package db
 
 import (
 	"context"
@@ -603,7 +603,7 @@ func Ping() error {
 	}
 	return conn.DB.PingContext(ctx)
 }
-`)
+`
 }
 
 func generateBaseRepository(projectName string) string {

@@ -8,7 +8,10 @@ import (
 	"github.com/arthurlch/goryu"
 )
 func SetupAuthMiddleware(app *goryu.App, secretKey string) (*AuthService, *AuthHandlers) {
-	jwtAuth := NewJWTAuth(secretKey, "goryu-app")
+	jwtAuth, err := NewJWTAuth(secretKey, "goryu-app")
+	if err != nil {
+		panic("Failed to create JWT Auth: " + err.Error())
+	}
 	userStore := NewInMemoryUserStore()
 	tokenStore := NewInMemoryTokenStore()
 	emailSender := NewMockEmailSender()

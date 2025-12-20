@@ -19,7 +19,10 @@ func setupTestApp() *goryu.App {
 	return app
 }
 func createTestAuthService() *auth.AuthService {
-	jwtAuth := auth.NewJWTAuth(testSecret, "test-app")
+	jwtAuth, err := auth.NewJWTAuth(testSecret, "test-app")
+	if err != nil {
+		panic(err)
+	}
 	userStore := auth.NewInMemoryUserStore()
 	tokenStore := auth.NewInMemoryTokenStore()
 	emailSender := auth.NewMockEmailSender()
@@ -133,7 +136,10 @@ func TestRateLimiting(t *testing.T) {
 	}
 }
 func TestJWTTokens(t *testing.T) {
-	jwtAuth := auth.NewJWTAuth(testSecret, "test-app")
+	jwtAuth, err := auth.NewJWTAuth(testSecret, "test-app")
+	if err != nil {
+		t.Fatalf("Failed to create JWT auth: %v", err)
+	}
 	t.Run("CreateAndValidateAuthToken", func(t *testing.T) {
 		userID := "user-123"
 		token, err := jwtAuth.CreateAuthToken(userID)

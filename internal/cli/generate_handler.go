@@ -17,15 +17,22 @@ func runGenerateHandler(args []string) error {
 	handlerType := "basic" // basic, crud, api (websocket later), crud default ;/
 
 	// Parse arguments
+	dbTool := ""
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "--path=") {
 			path = strings.TrimPrefix(arg, "--path=")
 		} else if strings.HasPrefix(arg, "--type=") {
 			handlerType = strings.TrimPrefix(arg, "--type=")
+		} else if strings.HasPrefix(arg, "--db-tool=") {
+			dbTool = strings.TrimPrefix(arg, "--db-tool=")
 		}
 	}
 
 	fmt.Printf("🚀 Generating %s handler: %s\n", handlerType, name)
+	if dbTool != "" {
+		fmt.Printf("   Database Tool: %s\n", dbTool)
+		handlerType = "db" // Override type to db specific
+	}
 
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -41,6 +48,17 @@ func runGenerateHandler(args []string) error {
 		content = generateCRUDHandlerContent(name)
 	case "api":
 		content = generateAPIHandlerContent(name)
+	case "db":
+		switch dbTool {
+		case "sqlc":
+			content = generateSQLCHandlerContent(name)
+		case "ent":
+			content = generateEntHandlerContent(name)
+		case "gorm":
+			content = generateGormHandlerContent(name)
+		default:
+			return fmt.Errorf("unknown db-tool: %s", dbTool)
+		}
 	default:
 		return fmt.Errorf("unknown handler type: %s (available: basic, crud, api)", handlerType)
 	}

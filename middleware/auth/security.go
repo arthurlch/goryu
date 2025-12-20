@@ -1,4 +1,5 @@
 package auth
+
 import (
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/scrypt"
 )
@@ -209,28 +211,18 @@ func SecureHashPassword(password string, cost int) ([]byte, error) {
 	if cost < MinBcryptCost {
 		cost = MinBcryptCost
 	}
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, fmt.Errorf("failed to generate salt: %v", err)
-	}
-	saltedPassword := append(salt, []byte(password)...)
-	hash, err := bcrypt.GenerateFromPassword(saltedPassword, cost)
+	// Bcrypt handles salting automatically and securely.
+	// We do not need to manually manage salts.
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %v", err)
 	}
-	result := append(salt, hash...)
-	return result, nil
+	return hash, nil
 }
+
 func VerifySecurePassword(password string, hashedPassword []byte) bool {
-	if len(hashedPassword) < 16 {
-		return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
-	}
-	salt := hashedPassword[:16]
-	hash := hashedPassword[16:]
-	saltCopy := make([]byte, len(salt))
-	copy(saltCopy, salt)
-	saltedPassword := append(saltCopy, []byte(password)...)
-	return bcrypt.CompareHashAndPassword(hash, saltedPassword) == nil
+	// Standard bcrypt verification
+	return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
 }
 func ValidateEmail(email string) error {
 	if email == "" {

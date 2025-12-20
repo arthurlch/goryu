@@ -20,17 +20,34 @@ To use Goryu in your Go project:
 go get github.com/arthurlch/goryu
 ```
 
-### CLI Tool
+### CLI Tool (Recommended)
 
-To install the Goryu CLI for project scaffolding:
+To install the Goryu CLI:
 
 ```bash
+# From source (if you have the repository locally)
+make install-cli
+
+# Or via go install
 go install github.com/arthurlch/goryu/cmd/goryu@latest
 ```
 
 ## Quick Start
 
-Create a simple server in `main.go`:
+The easiest way to start is with the CLI:
+
+```bash
+# Initialize a new project
+goryu init myapp
+
+# Enter directory
+cd myapp
+
+# Run the dev server
+goryu dev
+```
+
+Or manually create `main.go`:
 
 ```go
 package main
@@ -48,7 +65,7 @@ func main() {
         ctx.Text(http.StatusOK, "Hello, Goryu!")
     })
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 

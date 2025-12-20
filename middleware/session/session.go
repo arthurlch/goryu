@@ -69,6 +69,29 @@ const (
 	sessionCfgKey       = "goryu.session.config"
 	sessionDestroyedKey = "goryu.session.destroyed"
 )
+// sessionResponseWriter wraps http.ResponseWriter to intercept writes
+type sessionResponseWriter struct {
+	http.ResponseWriter
+	beforeWrite func()
+	written     bool
+}
+
+func (w *sessionResponseWriter) WriteHeader(code int) {
+	if !w.written {
+		w.beforeWrite()
+		w.written = true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *sessionResponseWriter) Write(b []byte) (int, error) {
+	if !w.written {
+		w.beforeWrite()
+		w.written = true
+	}
+	return w.ResponseWriter.Write(b)
+}
+
 func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
 	cfg := Config{}
 	if len(config) > 0 {
@@ -86,7 +109,9 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 			}
 		}
 	}
-	preHandler := func(c *goryuctx.Context) error {
+
+	// Pre-handler logic extracted
+	loadSession := func(c *goryuctx.Context) error {
 		c.Set(sessionCfgKey, &cfg)
 		cookie, err := c.Cookie(cfg.CookieName)
 		var session *Session
@@ -112,26 +137,35 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 		c.Set(sessionKey, session)
 		return nil
 	}
-	postHandler := func(c *goryuctx.Context) error {
+
+	// Post-handler logic extracted
+	saveSession := func(c *goryuctx.Context) {
 		if destroyed, _ := c.Get(sessionDestroyedKey); destroyed == true {
-			return nil 
+			return 
 		}
 		finalSessionVal, exists := c.Get(sessionKey)
 		if !exists {
-			return nil 
+			return 
 		}
 		finalSession, ok := finalSessionVal.(*Session)
 		if !ok {
-			return errors.New("invalid session type in goryuctx")
+			// Should log error?
+			return 
 		}
+
+		// Only save/set cookie if the writer hasn't been written to OR if we are just about to write
+		// Ideally we do this exactly once.
+		
 		if finalSession.modified {
 			if err := cfg.Store.Save(finalSession); err != nil {
 				if cfg.Logger != nil {
 					cfg.Logger.Printf("Error saving session: %v", err)
 				}
-				return nil 
+				// If save fails, we probably shouldn't set the cookie to the new ID if it was new?
+				// But we continue for now.
 			}
 		}
+		
 		cookie := &http.Cookie{
 			Name:     cfg.CookieName,
 			Value:    base64.StdEncoding.EncodeToString([]byte(finalSession.ID)),
@@ -143,9 +177,38 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 			SameSite: cfg.SameSite, 
 		}
 		c.SetCookie(cookie)
-		return nil
 	}
-	return base.PostProcessMiddleware("Session", cfg.BaseConfig, preHandler, postHandler)
+
+	return func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+		return func(c *goryuctx.Context) {
+			// 1. Run Pre-handler
+			if err := loadSession(c); err != nil {
+				if cfg.Logger != nil {
+					cfg.Logger.Printf("Session load error: %v", err)
+				}
+				// Continue? or Abort? Usually continue with new session if failed.
+			}
+
+			// 2. Wrap Writer to capture response start
+			originalWriter := c.Writer
+			w := &sessionResponseWriter{
+				ResponseWriter: originalWriter,
+				beforeWrite: func() {
+					saveSession(c)
+				},
+			}
+			c.Writer = w
+
+			// 3. Next
+			next(c)
+
+			// 4. If nothing was written, ensure we save (e.g. 404s or empty 200 OKs not using Write)
+			if !w.written {
+				w.beforeWrite()
+				w.written = true
+			}
+		}
+	}
 }
 func Get(c *goryuctx.Context) (*Session, error) {
 	s, exists := c.Get(sessionKey)

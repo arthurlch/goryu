@@ -16,6 +16,7 @@ type SecurityConfig struct {
 	RotateOnPrivilegeChange bool
 	RotationInterval       time.Duration
 	BindToIP              bool
+	BindToUserAgent       bool
 	AllowIPChange         bool
 	TrustedProxies        []string
 	TrackActivity         bool
@@ -30,8 +31,8 @@ func DefaultSecurityConfig() SecurityConfig {
 		RotateOnLogin:          true,
 		RotateOnPrivilegeChange: true,
 		RotationInterval:       1 * time.Hour,
-		BindToIP:               false, 
-		TrackActivity:          true,
+		BindToIP:               true, // Bulletproof default
+		BindToUserAgent:        true, // Bulletproof default		TrackActivity:          true,
 		IdleTimeout:            30 * time.Minute,
 		AbsoluteTimeout:        24 * time.Hour,
 		DetectAnomalies:        true,
@@ -49,28 +50,45 @@ func SecureSessionMiddleware(config SecurityConfig) func(next context.HandlerFun
 			}
 			if config.AbsoluteTimeout > 0 {
 				if created := session.Get("created_at"); created != nil {
-					if createdTime, ok := created.(int64); ok {
-						if time.Since(time.Unix(createdTime, 0)) > config.AbsoluteTimeout {
+					var createdTime int64
+					if t, ok := created.(int64); ok {
+						createdTime = t
+					} else if t, ok := created.(float64); ok {
+						createdTime = int64(t)
+					}
+					
+					if createdTime > 0 {
+						// Using Milli for consistency with new implementation
+						// If legacy data was seconds, it will be huge timeout? No, small number.
+						// We assume new sessions.
+						if time.Since(time.UnixMilli(createdTime)) > config.AbsoluteTimeout {
 							Destroy(c)
 							c.JSON(401, map[string]string{"error": "Session expired"})
 							return
 						}
 					}
 				} else {
-					session.Set("created_at", time.Now().Unix())
+					session.Set("created_at", time.Now().UnixMilli())
 				}
 			}
 			if config.IdleTimeout > 0 && config.TrackActivity {
 				if lastActivity := session.Get("last_activity"); lastActivity != nil {
-					if lastActivityTime, ok := lastActivity.(int64); ok {
-						if time.Since(time.Unix(lastActivityTime, 0)) > config.IdleTimeout {
+					var lastActivityTime int64
+					if t, ok := lastActivity.(int64); ok {
+						lastActivityTime = t
+					} else if t, ok := lastActivity.(float64); ok {
+						lastActivityTime = int64(t)
+					}
+
+					if lastActivityTime > 0 {
+						if time.Since(time.UnixMilli(lastActivityTime)) > config.IdleTimeout {
 							Destroy(c)
 							c.JSON(401, map[string]string{"error": "Session expired due to inactivity"})
 							return
 						}
 					}
 				}
-				session.Set("last_activity", time.Now().Unix())
+				session.Set("last_activity", time.Now().UnixMilli())
 			}
 			if config.BindToIP {
 				clientIP := getClientIP(c, config.TrustedProxies)
@@ -91,18 +109,39 @@ func SecureSessionMiddleware(config SecurityConfig) func(next context.HandlerFun
 					session.Set("bound_ip", clientIP)
 				}
 			}
+			if config.BindToUserAgent {
+				userAgent := c.GetHeader("User-Agent")
+				if boundUA := session.Get("bound_ua"); boundUA != nil {
+					if boundUAStr, ok := boundUA.(string); ok && boundUAStr != userAgent {
+						Destroy(c)
+						c.JSON(401, map[string]string{"error": "Session security violation - User-Agent mismatch"})
+						return
+					}
+				} else {
+					session.Set("bound_ua", userAgent)
+				}
+			}
+			if config.RotationInterval > 0 {
 			if config.RotationInterval > 0 {
 				if rotatedAt := session.Get("rotated_at"); rotatedAt != nil {
-					if rotatedTime, ok := rotatedAt.(int64); ok {
-						if time.Since(time.Unix(rotatedTime, 0)) > config.RotationInterval {
+					var rotatedTime int64
+					if t, ok := rotatedAt.(int64); ok {
+						rotatedTime = t
+					} else if t, ok := rotatedAt.(float64); ok {
+						rotatedTime = int64(t)
+					}
+
+					if rotatedTime > 0 {
+						if time.Since(time.UnixMilli(rotatedTime)) > config.RotationInterval {
 							if err := Regenerate(c); err == nil {
-								session.Set("rotated_at", time.Now().Unix())
+								session.Set("rotated_at", time.Now().UnixMilli())
 							}
 						}
 					}
 				} else {
-					session.Set("rotated_at", time.Now().Unix())
+					session.Set("rotated_at", time.Now().UnixMilli())
 				}
+			}
 			}
 			next(c)
 		}

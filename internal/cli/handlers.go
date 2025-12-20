@@ -42,6 +42,8 @@ func cmdGenerateHandler(ctx *Context) error {
 	model := getFlag(ctx, "model", "")
 	middleware := getFlag(ctx, "middleware", "")
 
+	dbTool := getFlag(ctx, "db-tool", "")
+
 	fmt.Printf("🎯 Generating %s handler: %s\n", handlerType, name)
 	
 	args := []string{name, "--type=" + handlerType, "--path=" + path}
@@ -50,6 +52,9 @@ func cmdGenerateHandler(ctx *Context) error {
 	}
 	if middleware != "" {
 		args = append(args, "--middleware="+middleware)
+	}
+	if dbTool != "" {
+		args = append(args, "--db-tool="+dbTool)
 	}
 
 	return runGenerateHandler(args)

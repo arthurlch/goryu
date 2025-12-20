@@ -47,7 +47,7 @@ func Register%sRoutes(app *goryu.App) {
 		}
 	}
 
-	content += fmt.Sprintf("\n\n\t// Register routes")
+	content += "\n\n\t// Register routes"
 	for _, method := range strings.Split(methods, ",") {
 		m := strings.TrimSpace(method)
 		handlerName := fmt.Sprintf("handle%s%s", routeName, strings.Title(strings.ToLower(m)))
