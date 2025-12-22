@@ -463,3 +463,35 @@ func (g *Group) wrapWithMiddleware(handler goryuctx.HandlerFunc) goryuctx.Handle
 	return handler
 }
 
+// RouteInfo holds information about a registered route
+type RouteInfo struct {
+	Method string
+	Path   string
+	Name   string
+}
+
+// Routes returns a list of all registered routes
+func (router *Router) Routes() []RouteInfo {
+	var routes []RouteInfo
+
+	// Walk through all trees
+	for method, tree := range router.trees {
+		tree.walk(func(path string, route *Route) {
+			routes = append(routes, RouteInfo{
+				Method: method,
+				Path:   path,
+				Name:   route.Name,
+			})
+		})
+	}
+	
+	// Sort for consistent output
+	sort.Slice(routes, func(i, j int) bool {
+		if routes[i].Path == routes[j].Path {
+			return routes[i].Method < routes[j].Method
+		}
+		return routes[i].Path < routes[j].Path
+	})
+
+	return routes
+}

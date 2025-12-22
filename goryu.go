@@ -20,6 +20,9 @@ type Ctx = goryu_context.Context
 type Handler = goryu_context.HandlerFunc
 type Middleware = goryu_context.Middleware
 
+// Map is a shortcut for map[string]interface{}, useful for JSON responses
+type Map map[string]interface{}
+
 type Config struct {
 	// AppName is the name of the application.
 	// Default: ""
@@ -522,26 +525,62 @@ func (app *App) MountPath() string {
 
 func (app *App) Run(addr string) error {
 	if !app.Config.DisableStartupMessage {
-		appName := "Goryu"
-		if app.Config.AppName != "" {
-			appName = app.Config.AppName
-		}
-		fmt.Printf("%s is running on %s\n", appName, addr)
+		app.printStartupMessage(addr)
 	}
 	return http.ListenAndServe(addr, app)
 }
 
 func (app *App) Listen(addr string) error {
 	if !app.Config.DisableStartupMessage {
-		appName := "Goryu"
-		if app.Config.AppName != "" {
-			appName = app.Config.AppName
-		}
-		fmt.Printf("🚀 %s is running on %s\n", appName, addr)
+		app.printStartupMessage(addr)
 	}
 
 	app.server = &http.Server{Addr: addr, Handler: app}
 	return app.server.ListenAndServe()
+}
+
+func (app *App) printStartupMessage(addr string) {
+	appName := "Goryu"
+	if app.Config.AppName != "" {
+		appName = app.Config.AppName
+	}
+	
+	fmt.Printf("\n🚀 %s is ready! Listening on %s\n", appName, addr)
+	fmt.Println("   Use Ctrl+C to stop")
+	fmt.Println()
+
+	// Print Route Table
+	routes := app.Router.Routes()
+	if len(routes) > 0 {
+		fmt.Println("📍 Registered Routes:")
+		fmt.Printf("   %-8s %-30s %s\n", "METHOD", "PATH", "NAME")
+		fmt.Println("   " + strings.Repeat("-", 50))
+		
+		for _, r := range routes {
+			name := r.Name
+			if name == "" {
+				name = "-"
+			}
+			
+			// Colorize methods if possible (basic ANSI)
+			method := r.Method
+			switch method {
+			case "GET":
+				method = "\033[34mGET\033[0m" // Blue
+			case "POST":
+				method = "\033[36mPOST\033[0m" // Cyan
+			case "PUT":
+				method = "\033[33mPUT\033[0m" // Yellow
+			case "DELETE":
+				method = "\033[31mDELETE\033[0m" // Red
+			case "PATCH":
+				method = "\033[35mPATCH\033[0m" // Magenta
+			}
+			
+			fmt.Printf("   %-17s %-30s %s\n", method, r.Path, name)
+		}
+		fmt.Println()
+	}
 }
 
 func (app *App) Shutdown() error {

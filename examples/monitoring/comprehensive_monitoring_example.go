@@ -1,15 +1,39 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/monitoring"
 )
 
+// UserRequest demonstrates the Validator interface
+type UserRequest struct {
+	Name  string `json:"name" query:"name"`
+	Email string `json:"email" query:"email"`
+}
+
+// Validate implements the Validator interface
+// This will be automatically called by c.BodyParser()
+func (u *UserRequest) Validate() error {
+	if len(u.Name) < 3 {
+		return fmt.Errorf("name must be at least 3 chars")
+	}
+	if !strings.Contains(u.Email, "@") {
+		return fmt.Errorf("invalid email")
+	}
+	return nil
+}
+
 func main() {
-	// Create app with enhanced monitoring
-	app := goryu.New()
+	// Create app with "batteries-included" defaults
+	// This automatically sets up:
+	// - Recovery & Logging Middleware
+	// - RequestID tracking
+	// - Monitoring (Health, Metrics, Events, Dashboard)
+	app := goryu.Default()
 
 	// Add custom health checks
 	app.AddHealthCheck("database", &monitoring.HealthCheck{
@@ -50,12 +74,27 @@ func main() {
 	})
 
 	app.POST("/users", func(c *goryu.Ctx) {
+		var req UserRequest
+		
+		// Use the new simplified BodyParser with auto-validation
+		if err := c.BodyParser(&req); err != nil {
+			c.JSON(400, goryu.Map{"error": err.Error()})
+			return
+		}
+
 		// Emit custom event
-		app.EmitEvent(monitoring.EventCustom, "User created", map[string]interface{}{
-			"user_id": 123,
-			"action":  "create_user",
+		app.EmitEvent(monitoring.EventCustom, "User created", goryu.Map{
+			"user_name":  req.Name,
+			"user_email": req.Email,
+			"action":     "create_user",
 		})
-		c.JSON(201, map[string]interface{}{"id": 123, "created": true})
+		
+		// Use goryu.Map for cleaner JSON construction
+		c.JSON(201, goryu.Map{
+			"id":      123,
+			"created": true,
+			"user":    req,
+		})
 	})
 
 	// Add event handler for custom logging

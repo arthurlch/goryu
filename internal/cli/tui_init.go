@@ -54,7 +54,7 @@ func (m ProjectInitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				return m, nil
 			}
-			return initialMainMenuModel(), nil
+			return newEnhancedMenu(), nil
 		case "enter":
 			return m.handleEnter()
 		case "up", "k":
@@ -121,7 +121,7 @@ func (m ProjectInitModel) handleEnter() (tea.Model, tea.Cmd) {
 		m.creating = true
 		return m, m.createProject()
 	case stepDone:
-		return initialMainMenuModel(), nil
+		return newEnhancedMenu(), nil
 	}
 	return m, nil
 }

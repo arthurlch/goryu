@@ -63,7 +63,7 @@ func (m GenerateMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				return m, nil
 			}
-			return initialMainMenuModel(), nil
+				return newEnhancedMenu(), nil
 		case "enter":
 			return m.handleGenEnter()
 		case "up", "k":

@@ -1,122 +1,121 @@
-# Goryu Framework
+# 🐉 Goryu Framework
 
-Goryu is a powerful, developer-friendly Golang web framework designed for building high-performance web applications and microservices. It combines a robust routing engine, a rich middleware ecosystem, and a developer-centric CLI to streamline your workflow.
+> **A GOated Web Framework for Go. Built for Developer Happiness.**
 
-## Features
+[![Go Report Card](https://goreportcard.com/badge/github.com/arthurlch/goryu)](https://goreportcard.com/report/github.com/arthurlch/goryu)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-*   **Fast & Robust Router**: Intelligent routing with support for parameters, groups, and method-specific handling.
-*   **Rich Middleware Ecosystem**: Built-in middlewares including Auth, CORS, Gzip, Logger, Recovery, and more.
-*   **Developer CLI**: Powerful command-line tool (`goryu`) to scaffold projects, generate code, and manage configurations.
-*   **Context-Driven Design**: A unified `Context` object for easy request/response handling.
-*   **Production Ready**: Built-in support for graceful shutdown, metrics, tracing, and security headers.
+Goryu is an **opinionated, batteries-included** web framework that prioritizes **Developer Experience (DX)** without sacrificing performance. It feels like express/fiber, but with the robustness of Go.
 
-## Installation
+## 🚀 Why Goryu?
 
-### Library
+*   **⚡ Zero-Config Start**: `goryu.Default()` gives you a production-ready app with logging, recovery, and monitoring instantly.
+*   **👁️ Visual Observability**: Built-in **Real-time Dashboard**, colorful logs, and startup **Route Tables**.
+*   **🧠 Smart Context**: Unified `BodyParser`, Auto-Validation, and generic `goryu.Map` for clean code.
+*   **🛡️ Production Grade**: Graceful shutdown, health checks, and security headers enabled by default.
 
-To use Goryu in your Go project:
+[**🎓 Start the Tutorial: Build a Todo App in 5 min**](./TUTORIAL.md)
+
+---
+
+## 📦 Installation
 
 ```bash
+# The library
 go get github.com/arthurlch/goryu
-```
 
-### CLI Tool (Recommended)
-
-To install the Goryu CLI:
-
-```bash
-# From source (if you have the repository locally)
-make install-cli
-
-# Or via go install
+# The CLI (Recommended for new projects)
 go install github.com/arthurlch/goryu/cmd/goryu@latest
 ```
 
-## Quick Start
+## ⚡ Quick Start
 
-The easiest way to start is with the CLI:
-
-```bash
-# Initialize a new project
-goryu init myapp
-
-# Enter directory
-cd myapp
-
-# Run the dev server
-goryu dev
-```
-
-Or manually create `main.go`:
+Create a `main.go` and experience the magic:
 
 ```go
 package main
 
 import (
-    "net/http"
     "github.com/arthurlch/goryu"
-    goryuContext "github.com/arthurlch/goryu/goryuctx"
 )
 
-func main() {
-    app := goryu.New()
+// define a structured request with validation
+type CreateUser struct {
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
 
-    app.GET("/", func(ctx *goryuContext.Context) {
-        ctx.Text(http.StatusOK, "Hello, Goryu!")
+func (u *CreateUser) Validate() error {
+    if len(u.Name) < 3 { return fmt.Errorf("name too short") }
+    return nil
+}
+
+func main() {
+    // 1. Create app with Logger, Recovery, Metrics & Dashboard
+    app := goryu.Default()
+
+    // 2. Define routes with smart binding
+    app.POST("/users", func(c *goryu.Ctx) {
+        var req CreateUser
+        
+        // Auto-binds JSON/Form AND runs Validate()
+        if err := c.BodyParser(&req); err != nil {
+            c.JSON(400, goryu.Map{"error": err.Error()})
+            return
+        }
+
+        c.JSON(201, goryu.Map{
+            "status": "created", 
+            "user": req.Name,
+        })
     })
 
+    // 3. Run it! (Prints route table on start)
     app.Listen(":8080")
 }
 ```
 
-Run it:
-```bash
-go run main.go
-```
+### What just happened?
+When you run this, Goryu automatically:
+1.  Started a **Real-time Monitoring Dashboard** at `http://localhost:8080/_dashboard`.
+2.  printed a **Route Table** to your console so you know what's running.
+3.  Enabled **Panic Recovery** so your server never crashes.
+4.  Set up **Request Logging** with colors and tracing IDs.
 
-Visit `http://localhost:8080` to see your app in action.
+---
 
-## Middleware
+## 🌟 Key Features
 
-Goryu comes with a comprehensive suite of middleware. Check out the [middleware directory](./middleware) for full documentation.
-
-*   **Auth**: Basic Auth, Session
-*   **Security**: CORS, CSRF, Secure Headers, TLS Redirect
-*   **Performance**: Compress, Cache
-*   **Observability**: Logger, Metrics, Tracing, RequestID
-*   **Resilience**: Circuit Breaker, Limiter, Recovery, Timeout
-
-## CLI
-
-The Goryu CLI helps you bootstrap and manage your projects.
-
-*   `goryu init`: Create a new project
-*   `goryu generate`: Generate handlers, middleware, models
-*   `goryu dev`: Run with hot-reload
-
-See [CLI.md](./CLI.md) for the full CLI documentation.
-
-## Context (Ctx)
-
-In Goryu, the `Context` (or `ctx`) is an object that is passed to every request handler. It holds the underlying HTTP request and response writer, but more importantly, it provides a large set of helper methods to make common web development tasks easier, safer, and more expressive.
-
-Instead of interacting directly with the low-level `http.ResponseWriter` and `*http.Request` objects for every task, you can use the `Context`'s clean and simple API to:
-
-* Parse incoming data (JSON, forms, query strings).
-* Send various types of responses (JSON, text, files).
-* Manipulate headers, cookies, and status codes.
-* Pass data between middleware and your final handler.
-
-Every handler function in Goryu receives a pointer to the `Context`. You can use the `goryu.Ctx` alias for convenience:
+### 1. Smart Request Binding
+Stop writing boilerplate. `BodyParser` handles JSON, Forms, and Query params in one line. Plus, if your struct implements `Validate() error`, it runs automatically!
 
 ```go
-func MyHandler(ctx *goryu.Ctx) {
-    // Use the context to handle the request and send a response
-    ctx.Text(http.StatusOK, "Hello, World!")
+// One line to bind AND validate
+if err := c.BodyParser(&payload); err != nil {
+    return c.Status(400).JSON(goryu.Map{"error": err.Error()})
 }
 ```
 
-## Router Configuration
+### 2. Built-in Monitoring UI
+No need for Prometheus/Grafana for simple apps. Goryu ships with a zero-dependency SPA dashboard.
+- **/_dashboard**: Visual stats & event log.
+- **/_health**: JSON health check.
+- **/_metrics**: Prometheus-compatible metrics.
+
+### 3. Developer Experience (DX) First
+- **goryu.Map**: `map[string]interface{}` is too long. Use `goryu.Map{}`.
+- **Route Table**:
+    ```text
+    📍 Registered Routes:
+       METHOD   PATH             NAME
+       -----------------------------------
+       GET      /_dashboard      Goryu Monitoring...
+       POST     /users           -
+    ```
+
+---
+
+## 📚 Documentation
 
 The Goryu router can be configured with various options to control its behavior:
 

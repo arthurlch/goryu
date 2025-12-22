@@ -193,3 +193,25 @@ func parsePath(path string) []string {
 	
 	return strings.Split(path, "/")
 }
+
+// walk recursively traverses the tree and calls the callback for each route found
+func (n *node) walk(fn func(path string, route *Route)) {
+	// If current node has a route, call callback
+	if n.route != nil {
+		fn(n.route.Path, n.route)
+	}
+	if n.routeWithSlash != nil {
+		fn(n.routeWithSlash.Path, n.routeWithSlash)
+	}
+
+	// Traverse children
+	for _, child := range n.children {
+		child.walk(fn)
+	}
+	if n.paramChild != nil {
+		n.paramChild.walk(fn)
+	}
+	if n.wildcardChild != nil {
+		n.wildcardChild.walk(fn)
+	}
+}

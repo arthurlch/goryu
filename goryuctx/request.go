@@ -437,3 +437,51 @@ func (c *Context) BindJSON(i interface{}) error {
 	
 	return nil
 }
+
+// BodyParser binds the request body to a struct based on the Content-Type header.
+// It supports:
+// - application/json -> BindJSON
+// - application/x-www-form-urlencoded -> QueryParser (form data)
+// - multipart/form-data -> QueryParser (form data)
+// - defaults to QueryParser for other types if methods is GET/DELETE
+func (c *Context) BodyParser(out interface{}) error {
+	ctype := c.GetHeader("Content-Type")
+
+	// JSON
+	if strings.HasPrefix(ctype, "application/json") {
+		return c.BindJSON(out)
+	}
+
+	// Form Data
+	if strings.HasPrefix(ctype, "application/x-www-form-urlencoded") || strings.HasPrefix(ctype, "multipart/form-data") {
+		// Use QueryParser logic but for form data (which QueryParser internally handles via ParseForm)
+		return c.QueryParser(out)
+	}
+
+	// Fallback/Default behavior
+	// If it's a GET/DELETE request without specific content type, try parsing query params
+	if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodDelete {
+		if err := c.QueryParser(out); err != nil {
+			return err
+		}
+	} else if strings.HasPrefix(ctype, "application/json") {
+		// Already handled above, but for flow completeness
+	} else if strings.HasPrefix(ctype, "application/x-www-form-urlencoded") || strings.HasPrefix(ctype, "multipart/form-data") {
+		// Already handled
+	} else {
+		return fmt.Errorf("BodyParser: unsupported content-type: %s", ctype)
+	}
+
+	// Validation hook
+	if validator, ok := out.(Validator); ok {
+		return validator.Validate()
+	}
+
+	return nil
+}
+
+// Validator is an interface for structs that can validate themselves
+type Validator interface {
+	Validate() error
+}
+

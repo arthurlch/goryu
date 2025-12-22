@@ -23,7 +23,8 @@ import (
 )
 
 func main() {
-    app := goryu.New()
+    // goryu.Default() enables monitoring automatically!
+    app := goryu.Default()
     
     // Add a health check
     app.AddHealthCheck("database", &monitoring.HealthCheck{

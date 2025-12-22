@@ -8,9 +8,10 @@ A beautiful, responsive web interface for monitoring your Goryu applications in 
 - **Responsive Design** - Works on desktop, tablet, and mobile
 - **Health Status Overview** - Visual status indicators with color coding
 - **Live Metrics** - Memory usage, request counts, error rates, uptime
-- **Event Stream** - Real-time application events with filtering
+- **Live Metrics** - Memory usage, request counts, error rates, uptime
+- **Event Filtering** - Filter by text search ("error", "user_id") or Category Chips
 - **Health Check Details** - Individual component health status
-- **Modern UI** - Clean, professional design with smooth animations
+- **Modern SPA** - Single Page Application with seamless background polling
 
 ## 🚀 Quick Start
 
@@ -71,10 +72,9 @@ When you call `app.EnableMonitoring("/_monitor")`, you get:
 - Error messages when checks fail
 
 ### 3. Recent Events Panel
-- Real-time event stream
-- Color-coded event types (requests, errors, custom events)
-- Event details and timestamps
-- Last 10 events displayed
+- **Search Box**: Filter events by message, type, or data content
+- **Category Toggles**: Show/Hide Request, Error, or Custom events
+- **Stream**: Real-time event feed with new items appearing instantly
 
 ### 4. System Metrics Panel
 - **Memory Usage** - Current memory consumption
@@ -144,12 +144,10 @@ The dashboard displays different event types with distinct visual indicators:
 
 ## 🔄 Real-time Updates
 
-The UI automatically refreshes data every 5 seconds. The system is designed to be:
-
-- **Lightweight** - Minimal server impact
-- **Efficient** - Only refreshes when tab is visible
-- **Responsive** - No blocking or delays
-- **Reliable** - Handles network issues gracefully
+The UI operates as a Single Page Application (SPA):
+- **Background Polling**: Fetches JSON data (`/_metrics`, `/_health`, `/_events`) every 2 seconds.
+- **Efficient**: Only updates changed DOM elements.
+- **Responsive**: No page flickers or reloads.
 
 ## 🎪 Example Dashboard Views
 

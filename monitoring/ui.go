@@ -1,10 +1,8 @@
 package monitoring
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
-	"time"
 
 	context "github.com/arthurlch/goryu/goryuctx"
 )
@@ -15,572 +13,438 @@ const dashboardHTML = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.AppName}} - Monitoring Dashboard</title>
+    <title>Goryu Monitoring</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-hover: #334155;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f7fa;
-            color: #333;
-            line-height: 1.6;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        /* Utils */
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 1.5rem; width: 100%; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-4 { gap: 1rem; }
+        .grid { display: grid; gap: 1.5rem; }
+        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+        
+        /* Typography */
+        h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+        h2 { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+        .text-sm { font-size: 0.875rem; }
+        .text-muted { color: var(--text-muted); }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Helpers */
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-dot.healthy { background-color: var(--success); box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+        .status-dot.unhealthy { background-color: var(--danger); box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+        .status-dot.degraded { background-color: var(--warning); }
+
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+        .badge.GET { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+        .badge.POST { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge.PUT { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge.DELETE { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+        /* Layout */
+        header {
+            background-color: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
+        main { padding: 2rem 0; flex: 1; overflow-y: auto; }
 
-        .header h1 {
-            font-size: 2rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .header .subtitle {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-
-        .main-content {
-            padding: 2rem 0;
-        }
-
-        .status-overview {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .status-card {
-            background: white;
-            padding: 1.5rem;
+        /* Cards */
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            border-left: 4px solid #667eea;
-            transition: transform 0.2s;
-        }
-
-        .status-card:hover {
-            transform: translateY(-2px);
-        }
-
-        .status-card.healthy {
-            border-left-color: #10b981;
-        }
-
-        .status-card.degraded {
-            border-left-color: #f59e0b;
-        }
-
-        .status-card.unhealthy {
-            border-left-color: #ef4444;
-        }
-
-        .status-card h3 {
-            font-size: 0.875rem;
-            color: #64748b;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
-        }
-
-        .status-card .value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 0.25rem;
-        }
-
-        .status-card .description {
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .panel {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            overflow: hidden;
-        }
-
-        .panel-header {
-            background: #f8fafc;
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .panel-header h2 {
-            font-size: 1.125rem;
-            font-weight: 600;
-            color: #1e293b;
-        }
-
-        .panel-content {
             padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); border-color: var(--primary); }
+
+        .stat-value { font-size: 2.25rem; font-weight: 800; color: var(--text); line-height: 1; margin: 0.5rem 0; }
+        .stat-label { font-size: 0.875rem; color: var(--text-muted); font-weight: 500; }
+
+        /* Events List */
+        .events-panel { grid-column: span 2; display: flex; flex-direction: column; height: 600px; }
+        .events-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        
+        .search-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            width: 300px;
+            font-size: 0.875rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .search-box:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
+
+        .events-list {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
         }
 
-        .health-check {
+        .event-row {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: grid;
+            grid-template-columns: 100px 80px 1fr auto;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.875rem;
+            transition: background 0.1s;
+        }
+        .event-row:hover { background: var(--surface-hover); }
+        .event-row:last-child { border-bottom: none; }
+        
+        .event-time { color: var(--text-muted); font-family: monospace; font-size: 0.8rem; }
+        .event-type { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+        .event-type.error { color: var(--danger); }
+        .event-type.request { color: var(--primary); }
+        .event-type.custom { color: var(--success); }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .live-indicator {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .health-check:last-child {
-            border-bottom: none;
-        }
-
-        .health-check-name {
-            font-weight: 500;
-            color: #1e293b;
-        }
-
-        .health-check-details {
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
             font-size: 0.75rem;
+            color: var(--success);
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.025em;
+        }
+        .live-dot {
+            width: 6px; height: 6px; background: var(--success); border-radius: 50%;
+            margin-right: 6px; animation: pulse 2s infinite;
         }
 
-        .status-badge.healthy {
-            background: #dcfce7;
-            color: #166534;
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
         }
-
-        .status-badge.degraded {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-badge.unhealthy {
-            background: #fecaca;
-            color: #991b1b;
-        }
-
-        .event-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
-            padding: 1rem 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .event-item:last-child {
-            border-bottom: none;
-        }
-
-        .event-icon {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-top: 0.5rem;
-            flex-shrink: 0;
-        }
-
-        .event-icon.request {
-            background: #3b82f6;
-        }
-
-        .event-icon.error {
-            background: #ef4444;
-        }
-
-        .event-icon.custom {
-            background: #8b5cf6;
-        }
-
-        .event-icon.healthy {
-            background: #10b981;
-        }
-
-        .event-icon.unhealthy {
-            background: #ef4444;
-        }
-
-        .event-content {
-            flex: 1;
-        }
-
-        .event-message {
-            font-weight: 500;
-            color: #1e293b;
-            margin-bottom: 0.25rem;
-        }
-
-        .event-details {
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .event-time {
-            font-size: 0.75rem;
-            color: #94a3b8;
-            margin-top: 0.25rem;
-        }
-
-        .refresh-info {
-            background: #f1f5f9;
-            padding: 1rem;
-            border-radius: 8px;
-            text-align: center;
-            margin-top: 2rem;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #f3f4f6;
-            border-top: 2px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         @media (max-width: 768px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .status-overview {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .container {
-                padding: 0 15px;
-            }
+            .grid-cols-2, .grid-cols-4 { grid-template-columns: 1fr; }
+            .events-panel { grid-column: span 1; }
+            .event-row { grid-template-columns: 1fr; gap: 0.25rem; }
         }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
+        /* Toggle Chips */
+        .filter-chips { display: flex; gap: 0.5rem; margin-right: 1rem; }
+        .chip { 
+            padding: 0.35rem 0.75rem; 
+            border-radius: 999px; 
+            font-size: 0.75rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            background: var(--surface);
+            transition: all 0.2s;
+            user-select: none;
         }
-
-        .metric-item {
-            text-align: center;
-            padding: 1rem;
-            background: #f8fafc;
-            border-radius: 8px;
-        }
-
-        .metric-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 0.25rem;
-        }
-
-        .metric-label {
-            font-size: 0.75rem;
-            color: #64748b;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-            margin-top: 2rem;
-        }
+        .chip:hover { border-color: var(--primary); color: var(--text); }
+        .chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .chip.active.error { background: var(--danger); border-color: var(--danger); }
+        .chip.active.request { background: var(--primary); border-color: var(--primary); }
+        .chip.active.custom { background: var(--success); border-color: var(--success); }
     </style>
 </head>
 <body>
-    <header class="header">
-        <div class="container">
-            <h1>{{.AppName}} Monitoring</h1>
-            <p class="subtitle">Real-time application health and performance dashboard</p>
+    <header>
+        <div class="container flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div style="background: var(--primary); width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; font-weight: bold;">G</div>
+                <h1>{{.AppName}}</h1>
+            </div>
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                LIVE
+            </div>
         </div>
     </header>
 
-    <main class="main-content">
-        <div class="container">
-            <!-- Status Overview -->
-            <div class="status-overview">
-                <div class="status-card {{.Status}}">
-                    <h3>Overall Status</h3>
-                    <div class="value">{{.Status | title}}</div>
-                    <div class="description">Application health</div>
+    <main>
+        <div class="container grid">
+            <!-- Top Stats -->
+            <div class="grid grid-cols-4">
+                <div class="card">
+                    <div class="stat-label">Health Status</div>
+                    <div class="stat-value flex items-center" id="health-status">
+                        <span class="status-dot"></span>
+                        <span id="health-text">--</span>
+                    </div>
                 </div>
-                <div class="status-card">
-                    <h3>Uptime</h3>
-                    <div class="value">{{.Metrics.Uptime | formatDuration}}</div>
-                    <div class="description">Since {{.Metrics.StartTime | formatTime}}</div>
+                <div class="card">
+                    <div class="stat-label">Total Requests</div>
+                    <div class="stat-value" id="req-count">0</div>
                 </div>
-                <div class="status-card">
-                    <h3>Requests</h3>
-                    <div class="value">{{.Metrics.RequestCount}}</div>
-                    <div class="description">Total processed</div>
+                <div class="card">
+                    <div class="stat-label">Total Errors</div>
+                    <div class="stat-value" style="color: var(--danger);" id="err-count">0</div>
                 </div>
-                <div class="status-card">
-                    <h3>Errors</h3>
-                    <div class="value">{{.Metrics.ErrorCount}}</div>
-                    <div class="description">Error responses</div>
+                <div class="card">
+                    <div class="stat-label">Avg Latency</div>
+                    <div class="stat-value" id="avg-latency">0ms</div>
                 </div>
             </div>
 
-            <!-- Main Dashboard Grid -->
-            <div class="dashboard-grid">
-                <!-- Health Checks Panel -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Health Checks</h2>
+            <div class="grid grid-cols-2">
+                <!-- Health Checks -->
+                <div class="card">
+                    <h2>System Health</h2>
+                    <div id="health-checks-list" class="grid" style="gap: 1rem;">
+                        <!-- Injected via JS -->
                     </div>
-                    <div class="panel-content">
-                        {{if .HealthChecks}}
-                            {{range $name, $check := .HealthChecks}}
-                            <div class="health-check">
-                                <div>
-                                    <div class="health-check-name">{{$name}}{{if $check.Critical}} (Critical){{end}}</div>
-                                    <div class="health-check-details">
-                                        Duration: {{$check.Duration | formatDuration}}
-                                        {{if $check.Message}}<br>{{$check.Message}}{{end}}
-                                    </div>
-                                </div>
-                                <span class="status-badge {{$check.Status}}">{{$check.Status}}</span>
+                </div>
+
+                <!-- Metrics Detail -->
+                <div class="card">
+                    <h2>Runtime Metrics</h2>
+                    <div class="grid grid-cols-2" style="gap: 2rem;">
+                        <div>
+                            <div class="stat-label">Goroutines</div>
+                            <div class="stat-value" style="font-size: 1.5rem;" id="goroutines">0</div>
+                        </div>
+                        <div>
+                            <div class="stat-label">Memory Usage</div>
+                            <div class="stat-value" style="font-size: 1.5rem;" id="memory">0 MB</div>
+                        </div>
+                        <div>
+                            <div class="stat-label">Uptime</div>
+                            <div class="stat-value" style="font-size: 1.5rem;" id="uptime">0s</div>
+                        </div>
+                    </div>
+                </div>
+             
+                <!-- Events Log -->
+                <div class="card events-panel">
+                    <div class="events-header">
+                        <h2>Event Log</h2>
+                        <div class="flex items-center">
+                            <div class="filter-chips" id="filter-chips">
+                                <span class="chip active request" data-type="request">Requests</span>
+                                <span class="chip active error" data-type="error">Errors</span>
+                                <span class="chip active custom" data-type="custom">Custom</span>
                             </div>
-                            {{end}}
-                        {{else}}
-                            <p style="color: #64748b; text-align: center;">No health checks configured</p>
-                        {{end}}
-                    </div>
-                </div>
-
-                <!-- Recent Events Panel -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <h2>Recent Events</h2>
-                    </div>
-                    <div class="panel-content">
-                        {{if .Events}}
-                            {{range .Events}}
-                            <div class="event-item">
-                                <div class="event-icon {{.Type}}"></div>
-                                <div class="event-content">
-                                    <div class="event-message">{{.Message}}</div>
-                                    {{if .Data}}
-                                    <div class="event-details">
-                                        {{if .Data.status_code}}Status: {{.Data.status_code}} | {{end}}
-                                        {{if .Data.duration_ms}}Duration: {{.Data.duration_ms}}ms{{end}}
-                                    </div>
-                                    {{end}}
-                                    <div class="event-time">{{.Timestamp | formatTime}}</div>
-                                </div>
-                            </div>
-                            {{end}}
-                        {{else}}
-                            <p style="color: #64748b; text-align: center;">No recent events</p>
-                        {{end}}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Metrics Panel (Full Width) -->
-            <div class="panel full-width">
-                <div class="panel-header">
-                    <h2>System Metrics</h2>
-                </div>
-                <div class="panel-content">
-                    <div class="metrics-grid">
-                        <div class="metric-item">
-                            <div class="metric-value">{{.Metrics.MemoryUsage | formatBytes}}</div>
-                            <div class="metric-label">Memory Usage</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-value">{{.Metrics.GoRoutines}}</div>
-                            <div class="metric-label">Goroutines</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-value">{{.Metrics.AvgResponseTime | formatDuration}}</div>
-                            <div class="metric-label">Avg Response</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-value">{{if .Metrics.RequestCount}}{{printf "%.2f" (div .Metrics.ErrorCount .Metrics.RequestCount | mul 100)}}%{{else}}0%{{end}}</div>
-                            <div class="metric-label">Error Rate</div>
+                            <input type="text" id="event-filter" class="search-box" placeholder="Search events...">
                         </div>
                     </div>
+                    <div class="events-list" id="events-list">
+                        <!-- Injected via JS -->
+                    </div>
                 </div>
-            </div>
-
-            <div class="refresh-info">
-                <span class="loading"></span>
-                <span style="margin-left: 0.5rem;">Auto-refreshing every 5 seconds</span>
             </div>
         </div>
     </main>
 
     <script>
-        // Auto-refresh functionality
-        let refreshInterval;
-        
-        function startAutoRefresh() {
-            refreshInterval = setInterval(() => {
-                window.location.reload();
-            }, 5000);
-        }
+        const state = {
+            events: [],
+            filter: '',
+            activeTypes: new Set(['request', 'error', 'custom'])
+        };
 
-        function stopAutoRefresh() {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
+        const els = {
+            healthStatus: document.getElementById('health-status'),
+            healthText: document.getElementById('health-text'),
+            reqCount: document.getElementById('req-count'),
+            errCount: document.getElementById('err-count'),
+            avgLatency: document.getElementById('avg-latency'),
+            healthChecksList: document.getElementById('health-checks-list'),
+            goroutines: document.getElementById('goroutines'),
+            memory: document.getElementById('memory'),
+            uptime: document.getElementById('uptime'),
+            eventsList: document.getElementById('events-list'),
+            eventFilter: document.getElementById('event-filter')
+        };
+
+        // Formatters
+        const formatBytes = (bytes) => {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        const formatTime = (ts) => {
+            return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        };
+
+        async function fetchData() {
+            try {
+                const [healthRes, metricsRes, eventsRes] = await Promise.all([
+                    fetch('/_health').then(r => r.json()),
+                    fetch('/_metrics').then(r => r.json()),
+                    fetch('/_events?limit=100').then(r => r.json())
+                ]);
+
+                updateHealth(healthRes);
+                updateMetrics(metricsRes);
+                updateEvents(eventsRes.events);
+            } catch (e) {
+                console.error("Monitoring fetch failed", e);
             }
         }
 
-        // Handle visibility change to pause/resume refresh when tab is hidden
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                stopAutoRefresh();
-            } else {
-                startAutoRefresh();
-            }
-        });
+        function updateHealth(data) {
+            const statusColor = data.status === 'healthy' ? 'healthy' : (data.status === 'degraded' ? 'degraded' : 'unhealthy');
+            els.healthText.textContent = data.status.toUpperCase();
+            els.healthText.className = "text-" + statusColor;
+            els.healthStatus.querySelector('.status-dot').className = "status-dot " + statusColor;
 
-        // Start auto-refresh when page loads
-        startAutoRefresh();
+            // Health Checks List
+            els.healthChecksList.innerHTML = Object.entries(data.checks || {}).map(([name, check]) => {
+                const msgHtml = check.message ? '<div class="text-sm text-danger">' + check.message + '</div>' : '';
+                return '<div class="flex justify-between items-center p-2 rounded" style="background: var(--bg);">' +
+                    '<div>' +
+                        '<div class="font-bold capitalize">' + name + '</div>' +
+                        '<div class="text-sm text-muted">' + (check.duration / 1000000).toFixed(2) + 'ms</div>' +
+                        msgHtml +
+                    '</div>' +
+                    '<span class="status-dot ' + (check.status === 'healthy' ? 'healthy' : 'unhealthy') + '"></span>' +
+                '</div>';
+            }).join('');
+        }
 
-        // Optional: Add click handlers for manual refresh
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'r' || e.key === 'R') {
-                window.location.reload();
-            }
-        });
-
-        // Add some interactivity to status cards
-        document.querySelectorAll('.status-card, .panel').forEach(card => {
-            card.addEventListener('mouseenter', function() {
-                this.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-            });
+        function updateMetrics(data) {
+            els.reqCount.textContent = data.request_count.toLocaleString();
+            els.errCount.textContent = data.error_count.toLocaleString();
+            // Convert ns to ms
+            els.avgLatency.textContent = (data.avg_response_time / 1000000).toFixed(1) + 'ms';
+            els.goroutines.textContent = data.goroutines;
+            els.memory.textContent = formatBytes(data.memory_usage_bytes);
             
-            card.addEventListener('mouseleave', function() {
-                this.style.boxShadow = '0 2px 10px rgba(0,0,0,0.08)';
+            // Simple uptime formatting
+            const uptimeSecs = data.uptime / 1000000000;
+            const h = Math.floor(uptimeSecs / 3600);
+            const m = Math.floor((uptimeSecs % 3600) / 60);
+            els.uptime.textContent = h + 'h ' + m + 'm';
+        }
+
+        function updateEvents(newEvents) {
+            if (!newEvents) return;
+            // Reverse to show newest top, locally
+            state.events = newEvents.reverse(); 
+            renderEvents();
+        }
+
+        function renderEvents() {
+            const filter = state.filter.toLowerCase();
+            const filtered = state.events.filter(e => {
+                // Type Filter
+                if (!state.activeTypes.has(e.type)) return false;
+
+                // Text Filter
+                return e.message.toLowerCase().includes(filter) || 
+                       e.type.toLowerCase().includes(filter) ||
+                       (e.data && JSON.stringify(e.data).toLowerCase().includes(filter));
+            });
+
+            els.eventsList.innerHTML = filtered.map(e => {
+                const dataHtml = e.data ? '<div class="text-sm text-muted font-mono" style="margin-top:2px;">' + JSON.stringify(e.data).replace(/["{}]/g, "") + '</div>' : '';
+                const durationHtml = e.duration ? (e.duration/1000000).toFixed(1) + 'ms' : '';
+                
+                return '<div class="event-row">' +
+                    '<div class="event-time">' + formatTime(e.timestamp) + '</div>' +
+                    '<div class="event-type ' + e.type + '">' + e.type + '</div>' +
+                    '<div class="event-msg">' +
+                        e.message +
+                        dataHtml +
+                    '</div>' +
+                    '<div class="text-muted text-sm">' + durationHtml + '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        // Filter Chips Logic
+        document.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', (e) => {
+                const type = e.target.dataset.type;
+                if (state.activeTypes.has(type)) {
+                    state.activeTypes.delete(type);
+                    e.target.classList.remove('active');
+                } else {
+                    state.activeTypes.add(type);
+                    e.target.classList.add('active');
+                }
+                renderEvents();
             });
         });
 
-        // Show loading state during refresh
-        let isRefreshing = false;
-        
-        window.addEventListener('beforeunload', function() {
-            isRefreshing = true;
-            document.querySelector('.loading').style.opacity = '1';
+        els.eventFilter.addEventListener('input', (e) => {
+            state.filter = e.target.value;
+            renderEvents();
         });
+
+        // Loop
+        fetchData();
+        setInterval(fetchData, 2000); // 2s polling
     </script>
 </body>
 </html>
 `
 
 func (m *Monitor) UIHandler(appName string) context.HandlerFunc {
-	tmpl := template.New("dashboard").Funcs(template.FuncMap{
-		"title": func(s string) string {
-			if len(s) == 0 {
-				return s
-			}
-			return string(s[0]-32) + s[1:]
-		},
-		"formatDuration": func(d time.Duration) string {
-			if d < time.Minute {
-				return d.Truncate(time.Second).String()
-			}
-			if d < time.Hour {
-				return d.Truncate(time.Minute).String()
-			}
-			if d < 24*time.Hour {
-				return d.Truncate(time.Hour).String()
-			}
-			days := int(d.Hours() / 24)
-			hours := int(d.Hours()) % 24
-			if days > 0 {
-				return fmt.Sprintf("%dd %dh", days, hours)
-			}
-			return d.Truncate(time.Hour).String()
-		},
-		"formatTime": func(t time.Time) string {
-			return t.Format("15:04:05")
-		},
-		"formatBytes": func(bytes uint64) string {
-			const unit = 1024
-			if bytes < unit {
-				return fmt.Sprintf("%d B", bytes)
-			}
-			div, exp := uint64(unit), 0
-			for n := bytes / unit; n >= unit; n /= unit {
-				div *= unit
-				exp++
-			}
-			return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-		},
-		"mul": func(a, b float64) float64 {
-			return a * b
-		},
-		"div": func(a, b int64) float64 {
-			if b == 0 {
-				return 0
-			}
-			return float64(a) / float64(b)
-		},
-	})
-
-	template.Must(tmpl.Parse(dashboardHTML))
+	if appName == "" {
+		appName = "Goryu App"
+	}
+	
+	// Create template once
+	tmpl, err := template.New("dashboard").Parse(dashboardHTML)
+	if err != nil {
+		panic(err) // Should be safe as template is const
+	}
 
 	return func(c *context.Context) {
-		if appName == "" {
-			appName = "Application"
-		}
-
-		status := m.GetHealthStatus()
-		metrics := m.GetMetrics()
-		healthChecks := m.GetHealthResults()
-		events := m.GetEvents(10) // Get last 10 events
-
-		data := struct {
-			AppName      string
-			Status       string
-			Metrics      *Metrics
-			HealthChecks map[string]*HealthResult
-			Events       []Event
-		}{
-			AppName:      appName,
-			Status:       string(status),
-			Metrics:      metrics,
-			HealthChecks: healthChecks,
-			Events:       events,
-		}
-
 		c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		
+		data := struct {
+			AppName string
+		}{
+			AppName: appName,
+		}
+
 		if err := tmpl.Execute(c.Writer, data); err != nil {
 			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 			return
