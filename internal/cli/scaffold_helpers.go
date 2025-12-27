@@ -64,7 +64,7 @@ func convertToGoType(typ string) string {
 	}
 }
 
-func generateRepository(resource string, fields []Field) error {
+func generateRepository(resource string, fields []Field, moduleName string) error {
 	repoDir := "internal/repository"
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
 		return err
@@ -81,7 +81,7 @@ import (
 	"fmt"
 	"time"
 	
-	"myapp/internal/models"
+	"%s/internal/models"
 )
 
 type %sRepository struct {
@@ -179,7 +179,7 @@ func (r *%sRepository) List(ctx context.Context, offset, limit int) ([]*models.%
 	
 	return items, rows.Err()
 }
-`, resourceName, resourceName, resourceName, resourceName, 
+`, moduleName, resourceName, resourceName, resourceName, resourceName, 
 		resourceName, strings.ToLower(resource), resourceName,
 		"`", strings.ToLower(resource), generateFieldList(fields, false), generatePlaceholders(len(fields)), "`",
 		generateFieldValues(fields, strings.ToLower(resource)),
@@ -203,7 +203,7 @@ func (r *%sRepository) List(ctx context.Context, offset, limit int) ([]*models.%
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
-func generateValidation(resource string, fields []Field) error {
+func generateValidation(resource string, fields []Field, moduleName string) error {
 	validationDir := "internal/validation"
 	if err := os.MkdirAll(validationDir, 0755); err != nil {
 		return err
@@ -215,11 +215,10 @@ func generateValidation(resource string, fields []Field) error {
 	content := fmt.Sprintf(`package validation
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	
-	"myapp/internal/models"
+	"%s/internal/models"
 )
 
 var emailRegex = regexp.MustCompile(%s^[a-zA-Z0-9._%s+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$%s)
@@ -236,12 +235,12 @@ func Validate%sUpdate(model *models.%s) []string {
 	// For updates, we might have different validation rules
 	return Validate%s(model)
 }
-`, "`", "\\", "`", resourceName, resourceName, generateValidationChecks(fields), resourceName, resourceName, resourceName)
+`, moduleName, "`", "\\", "`", resourceName, resourceName, generateValidationChecks(fields), resourceName, resourceName, resourceName)
 	
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
-func generateAPITests(resource string, fields []Field) error {
+func generateAPITests(resource string, fields []Field, moduleName string) error {
 	testsDir := "internal/handlers"
 	resourceName := utils.ToGoIdentifier(resource)
 	filename := filepath.Join(testsDir, strings.ToLower(resource)+"_test.go")
@@ -256,7 +255,7 @@ import (
 	"testing"
 	
 	"github.com/arthurlch/goryu"
-	"myapp/internal/models"
+	"%s/internal/models"
 )
 
 func TestCreate%s(t *testing.T) {
@@ -356,7 +355,7 @@ func TestList%s(t *testing.T) {
 		t.Errorf("expected status 200, got %%d", resp.StatusCode)
 	}
 }
-`, resourceName, strings.ToLower(resource), resourceName,
+`, moduleName, resourceName, strings.ToLower(resource), resourceName,
 		generateTestPayload(fields),
 		strings.ToLower(resource),
 		resourceName, strings.ToLower(resource), resourceName, strings.ToLower(resource),

@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.24']
+        go-version: ['1.24', '1.25.5']
 
     steps:
     - uses: actions/checkout@v4
@@ -45,3 +45,14 @@ jobs:
 
     - name: Test with Race Detector
       run: go test -v -race ./...
+
+    - name: Test CLI
+      run: |
+        chmod +x internal/cli/test_cli.sh
+        ./internal/cli/test_cli.sh
+
+    - name: Stress & Memory Tests
+      run: go test -v ./tests/stress/...
+
+    - name: Benchmarks
+      run: go test -bench=. ./tests/bench/...

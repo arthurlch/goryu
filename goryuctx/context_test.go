@@ -46,7 +46,7 @@ func TestContext_JSON(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("JSON() status code got %d, want %d", rr.Code, http.StatusOK)
 	}
-	expectedBody := "{\"message\":\"hello\"}\n"
+	expectedBody := "{\"message\":\"hello\"}"
 	if rr.Body.String() != expectedBody {
 		t.Errorf("JSON() body got %s, want %s", rr.Body.String(), expectedBody)
 	}

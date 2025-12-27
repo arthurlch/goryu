@@ -7,7 +7,7 @@ import (
 
 // Any good framework needs a big yaml or json file with many config to tweak for fun
 
-func generateRouteBuilderContent(name, group, middleware, methods string) string {
+func generateRouteBuilderContent(name, group, middleware, methods, moduleName string) string {
 	routeName := strings.Title(strings.ToLower(name))
 	varName := strings.ToLower(name)
 
@@ -30,27 +30,30 @@ func generateRouteBuilderContent(name, group, middleware, methods string) string
 
 import (
 	"github.com/arthurlch/goryu"
-	"myapp/internal/handlers"
-	"myapp/internal/middleware"
+	"%s/internal/handlers"
+	"%s/internal/middleware"
 )
 
 // Register%sRoutes registers all %s routes
 func Register%sRoutes(app *goryu.App) {
 	// Create a group for %s routes
 	group := app.Group("/%s")`,
-		routeName, varName, routeName, varName, group)
+		moduleName, moduleName, routeName, varName, routeName, varName, group)
 
 	if middleware != "" {
 		mws := strings.Split(middleware, ",")
 		for _, mw := range mws {
 			content += fmt.Sprintf("\n\tgroup.Use(middleware.%s())", strings.Title(strings.TrimSpace(mw)))
 		}
+	} else {
+		// If no middleware, we should remove the unused import to avoid compile error
+		content = strings.Replace(content, fmt.Sprintf("\t\"%s/internal/middleware\"\n", moduleName), "", 1)
 	}
 
 	content += "\n\n\t// Register routes"
 	for _, method := range strings.Split(methods, ",") {
 		m := strings.TrimSpace(method)
-		handlerName := fmt.Sprintf("handle%s%s", routeName, strings.Title(strings.ToLower(m)))
+		handlerName := fmt.Sprintf("Handle%s%s", routeName, strings.Title(strings.ToLower(m)))
 		content += fmt.Sprintf("\n\tgroup.%s(\"/\", handlers.%s)", strings.ToUpper(m), handlerName)
 	}
 
@@ -61,8 +64,8 @@ func Register%sRoutes(app *goryu.App) {
 // Configure%sAPI sets up the complete API configuration
 func Configure%sAPI(app *goryu.App) {
 	// Configure global middleware
-	app.Use(goryu.Logger())
-	app.Use(goryu.Recovery())
+	app.Use(goryu.Logger().Build())
+	app.Use(goryu.Recovery().Build())
 	
 	// Register routes
 	Register%sRoutes(app)
@@ -72,7 +75,7 @@ func Configure%sAPI(app *goryu.App) {
 	return content
 }
 
-func generateStandardRouteContent(name, group, middleware, methods string) string {
+func generateStandardRouteContent(name, group, middleware, methods, moduleName string) string {
 	routeName := strings.Title(strings.ToLower(name))
 	varName := strings.ToLower(name)
 
@@ -80,13 +83,13 @@ func generateStandardRouteContent(name, group, middleware, methods string) strin
 
 import (
 	"github.com/arthurlch/goryu"
-	"myapp/internal/handlers"
+	"%s/internal/handlers"
 )
 
 // Register%sRoutes registers all %s routes
 func Register%sRoutes(app *goryu.App) {
 	// Basic route registration
-`, routeName, varName, routeName)
+`, moduleName, routeName, varName, routeName)
 
 	prefix := ""
 	if group != "" {
@@ -95,7 +98,7 @@ func Register%sRoutes(app *goryu.App) {
 
 	for _, method := range strings.Split(methods, ",") {
 		m := strings.ToUpper(strings.TrimSpace(method))
-		handlerName := fmt.Sprintf("handle%s%s", routeName, strings.Title(strings.ToLower(m)))
+		handlerName := fmt.Sprintf("Handle%s%s", routeName, strings.Title(strings.ToLower(m)))
 		content += fmt.Sprintf(`	app.%s("%s%s", handlers.%s)
 `, strings.Title(strings.ToLower(m)), prefix, varName, handlerName)
 	}

@@ -43,7 +43,7 @@ func Example() {
 	// Environment: production
 	// Server Address: 0.0.0.0:8080
 	// Database Driver: postgres
-	// Framework config available: struct { AppName string; ServerHeader string; StrictRouting bool; CaseSensitive bool; DisableStartupMessage bool; RedirectTrailingSlash *bool; EnableHEADFallback *bool }
+	// Framework config available: config.GoryuConfigCompatibility
 	// Configuration loaded and validated successfully!
 }
 

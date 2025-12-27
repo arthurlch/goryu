@@ -1,5 +1,9 @@
 # 🐉 Goryu Framework
 
+<div align="center">
+  <img src="https://i.imgur.com/9yTfwke.png" alt="Goryu Logo" width="200"/>
+</div>
+
 > **A GOated Web Framework for Go. Built for Developer Happiness.**
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/arthurlch/goryu)](https://goreportcard.com/report/github.com/arthurlch/goryu)

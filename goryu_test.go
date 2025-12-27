@@ -551,7 +551,7 @@ func TestListenAndShutdown(t *testing.T) {
 	}()
 
 	// Give the server a moment to start
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	// Test that Server() returns a server after Listen
 	server := app.Server()

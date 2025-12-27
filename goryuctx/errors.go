@@ -103,15 +103,27 @@ func (c *Context) SetErrorHandlingMode(mode ErrorHandlingMode) {
 }
 
 func (c *Context) GetErrorHandlingMode() ErrorHandlingMode {
+	// Use cached value if already set
+	if c.errorModeSet {
+		return c.errorHandlingMode
+	}
+	
+	// Otherwise check Keys map
 	if c.Keys == nil {
-		return ErrorModeReturn
+		c.errorHandlingMode = ErrorModeReturn
+		c.errorModeSet = true
+		return c.errorHandlingMode
 	}
 	if mode, exists := c.Keys["error_handling_mode"]; exists {
 		if m, ok := mode.(ErrorHandlingMode); ok {
+			c.errorHandlingMode = m
+			c.errorModeSet = true
 			return m
 		}
 	}
-	return ErrorModeReturn
+	c.errorHandlingMode = ErrorModeReturn
+	c.errorModeSet = true
+	return c.errorHandlingMode
 }
 
 func (c *Context) handleResponseError(operation string, err error, errorType ErrorType) error {

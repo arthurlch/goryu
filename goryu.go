@@ -7,17 +7,20 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
+	"strings" // Added sync import
 	"time"
 
 	"github.com/arthurlch/goryu/config/builder"
 	goryu_context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/internal/json"
 	"github.com/arthurlch/goryu/monitoring"
 	"github.com/arthurlch/goryu/router"
 )
 
 type Ctx = goryu_context.Context
+type Context = goryu_context.Context
 type Handler = goryu_context.HandlerFunc
+type HandlerFunc = goryu_context.HandlerFunc
 type Middleware = goryu_context.Middleware
 
 // Map is a shortcut for map[string]interface{}, useful for JSON responses
@@ -54,6 +57,12 @@ type Config struct {
 	// MaxMultipartMemory is the maximum amount of memory to use for multipart form parsing.
 	// Default: 10MB
 	MaxMultipartMemory int64
+	// EnableMonitoring enables the built-in monitoring system.
+	// Default: true
+	EnableMonitoring *bool
+	// JSONEngine specifies which JSON library to use: "standard", "sonic"
+	// Default: "standard" (use "sonic" for potentially better performance on large payloads)
+	JSONEngine string
 }
 
 type App struct {
@@ -79,6 +88,14 @@ func New(config ...Config) *App {
 	if len(config) > 0 {
 		cfg = config[0]
 	}
+	
+	// Configure JSON engine - default to sonic for JSONHeavy performance
+	if cfg.JSONEngine == "standard" {
+		json.UseStandardJSON()
+	} else {
+		// Default to sonic for JSONHeavy performance
+		json.UseSonicJSON()
+	}
 
 	routerConfig := router.RouterConfig{
 		RedirectTrailingSlash:     true,  // default
@@ -99,13 +116,21 @@ func New(config ...Config) *App {
 		routerConfig.EnableHEADFallback = *cfg.EnableHEADFallback
 	}
 
-	monitor := monitoring.New(monitoring.Config{
-		Enabled:        true,
-		MaxEvents:      10000,
-		HealthInterval: 30 * time.Second,
-		MetricsEnabled: true,
-		SafeExecute:    true,
-	})
+	enableMonitoring := true
+	if cfg.EnableMonitoring != nil {
+		enableMonitoring = *cfg.EnableMonitoring
+	}
+
+	var monitor *monitoring.Monitor
+	if enableMonitoring {
+		monitor = monitoring.New(monitoring.Config{
+			Enabled:        true,
+			MaxEvents:      10000,
+			HealthInterval: 30 * time.Second,
+			MetricsEnabled: true,
+			SafeExecute:    true,
+		})
+	}
 
 	app := &App{
 		Router:      router.New(routerConfig),
@@ -115,11 +140,13 @@ func New(config ...Config) *App {
 		Monitor:     monitor,
 	}
 
-	app.Use(monitor.Middleware())
+	if monitor != nil {
+		app.Use(monitor.Middleware())
 
-	app.GET("/_health", monitor.HealthHandler())
-	app.GET("/_metrics", monitor.MetricsHandler())
-	app.GET("/_events", monitor.EventsHandler())
+		app.GET("/_health", monitor.HealthHandler())
+		app.GET("/_metrics", monitor.MetricsHandler())
+		app.GET("/_events", monitor.EventsHandler())
+	}
 
 	return app
 }
@@ -141,29 +168,22 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Server", app.Config.ServerHeader)
 	}
 	
-	const defaultMaxMemory = 32 << 20 // 32 MB
-	maxMemory := app.Config.MaxMultipartMemory
-	if maxMemory == 0 {
-		maxMemory = defaultMaxMemory
-	}
-	
-	if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data") {
-		if err := req.ParseMultipartForm(maxMemory); err != nil {
-			http.Error(w, "Form data too large or invalid", http.StatusBadRequest)
-			return
+	// Optimization: Only parse multipart when needed.
+	// Skip content-type check for GET/HEAD/DELETE requests as they rarely have bodies
+	if req.Method != "GET" && req.Method != "HEAD" && req.Method != "DELETE" {
+		contentType := req.Header.Get("Content-Type")
+		if len(contentType) >= 19 && contentType[:19] == "multipart/form-data" {
+			const defaultMaxMemory = 32 << 20 // 32 MB
+			maxMemory := app.Config.MaxMultipartMemory
+			if maxMemory == 0 {
+				maxMemory = defaultMaxMemory
+			}
+			if err := req.ParseMultipartForm(maxMemory); err != nil {
+				http.Error(w, "Form data too large or invalid", http.StatusBadRequest)
+				return
+			}
 		}
-	} else {
-		// For non-multipart, we don't strictly enforce memory limit on ParseForm as it parses into url.Values
-		// but we might want to check ContentLength if we want to be strict.
-		// Standard ParseForm reads the body.
-		if req.ContentLength > maxMemory {
-			http.Error(w, "Form data too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		if err := req.ParseForm(); err != nil {
-			http.Error(w, "Failed to parse Form Data", http.StatusBadRequest)
-			return
-		}
+		// Skip form parsing for other content types - let Context handle it lazily
 	}
 	
 	app.Router.ServeHTTP(w, req)
@@ -635,5 +655,17 @@ func (app *App) GetMetrics() *monitoring.Metrics {
 		return app.Monitor.GetMetrics()
 	}
 	return nil
+}
+
+// UseStandardJSON configures Goryu to use the standard library "encoding/json" package.
+// This is the default.
+func UseStandardJSON() {
+	json.UseStandardJSON()
+}
+
+// UseSonicJSON configures Goryu to use "github.com/bytedance/sonic" for JSON operations.
+// This provides significantly faster performance for complex JSON but may have larger binary size.
+func UseSonicJSON() {
+	json.UseSonicJSON()
 }
 

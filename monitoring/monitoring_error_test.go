@@ -76,6 +76,9 @@ func TestEventHandlerPanicRecovery(t *testing.T) {
 		
 		handlerCallCount := 0
 		monitor.AddEventHandler(func(event Event) {
+			if event.Type == EventStartup {
+				return
+			}
 			handlerCallCount++
 		})
 		
@@ -230,6 +233,11 @@ func TestConcurrentEventHandlers(t *testing.T) {
 	for i := 0; i < numHandlers; i++ {
 		handlerIndex := i
 		monitor.AddEventHandler(func(event Event) {
+			// Ignore startup event which might race
+			if event.Type != EventCustom {
+				return
+			}
+			
 			mu.Lock()
 			handlerCallCount[handlerIndex]++
 			mu.Unlock()
@@ -251,7 +259,9 @@ func TestConcurrentEventHandlers(t *testing.T) {
 	
 	wg.Wait()
 	
-	time.Sleep(500 * time.Millisecond)
+	monitor.Close()
+	monitor.Wait()
+	time.Sleep(100 * time.Millisecond) // buffer for handlers
 	
 	mu.Lock()
 	defer mu.Unlock()
@@ -281,7 +291,7 @@ func TestConcurrentHealthChecks(t *testing.T) {
 					return StatusHealthy, nil
 				case 2:
 					// Error
-					return StatusUnhealthy, errors.New(fmt.Sprintf("check %d failed", checkIndex))
+					return StatusUnhealthy, fmt.Errorf("check %d failed", checkIndex)
 				case 3:
 					// Panic
 					panic(fmt.Sprintf("check %d panicked", checkIndex))
@@ -335,7 +345,7 @@ func TestConcurrentHealthChecks(t *testing.T) {
 }
 
 func TestConcurrentEventSubscription(t *testing.T) {
-	monitor := New(Config{Enabled: true, SafeExecute: true})
+	monitor := New(Config{Enabled: true, SafeExecute: true, EventBufferSize: 10000})
 	
 	const numHandlers = 15
 	const numEmitters = 5
@@ -405,7 +415,9 @@ func TestConcurrentEventSubscription(t *testing.T) {
 	}
 	emitWg.Wait()
 	
-	time.Sleep(500 * time.Millisecond)
+	monitor.Close()
+	monitor.Wait()
+	time.Sleep(100 * time.Millisecond) // buffer for handlers
 	
 	expectedCalls := numEmitters * eventsPerEmitter
 	callMutex.Lock()
@@ -418,7 +430,7 @@ func TestConcurrentEventSubscription(t *testing.T) {
 }
 
 func TestMonitoringStressTest(t *testing.T) {
-	monitor := New(Config{Enabled: true, SafeExecute: true, HealthInterval: 0})
+	monitor := New(Config{Enabled: true, SafeExecute: true, HealthInterval: 0, EventBufferSize: 10000})
 	
 	const duration = 100 * time.Millisecond
 	const numWorkers = 10
@@ -493,7 +505,13 @@ func TestMonitoringStressTest(t *testing.T) {
 	close(stopChan)
 	wg.Wait()
 	
-	time.Sleep(50 * time.Millisecond)
+	monitor.Close()
+	monitor.Wait()
+	
+	// Give handlers launched by worker a moment to finish (since they are goroutines)
+	// Or we should wait for them. But we don't track them.
+	// For now, a small sleep is still needed for *handlers* to finish, but queue is drained.
+	time.Sleep(100 * time.Millisecond)
 	
 	mu.Lock()
 	defer mu.Unlock()

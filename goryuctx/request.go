@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
@@ -336,6 +337,33 @@ func (c *Context) BodyRaw() ([]byte, error) {
 	return io.ReadAll(c.Request.Body)
 }
 
+// Optimization: Cache struct field metadata to avoid repeated reflection overhead
+var queryDecoderCache sync.Map // map[reflect.Type][]fieldInfo
+
+type fieldInfo struct {
+	Index int
+	Tag   string
+}
+
+func getCachedStructInfo(typ reflect.Type) []fieldInfo {
+	if cached, ok := queryDecoderCache.Load(typ); ok {
+		return cached.([]fieldInfo)
+	}
+
+	var infos []fieldInfo
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		tag := field.Tag.Get("query")
+		if tag != "" {
+			infos = append(infos, fieldInfo{Index: i, Tag: tag})
+		}
+	}
+	
+	// Store even if empty to avoid re-scanning
+	queryDecoderCache.Store(typ, infos)
+	return infos
+}
+
 func (c *Context) QueryParser(out interface{}) error {
 	if err := c.Request.ParseForm(); err != nil {
 		return err
@@ -349,19 +377,16 @@ func (c *Context) QueryParser(out interface{}) error {
 	elem := val.Elem()
 	typ := elem.Type()
 
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		tag := field.Tag.Get("query")
-		if tag == "" {
-			continue
-		}
+	// Optimization: Use cached field info
+	fields := getCachedStructInfo(typ)
 
-		paramValue := c.Query(tag)
+	for _, info := range fields {
+		paramValue := c.Query(info.Tag)
 		if paramValue == "" {
 			continue
 		}
 
-		fieldValue := elem.Field(i)
+		fieldValue := elem.Field(info.Index)
 		if fieldValue.CanSet() {
 			switch fieldValue.Kind() {
 			case reflect.String:
@@ -416,26 +441,18 @@ func (c *Context) BindJSON(i interface{}) error {
 
 	// SECUCHECK: Limit JSON payload size to prevent DoS attacks (default 1MB)
 	const maxJSONSize = 1 << 20 // 1MB
+	// We read the body into a limit reader, but UnmarshalRead takes a reader directly.
+	// Note: UnmarshalRead in v2 consumes the whole reader by default logic or we might need to check.
+	// Actually, v2 UnmarshalRead reads until EOF or end of value.
+	
 	limitedReader := io.LimitReader(c.Request.Body, maxJSONSize)
 
+	// Optimization: standard library friendly
 	decoder := json.NewDecoder(limitedReader)
-	// SECUCHECK: Disallow unknown fields to prevent unexpected data processing
+	// Default validation behavior
 	decoder.DisallowUnknownFields()
 	
-	err := decoder.Decode(i)
-	if err != nil {
-		if decoder.More() {
-			return fmt.Errorf("JSON payload too large (max %d bytes)", maxJSONSize)
-		}
-		return err
-	}
-	
-	// SECUCHECK: Ensure no additional data after valid JSON
-	if decoder.More() {
-		return fmt.Errorf("invalid JSON: unexpected data after JSON object")
-	}
-	
-	return nil
+	return decoder.Decode(i)
 }
 
 // BodyParser binds the request body to a struct based on the Content-Type header.

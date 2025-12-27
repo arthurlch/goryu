@@ -103,6 +103,10 @@ type Monitor struct {
 	eventHandlers []func(Event)
 	enabled       bool
 	safeExecute   bool
+	
+	// Optimization: Async event processing
+	eventsChan chan Event
+	done       chan struct{}
 }
 
 type Config struct {
@@ -111,15 +115,18 @@ type Config struct {
 	HealthInterval time.Duration `json:"health_interval"`
 	MetricsEnabled bool          `json:"metrics_enabled"`
 	SafeExecute    bool          `json:"safe_execute"`
+	// Optimization: Buffer size for processing channel
+	EventBufferSize int           `json:"event_buffer_size"`
 }
 
 func New(config ...Config) *Monitor {
 	cfg := Config{
-		Enabled:        true,
-		MaxEvents:      1000,
-		HealthInterval: 30 * time.Second,
-		MetricsEnabled: true,
-		SafeExecute:    true,
+		Enabled:         true,
+		MaxEvents:       1000,
+		HealthInterval:  30 * time.Second,
+		MetricsEnabled:  true,
+		SafeExecute:     true,
+		EventBufferSize: 1000, // Default buffer size
 	}
 	if len(config) > 0 {
 		cfg = config[0]
@@ -128,6 +135,9 @@ func New(config ...Config) *Monitor {
 		}
 		if cfg.HealthInterval == 0 {
 			cfg.HealthInterval = 30 * time.Second
+		}
+		if cfg.EventBufferSize == 0 {
+			cfg.EventBufferSize = 1000
 		}
 		if !cfg.Enabled {
 			if cfg.MaxEvents != 0 || cfg.HealthInterval != 0 || cfg.MetricsEnabled || cfg.SafeExecute {
@@ -151,7 +161,13 @@ func New(config ...Config) *Monitor {
 			MiddlewareMetrics: make(map[string]*MiddlewareMetric),
 			StatusCodeCounts:  make(map[int]int64),
 		},
+		// Initialize async channels
+		eventsChan: make(chan Event, cfg.EventBufferSize),
+		done:       make(chan struct{}),
 	}
+
+	// Start processing worker
+	go m.processEventsWorker()
 
 	if cfg.MetricsEnabled {
 		go m.updateMetrics()
@@ -165,6 +181,40 @@ func New(config ...Config) *Monitor {
 	return m
 }
 
+func (m *Monitor) processEventsWorker() {
+	defer close(m.done) // Signal completion when channel is closed and drained
+	for event := range m.eventsChan {
+		m.mu.Lock()
+		if len(m.events) >= m.maxEvents {
+			m.events = m.events[1:]
+		}
+		m.events = append(m.events, event)
+		m.mu.Unlock()
+
+		m.mu.RLock()
+		handlers := make([]func(Event), len(m.eventHandlers))
+		copy(handlers, m.eventHandlers)
+		m.mu.RUnlock()
+
+		// Executing handlers is also moved off the request path
+		for _, handler := range handlers {
+			// Still launch goroutines for handlers to prevent one blocking the worker
+			go m.safeExecuteEventHandler(handler, event)
+		}
+	}
+}
+
+// Close gracefully shuts down the monitor
+func (m *Monitor) Close() {
+	close(m.eventsChan)
+	// Do not close done here, let worker close it
+}
+
+// Wait blocks until the monitor worker has finished processing events
+func (m *Monitor) Wait() {
+	<-m.done
+}
+
 func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 	if !m.safeExecute {
 		handler(event)
@@ -174,23 +224,13 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Event handler panicked: %v", r)
-			errorEvent := Event{
-				ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
-				Type:      EventError,
-				Timestamp: time.Now(),
-				Message:   "Event handler panicked",
-				Data: map[string]interface{}{
-					"original_event": event,
-					"panic_value":    fmt.Sprintf("%v", r),
-					"handler_error":  true,
-				},
+			
+			// Restore functionality: Emit error event
+			data := map[string]interface{}{
+				"panic_value":   fmt.Sprintf("%v", r),
+				"handler_error": true,
 			}
-			m.mu.Lock()
-			if len(m.events) >= m.maxEvents {
-				m.events = m.events[1:]
-			}
-			m.events = append(m.events, errorEvent)
-			m.mu.Unlock()
+			m.EmitEvent(EventError, "Event handler panicked", data)
 		}
 	}()
 	
@@ -280,22 +320,29 @@ func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string
 	}
 
 	event := Event{
-		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+		// Optimization: Use strconv instead of fmt.Sprintf
+		ID:        strconv.FormatInt(time.Now().UnixNano(), 10),
 		Type:      eventType,
 		Timestamp: time.Now(),
 		Message:   message,
 		Data:      data,
 	}
 
-	m.mu.Lock()
-	if len(m.events) >= m.maxEvents {
-		m.events = m.events[1:]
-	}
-	m.events = append(m.events, event)
-	m.mu.Unlock()
-
-	for _, handler := range m.eventHandlers {
-		go m.safeExecuteEventHandler(handler, event)
+	// Non-blocking send (optional: drop event if channel full to preserve performance)
+	// Non-blocking send (optional: drop event if channel full to preserve performance)
+	// Also protect against send on closed channel
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Failed to emit event (monitor closed): %s", message)
+		}
+	}()
+	
+	select {
+	case m.eventsChan <- event:
+		// Sent
+	default:
+		// Channel full, drop event to prevent blocking application
+		log.Printf("Monitor event buffer full, dropping event: %s", message)
 	}
 }
 

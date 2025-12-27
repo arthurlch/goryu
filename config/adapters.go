@@ -11,20 +11,19 @@ func NewFrameworkAdapter(config *Config) *FrameworkAdapter {
 	}
 }
 
-func (a *FrameworkAdapter) ToGoryuConfig() interface{} {
-	// Gotta return an interface because I don't want to import goryu package here
-	// to avoid circular dependencies. The caller should type assert this. Had some issues here due to circular imports,
-	// wish earth was flat like my imports
-	
-	return struct {
-		AppName               string
-		ServerHeader          string
-		StrictRouting         bool
-		CaseSensitive         bool
-		DisableStartupMessage bool
-		RedirectTrailingSlash *bool
-		EnableHEADFallback    *bool
-	}{
+// GoryuConfigCompatibility matches goryu.Config fields to avoid circular imports
+type GoryuConfigCompatibility struct {
+	AppName               string
+	ServerHeader          string
+	StrictRouting         bool
+	CaseSensitive         bool
+	DisableStartupMessage bool
+	RedirectTrailingSlash *bool
+	EnableHEADFallback    *bool
+}
+
+func (a *FrameworkAdapter) ToGoryuConfig() GoryuConfigCompatibility {
+	return GoryuConfigCompatibility{
 		AppName:               a.config.App.Name,
 		ServerHeader:          a.config.Framework.ServerHeader,
 		StrictRouting:         a.config.Framework.StrictRouting,
@@ -33,6 +32,11 @@ func (a *FrameworkAdapter) ToGoryuConfig() interface{} {
 		RedirectTrailingSlash: &a.config.Framework.RedirectTrailingSlash,
 		EnableHEADFallback:    &a.config.Framework.EnableHEADFallback,
 	}
+}
+
+// ToGoryuConfig converts Config to GoryuConfigCompatibility for use in main.go
+func (c *Config) ToGoryuConfig() GoryuConfigCompatibility {
+	return NewFrameworkAdapter(c).ToGoryuConfig()
 }
 
 func (a *FrameworkAdapter) GetServerConfig() ServerConfig {

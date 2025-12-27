@@ -343,21 +343,9 @@ func TestConfigHelpers(t *testing.T) {
 		adapter := NewFrameworkAdapter(config)
 		goryuCfg := adapter.ToGoryuConfig()
 		
-		// Type assert the interface{} back to a struct for testing
-		if goryuStruct, ok := goryuCfg.(struct {
-			AppName               string
-			ServerHeader          string
-			StrictRouting         bool
-			CaseSensitive         bool
-			DisableStartupMessage bool
-			RedirectTrailingSlash *bool
-			EnableHEADFallback    *bool
-		}); ok {
-			if goryuStruct.AppName != "test-app" {
-				t.Errorf("Expected AppName 'test-app', got '%s'", goryuStruct.AppName)
-			}
-		} else {
-			t.Error("Failed to type assert goryu config")
+		// No type assertion needed, directly access fields
+		if goryuCfg.AppName != "test-app" {
+			t.Errorf("Expected AppName 'test-app', got '%s'", goryuCfg.AppName)
 		}
 	})
 }

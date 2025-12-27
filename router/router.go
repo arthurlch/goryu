@@ -88,15 +88,15 @@ func New(config ...RouterConfig) *Router {
 		HandleOPTIONS:          true,
 		EnableHEADFallback:     true,
 		ErrorMode:              RouterErrorModePanic, // Backward compatible default
-		MaxRouteDepth:          32,    // SECURITY: Reasonable default limit
-		MaxTotalRoutes:         10000, // SECURITY: Prevent memory exhaustion
-		MaxParametersPerRoute:  32,    // SECURITY: Prevent complex route attacks
+		MaxRouteDepth:          32,                   // SECURITY: Reasonable default limit
+		MaxTotalRoutes:         10000,                // SECURITY: Prevent memory exhaustion
+		MaxParametersPerRoute:  32,                   // SECURITY: Prevent complex route attacks
 	}
-	
+
 	if len(config) > 0 {
 		// Merge the provided config with defaults
 		userCfg := config[0]
-		
+
 		// Override only non-zero values to preserve defaults
 		if userCfg.ErrorMode != 0 {
 			cfg.ErrorMode = userCfg.ErrorMode
@@ -110,7 +110,7 @@ func New(config ...RouterConfig) *Router {
 		if userCfg.MaxParametersPerRoute != 0 {
 			cfg.MaxParametersPerRoute = userCfg.MaxParametersPerRoute
 		}
-		
+
 		// Boolean fields need special handling since false is a valid value
 		cfg.RedirectTrailingSlash = userCfg.RedirectTrailingSlash
 		cfg.RedirectFixedPath = userCfg.RedirectFixedPath
@@ -119,7 +119,7 @@ func New(config ...RouterConfig) *Router {
 		cfg.EnableHEADFallback = userCfg.EnableHEADFallback
 		cfg.StrictRouting = userCfg.StrictRouting
 	}
-	
+
 	r := &Router{
 		trees:       make(map[string]*node),
 		namedRoutes: make(map[string]*Route),
@@ -143,64 +143,50 @@ func (router *Router) Add(method, path string, handler goryuctx.HandlerFunc) *Ro
 	// SECURITY: Check total route limit
 	if router.totalRoutes >= router.Config.MaxTotalRoutes {
 		router.handleRouterError("Add", fmt.Sprintf("exceeded maximum number of routes (%d)", router.Config.MaxTotalRoutes))
-		// Return a dummy route to prevent nil pointer errors in non-panic modes
-		dummyRoute := &Route{Method: method, Path: path, Handler: handler}
-		dummyRoute.SetRouter(router)
-		return dummyRoute
+		// Return dummy route
+		return &Route{Method: method, Path: path}
 	}
-	
+
 	if path == "" || path[0] != '/' {
 		router.handleRouterError("Add", "path must begin with '/'")
-		// Return a dummy route to prevent nil pointer errors in non-panic modes
-		dummyRoute := &Route{Method: method, Path: path, Handler: handler}
-		dummyRoute.SetRouter(router)
-		return dummyRoute
+		return &Route{Method: method, Path: path}
 	}
-	
-	// SECURITY: Check route depth limit
-	parts := parsePath(path)
-	if len(parts) > router.Config.MaxRouteDepth {
-		router.handleRouterError("Add", fmt.Sprintf("route depth (%d) exceeds maximum allowed (%d)", len(parts), router.Config.MaxRouteDepth))
-		dummyRoute := &Route{Method: method, Path: path, Handler: handler}
-		dummyRoute.SetRouter(router)
-		return dummyRoute
-	}
-	
-	// SECURITY: Check parameter count limit
-	paramCount := 0
-	for _, part := range parts {
-		if strings.HasPrefix(part, ":") || strings.HasPrefix(part, "*") {
-			paramCount++
-		}
-	}
-	if paramCount > router.Config.MaxParametersPerRoute {
-		router.handleRouterError("Add", fmt.Sprintf("route has too many parameters (%d) exceeds maximum allowed (%d)", paramCount, router.Config.MaxParametersPerRoute))
-		dummyRoute := &Route{Method: method, Path: path, Handler: handler}
-		dummyRoute.SetRouter(router)
-		return dummyRoute
-	}
-	
+
 	if _, ok := router.trees[method]; !ok {
 		router.trees[method] = &node{}
 	}
-	
-	// Store whether path has trailing slash
-	hasTrailingSlash := len(path) > 1 && path[len(path)-1] == '/'
-	
-	// For StrictRouting mode, preserve the trailing slash distinction
-	// Otherwise, normalize the path
-	normalizedPath := path
-	if !router.Config.StrictRouting && hasTrailingSlash {
-		normalizedPath = path[:len(path)-1]
-	}
-	
+
 	route := &Route{Method: method, Path: path, Handler: handler}
 	route.SetRouter(router)
-	router.trees[method].insert(normalizedPath, parts, 0, route, hasTrailingSlash, router)
-	
-	// SECURITY: Increment route counter
+
+	// Delegate insertion to Radix Tree node
+	if err := router.trees[method].addRoute(path, handler, route); err != nil {
+		router.handleRouterError("Add", err.Error())
+		// If logging/silent, we must return something valid-ish or the dummy
+		// Actually if error, route is not added.
+	}
+
+	// Parse parameters for the Route object
+	// This allows Context.Param() to map values (collected during traversal) to names
+	for i, l := 0, len(path); i < l; i++ {
+		if path[i] == ':' {
+			j := i + 1
+			for j < l && path[j] != '/' {
+				j++
+			}
+			route.ParamNames = append(route.ParamNames, path[i+1:j])
+			i = j - 1 // -1 because loop increments
+		} else if path[i] == '*' {
+			j := i + 1
+			for j < l && path[j] != '/' {
+				j++
+			}
+			route.ParamNames = append(route.ParamNames, path[i+1:j])
+			i = j - 1
+		}
+	}
+
 	router.totalRoutes++
-	
 	return route
 }
 
@@ -248,12 +234,12 @@ func (rc *RouteCollection) SetName(name string) *RouteCollection {
 func (router *Router) ALL(path string, handler goryuctx.HandlerFunc) *RouteCollection {
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 	routes := make([]*Route, 0, len(methods))
-	
+
 	for _, method := range methods {
 		route := router.Add(method, path, handler)
 		routes = append(routes, route)
 	}
-	
+
 	return &RouteCollection{
 		Routes: routes,
 		Path:   path,
@@ -299,135 +285,133 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := goryuctx.NewContext(w, r)
 	defer ctx.Release()
 	path := r.URL.Path
-	method := r.Method
 
-	// Store whether path has trailing slash before parsing
-	hasTrailingSlash := len(path) > 1 && path[len(path)-1] == '/'
+	if root := router.trees[r.Method]; root != nil {
+		// RADIX OPTIMIZATION: Direct lookup without recursion or stack
+		handler, route, params, tsr := root.getValue(path, ctx.ParamValues, false)
 
-	// Try to find exact match first
-	if tree, ok := router.trees[method]; ok {
-		parts := parsePath(path)
-		if foundNode, params, foundRoute := tree.find(parts, 0, hasTrailingSlash, router.Config.StrictRouting); foundNode != nil && foundRoute != nil {
-			ctx.Params = params
-			ctx.Route = foundRoute
-			if handler, ok := foundRoute.Handler.(goryuctx.HandlerFunc); ok {
-				handler(ctx)
-			}
+		if handler != nil {
+			ctx.ParamValues = params
+			ctx.Route = route
+			handler(ctx)
 			return
-		}
-	}
-
-	// Handle HEAD method fallback to GET if enabled
-	if method == http.MethodHead && router.Config.EnableHEADFallback {
-		if tree, ok := router.trees[http.MethodGet]; ok {
-			parts := parsePath(path)
-			if foundNode, params, foundRoute := tree.find(parts, 0, hasTrailingSlash, router.Config.StrictRouting); foundNode != nil && foundRoute != nil {
-				ctx.Params = params
-				ctx.Route = foundRoute
-				if handler, ok := foundRoute.Handler.(goryuctx.HandlerFunc); ok {
-					handler(ctx)
+		} else if method := r.Method; method != "CONNECT" && path != "/" {
+			// Redirect Trailing Slash
+			if router.Config.RedirectTrailingSlash && tsr {
+				code := 301 // Permanent redirect, request with GET method
+				if method != "GET" {
+					code = 308
 				}
+
+				if len(path) > 1 && path[len(path)-1] == '/' {
+					r.URL.Path = path[:len(path)-1]
+				} else {
+					r.URL.Path = path + "/"
+				}
+				http.Redirect(w, r, r.URL.String(), code)
+				return
+			}
+		}
+
+		// Try to fix the request path (StrictRouting disabled)
+		if !router.Config.StrictRouting && path != "/" {
+			fixedPath := path
+			if len(path) > 1 && path[len(path)-1] == '/' {
+				fixedPath = path[:len(path)-1]
+			} else {
+				fixedPath = path + "/"
+			}
+
+			handler, route, params, _ := root.getValue(fixedPath, nil, false)
+			if handler != nil {
+				ctx.ParamValues = params
+				ctx.Route = route
+				handler(ctx)
 				return
 			}
 		}
 	}
 
-	// Handle trailing slash redirect if enabled
-	if router.Config.RedirectTrailingSlash {
-		// Try alternate path (with or without trailing slash)
-		var alternatePath string
-		if hasTrailingSlash {
-			alternatePath = path[:len(path)-1]
-		} else if path != "/" {
-			alternatePath = path + "/"
-		}
-		
-		if alternatePath != "" {
-			if tree, ok := router.trees[method]; ok {
-				parts := parsePath(alternatePath)
-				// Use opposite trailing slash for alternate path
-				altHasSlash := !hasTrailingSlash
-				if _, _, foundRoute := tree.find(parts, 0, altHasSlash, router.Config.StrictRouting); foundRoute != nil {
-					// Redirect to alternate path
-					code := http.StatusMovedPermanently // 301
-					if method != http.MethodGet {
-						code = http.StatusPermanentRedirect // 308
-					}
-					
-					redirectURL := alternatePath
-					if r.URL.RawQuery != "" {
-						redirectURL += "?" + r.URL.RawQuery
-					}
-					
-					http.Redirect(w, r, redirectURL, code)
-					return
-				}
+	// Fallback for HEAD -> GET (outside of tree check loop)
+	if r.Method == "HEAD" && router.Config.EnableHEADFallback {
+		// If we haven't found a HEAD handler (handler is nil above), try GET
+		// But note: if we found a HEAD tree but no handler, we are here.
+		// If we didn't find a HEAD tree, we are here.
+		// So checking GET tree is correct.
+		if root := router.trees["GET"]; root != nil {
+			handler, route, params, _ := root.getValue(path, ctx.ParamValues, false)
+			if handler != nil {
+				ctx.ParamValues = params
+				ctx.Route = route
+				handler(ctx)
+				return
 			}
 		}
 	}
 
-	// Handle automatic OPTIONS response
-	if method == http.MethodOptions && router.Config.HandleOPTIONS {
-		allowed := router.calculateAllowedMethods(path)
-		if len(allowed) > 0 {
-			w.Header().Set("Allow", strings.Join(allowed, ", "))
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-	}
-
-	// Check if method not allowed
+	// Handle 405 Method Not Allowed
 	if router.Config.HandleMethodNotAllowed {
 		allowed := router.calculateAllowedMethods(path)
 		if len(allowed) > 0 {
-			router.MethodNotAllowed(ctx)
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
+			if r.Method == "OPTIONS" && router.Config.HandleOPTIONS {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			if router.MethodNotAllowed != nil {
+				router.MethodNotAllowed(ctx)
+			} else {
+				http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			}
 			return
 		}
 	}
 
-	router.NotFound(ctx)
+	// 404 Not Found
+	if router.NotFound != nil {
+		router.NotFound(ctx)
+	} else {
+		http.NotFound(w, r)
+	}
 }
 
+// parsePath splits a URL path into segments using the provided buffer
+// Please don't mind the linter for unused ! 
+// Used by Add() to parse structure (legacy helper, maybe unused now but keeping for safety)
+func parsePath(path string, buf []string) []string {
+	if path == "/" {
+		return buf
+	}
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return buf
+	}
+	start := 0
+	for i := 0; i < len(path); i++ {
+		if path[i] == '/' {
+			buf = append(buf, path[start:i])
+			start = i + 1
+		}
+	}
+	buf = append(buf, path[start:])
+	return buf
+}
 
+// calculateAllowedMethods returns the allowed methods for a given path
 func (router *Router) calculateAllowedMethods(path string) []string {
 	allowed := make([]string, 0)
-	parts := parsePath(path)
-	hasTrailingSlash := len(path) > 1 && path[len(path)-1] == '/'
-	
-	// Check exact path
-	for method, tree := range router.trees {
-		if _, _, foundRoute := tree.find(parts, 0, hasTrailingSlash, router.Config.StrictRouting); foundRoute != nil {
+
+	for method, root := range router.trees {
+		handler, _, _, _ := root.getValue(path, nil, false)
+		if handler != nil {
 			allowed = append(allowed, method)
 		}
 	}
-	
-	// If RedirectTrailingSlash is enabled, also check alternate path
-	if router.Config.RedirectTrailingSlash && len(allowed) == 0 {
-		altHasSlash := !hasTrailingSlash
-		for method, tree := range router.trees {
-			if _, _, foundRoute := tree.find(parts, 0, altHasSlash, router.Config.StrictRouting); foundRoute != nil {
-				allowed = append(allowed, method)
-			}
-		}
+
+	if len(allowed) > 0 {
+		allowed = append(allowed, "OPTIONS")
 	}
-	
-	// Add HEAD if GET exists and EnableHEADFallback is true
-	if router.Config.EnableHEADFallback {
-		hasGet := false
-		hasHead := false
-		for _, m := range allowed {
-			if m == "GET" {
-				hasGet = true
-			}
-			if m == "HEAD" {
-				hasHead = true
-			}
-		}
-		if hasGet && !hasHead {
-			allowed = append(allowed, "HEAD")
-		}
-	}
-	
+
 	sort.Strings(allowed)
 	return allowed
 }
@@ -448,19 +432,38 @@ func (g *Group) add(method, path string, handler goryuctx.HandlerFunc) *Route {
 	return g.router.Add(method, fullPath, wrappedHandler)
 }
 
-func (g *Group) GET(path string, handler goryuctx.HandlerFunc) *Route     { return g.add("GET", path, handler) }
-func (g *Group) POST(path string, handler goryuctx.HandlerFunc) *Route    { return g.add("POST", path, handler) }
-func (g *Group) PUT(path string, handler goryuctx.HandlerFunc) *Route     { return g.add("PUT", path, handler) }
-func (g *Group) DELETE(path string, handler goryuctx.HandlerFunc) *Route  { return g.add("DELETE", path, handler) }
-func (g *Group) PATCH(path string, handler goryuctx.HandlerFunc) *Route   { return g.add("PATCH", path, handler) }
-func (g *Group) HEAD(path string, handler goryuctx.HandlerFunc) *Route    { return g.add("HEAD", path, handler) }
-func (g *Group) OPTIONS(path string, handler goryuctx.HandlerFunc) *Route { return g.add("OPTIONS", path, handler) }
+func (g *Group) GET(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("GET", path, handler)
+}
+func (g *Group) POST(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("POST", path, handler)
+}
+func (g *Group) PUT(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("PUT", path, handler)
+}
+func (g *Group) DELETE(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("DELETE", path, handler)
+}
+func (g *Group) PATCH(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("PATCH", path, handler)
+}
+func (g *Group) HEAD(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("HEAD", path, handler)
+}
+func (g *Group) OPTIONS(path string, handler goryuctx.HandlerFunc) *Route {
+	return g.add("OPTIONS", path, handler)
+}
 
 func (g *Group) wrapWithMiddleware(handler goryuctx.HandlerFunc) goryuctx.HandlerFunc {
 	for i := len(g.middlewares) - 1; i >= 0; i-- {
 		handler = g.middlewares[i](handler)
 	}
 	return handler
+}
+
+// Use adds middleware to the group
+func (g *Group) Use(middlewares ...goryuctx.Middleware) {
+	g.middlewares = append(g.middlewares, middlewares...)
 }
 
 // RouteInfo holds information about a registered route
@@ -484,7 +487,7 @@ func (router *Router) Routes() []RouteInfo {
 			})
 		})
 	}
-	
+
 	// Sort for consistent output
 	sort.Slice(routes, func(i, j int) bool {
 		if routes[i].Path == routes[j].Path {

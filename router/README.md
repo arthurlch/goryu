@@ -4,7 +4,7 @@ The `router` package implements a high-performance, radix tree-based HTTP router
 
 ## Features
 
-- **Radix Tree**: Efficient routing algorithm for fast path matching.
+- **Fast**: Efficient routing algorithm for fast path matching (Radix tree).
 - **Parameters**: Named parameters like `/users/:id`.
 - **Wildcards**: Catch-all routes like `/files/*path`.
 - **Groups**: Organize routes with common prefixes and middlewares.

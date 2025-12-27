@@ -179,7 +179,7 @@ func TestRouterWildcardErrors(t *testing.T) {
 				t.Error("Expected panic for wildcard not at end in panic mode")
 			} else {
 				errStr := r.(string)
-				if !strings.Contains(errStr, "wildcard must be at the end of the path") {
+				if !strings.Contains(errStr, "catch-all routes are only allowed at the end of the path") {
 					t.Errorf("Expected specific error message, got: %s", errStr)
 				}
 			}
@@ -204,7 +204,7 @@ func TestRouterWildcardErrors(t *testing.T) {
 		if !strings.Contains(logOutput, "Router error") {
 			t.Errorf("Expected error to be logged, got: %s", logOutput)
 		}
-		if !strings.Contains(logOutput, "wildcard must be at the end of the path") {
+		if !strings.Contains(logOutput, "catch-all routes are only allowed at the end of the path") {
 			t.Errorf("Expected specific error message in log, got: %s", logOutput)
 		}
 	})

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/arthurlch/goryu/internal/utils"
 )
 
 // thats the heaviest feature asofnow
@@ -174,6 +176,12 @@ func cmdScaffoldAPI(ctx *Context) error {
 
 	fieldList := parseFields(fields)
 	
+	moduleName, err := utils.GetModuleName()
+	if err != nil {
+		moduleName = "myapp"
+		fmt.Printf("⚠️  Warning: could not determine module name: %v using 'myapp'\n", err)
+	}
+
 	fmt.Println("\n📦 Generating model...")
 	modelType := "basic"
 	if includeDB {
@@ -193,35 +201,38 @@ func cmdScaffoldAPI(ctx *Context) error {
 	if includeAuth {
 		middlewareList = "auth"
 	}
+	// Validation is handled explicitly in handlers, not as middleware
+	/*
 	if includeValidation {
 		if middlewareList != "" {
 			middlewareList += ","
 		}
 		middlewareList += "validator"
 	}
+	*/
 	
 	routeGroup := fmt.Sprintf("/api/%s", strings.ToLower(resource))
-	if err := generateRouteConfig(resource, true, routeGroup, middlewareList, "GET,POST,PUT,DELETE"); err != nil {
+	if err := generateAPIRoutes(resource, moduleName, middlewareList); err != nil {
 		return fmt.Errorf("failed to generate routes: %w", err)
 	}
 
 	if includeDB {
 		fmt.Println("\n🗄️  Generating repository...")
-		if err := generateRepository(resource, fieldList); err != nil {
+		if err := generateRepository(resource, fieldList, moduleName); err != nil {
 			return fmt.Errorf("failed to generate repository: %w", err)
 		}
 	}
 
 	if includeValidation {
 		fmt.Println("\n✅ Generating validation...")
-		if err := generateValidation(resource, fieldList); err != nil {
+		if err := generateValidation(resource, fieldList, moduleName); err != nil {
 			return fmt.Errorf("failed to generate validation: %w", err)
 		}
 	}
 
 	if includeTests {
 		fmt.Println("\n🧪 Generating tests...")
-		if err := generateAPITests(resource, fieldList); err != nil {
+		if err := generateAPITests(resource, fieldList, moduleName); err != nil {
 			return fmt.Errorf("failed to generate tests: %w", err)
 		}
 	}
@@ -684,11 +695,20 @@ func generateRouteConfig(name string, useBuilder bool, group, middleware, method
 
 	filename := filepath.Join(routesDir, strings.ToLower(name)+".go")
 	
+	moduleName, err := utils.GetModuleName()
+	if err != nil {
+		// Fallback or error? defaulting to myapp allows testing without go.mod but prints warning?
+		// Better to require go.mod for code generation usually.
+		// For now default to myapp if fails, but in real usage it should probably fail.
+		moduleName = "myapp" 
+		fmt.Printf("⚠️  Warning: could not determine module name: %v using 'myapp'\n", err)
+	}
+
 	var content string
 	if useBuilder {
-		content = generateRouteBuilderContent(name, group, middleware, methods)
+		content = generateRouteBuilderContent(name, group, middleware, methods, moduleName)
 	} else {
-		content = generateStandardRouteContent(name, group, middleware, methods)
+		content = generateStandardRouteContent(name, group, middleware, methods, moduleName)
 	}
 
 	return os.WriteFile(filename, []byte(content), 0644)

@@ -8,9 +8,54 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
+
+	"github.com/arthurlch/goryu/internal/bytesconv"
+	goryujson "github.com/arthurlch/goryu/internal/json"
 )
+
+// isComplexObject determines if an object is complex enough to benefit from sonic
+func isComplexObject(obj interface{}) bool {
+	// Quick type assertions for common cases to avoid reflection overhead
+	switch v := obj.(type) {
+	case map[string]string:
+		return len(v) > 3
+	case map[string]interface{}:
+		return len(v) > 3
+	case []string:
+		return len(v) > 5
+	case []interface{}:
+		return len(v) > 5
+	case []int:
+		return len(v) > 5
+	case string, int, int32, int64, float32, float64, bool:
+		return false
+	default:
+		// Fall back to reflection for unknown types
+		if obj == nil {
+			return false
+		}
+		
+		rv := reflect.ValueOf(obj)
+		switch rv.Kind() {
+		case reflect.Struct:
+			return rv.Type().NumField() > 3
+		case reflect.Map:
+			return rv.Len() > 3
+		case reflect.Slice, reflect.Array:
+			return rv.Len() > 5
+		case reflect.Ptr, reflect.Interface:
+			if rv.IsNil() {
+				return false
+			}
+			return isComplexObject(rv.Elem().Interface())
+		default:
+			return false
+		}
+	}
+}
 
 func (c *Context) SetHeader(key string, value string) error {
 	return c.safeExecute("SetHeader", HeaderError, func() error {
@@ -20,13 +65,75 @@ func (c *Context) SetHeader(key string, value string) error {
 }
 
 func (c *Context) JSON(code int, obj interface{}) error {
+	// Fast path for non-panic mode
+	if c.GetErrorHandlingMode() == ErrorModeReturn {
+		c.Writer.Header().Set("Content-Type", "application/json")
+		c.Writer.WriteHeader(code)
+		
+		// Smart JSON selection: use sonic for complex objects, standard for simple ones
+		var data []byte
+		var err error
+		if isComplexObject(obj) {
+			// Use sonic for complex/large objects
+			data, err = goryujson.Default.Marshal(obj)
+		} else {
+			// Use standard library for simple objects
+			data, err = json.Marshal(obj)
+		}
+		if err != nil {
+			responseErr := &ResponseError{
+				Type:      SerializationError,
+				Operation: "JSON",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+			return c.handleResponseError("JSON", responseErr, SerializationError)
+		}
+		
+		_, err = c.Writer.Write(data)
+		if err != nil {
+			responseErr := &ResponseError{
+				Type:      WriteError,
+				Operation: "JSON",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+			return c.handleResponseError("JSON", responseErr, WriteError)
+		}
+		return nil
+	}
+	
+	// Slow path with panic recovery
 	return c.safeExecute("JSON", SerializationError, func() error {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Writer.WriteHeader(code)
-		enc := json.NewEncoder(c.Writer)
-		if err := enc.Encode(obj); err != nil {
+		
+		// Smart JSON selection: use sonic for complex objects, standard for simple ones
+		var data []byte
+		var err error
+		if isComplexObject(obj) {
+			// Use sonic for complex/large objects
+			data, err = goryujson.Default.Marshal(obj)
+		} else {
+			// Use standard library for simple objects
+			data, err = json.Marshal(obj)
+		}
+		if err != nil {
 			return &ResponseError{
 				Type:      SerializationError,
+				Operation: "JSON",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+		}
+		
+		_, err = c.Writer.Write(data)
+		if err != nil {
+			return &ResponseError{
+				Type:      WriteError,
 				Operation: "JSON",
 				Err:       err,
 				Code:      code,
@@ -38,10 +145,29 @@ func (c *Context) JSON(code int, obj interface{}) error {
 }
 
 func (c *Context) Text(code int, text string) error {
+	// Fast path for non-panic mode
+	if c.GetErrorHandlingMode() == ErrorModeReturn {
+		c.Writer.Header().Set("Content-Type", "text/plain")
+		c.Writer.WriteHeader(code)
+		_, err := c.Writer.Write(bytesconv.StringToBytes(text))
+		if err != nil {
+			responseErr := &ResponseError{
+				Type:      WriteError,
+				Operation: "Text",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+			return c.handleResponseError("Text", responseErr, WriteError)
+		}
+		return nil
+	}
+	
+	// Slow path with panic recovery
 	return c.safeExecute("Text", WriteError, func() error {
 		c.Writer.Header().Set("Content-Type", "text/plain")
 		c.Writer.WriteHeader(code)
-		_, err := c.Writer.Write([]byte(text))
+		_, err := c.Writer.Write(bytesconv.StringToBytes(text))
 		if err != nil {
 			return &ResponseError{
 				Type:      WriteError,
@@ -53,6 +179,79 @@ func (c *Context) Text(code int, text string) error {
 		}
 		return nil
 	})
+}
+
+// JSONHeavy is optimized for complex/large JSON objects using the configured JSON engine
+func (c *Context) JSONHeavy(code int, obj interface{}) error {
+	// Fast path for non-panic mode
+	if c.GetErrorHandlingMode() == ErrorModeReturn {
+		c.Writer.Header().Set("Content-Type", "application/json")
+		c.Writer.WriteHeader(code)
+		
+		// Use configured JSON engine for potentially better performance on large objects
+		data, err := goryujson.Default.Marshal(obj)
+		if err != nil {
+			responseErr := &ResponseError{
+				Type:      SerializationError,
+				Operation: "JSONHeavy",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+			return c.handleResponseError("JSONHeavy", responseErr, SerializationError)
+		}
+		
+		_, err = c.Writer.Write(data)
+		if err != nil {
+			responseErr := &ResponseError{
+				Type:      WriteError,
+				Operation: "JSONHeavy",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+			return c.handleResponseError("JSONHeavy", responseErr, WriteError)
+		}
+		return nil
+	}
+	
+	// Slow path with panic recovery
+	return c.safeExecute("JSONHeavy", SerializationError, func() error {
+		c.Writer.Header().Set("Content-Type", "application/json")
+		c.Writer.WriteHeader(code)
+		
+		// Use configured JSON engine
+		data, err := goryujson.Default.Marshal(obj)
+		if err != nil {
+			return &ResponseError{
+				Type:      SerializationError,
+				Operation: "JSONHeavy",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+		}
+		
+		_, err = c.Writer.Write(data)
+		if err != nil {
+			return &ResponseError{
+				Type:      WriteError,
+				Operation: "JSONHeavy",
+				Err:       err,
+				Code:      code,
+				Critical:  true,
+			}
+		}
+		return nil
+	})
+}
+
+// WriteString is a fast, minimal method for writing strings without safety checks
+// this is for maximum performance when we know the response won't fail
+func (c *Context) WriteString(code int, s string) {
+	c.Writer.Header().Set("Content-Type", "text/plain")
+	c.Writer.WriteHeader(code)
+	c.Writer.Write(bytesconv.StringToBytes(s))
 }
 
 func (c *Context) Data(code int, contentType string, data []byte) error {
