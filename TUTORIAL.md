@@ -3,7 +3,7 @@
 Build a production-ready Todo API in 5 minutes using Goryu.
 
 ## Prerequisites
-- Go 1.21+
+- Go 1.24+
 - The Goryu CLI installed:
   ```bash
   go install github.com/arthurlch/goryu/cmd/goryu@latest

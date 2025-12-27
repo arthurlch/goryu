@@ -7,7 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings" // Added sync import
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/arthurlch/goryu/config/builder"
@@ -68,6 +69,7 @@ type Config struct {
 type App struct {
 	Router      *router.Router
 	server      *http.Server
+	serverMu    sync.RWMutex // Protect concurrent access to server
 	middlewares []Middleware
 	Config      Config
 	mountPath   string
@@ -555,8 +557,12 @@ func (app *App) Listen(addr string) error {
 		app.printStartupMessage(addr)
 	}
 
+	app.serverMu.Lock()
 	app.server = &http.Server{Addr: addr, Handler: app}
-	return app.server.ListenAndServe()
+	server := app.server
+	app.serverMu.Unlock()
+	
+	return server.ListenAndServe()
 }
 
 func (app *App) printStartupMessage(addr string) {
@@ -611,13 +617,19 @@ func (app *App) Shutdown() error {
 }
 
 func (app *App) ShutdownWithContext(ctx context.Context) error {
-	if app.server == nil {
+	app.serverMu.RLock()
+	server := app.server
+	app.serverMu.RUnlock()
+	
+	if server == nil {
 		return fmt.Errorf("server is not running")
 	}
-	return app.server.Shutdown(ctx)
+	return server.Shutdown(ctx)
 }
 
 func (app *App) Server() *http.Server {
+	app.serverMu.RLock()
+	defer app.serverMu.RUnlock()
 	return app.server
 }
 

@@ -60,8 +60,8 @@ jobs:
 
     - name: Test CLI
       run: |
-        chmod +x internal/cli/test_cli.sh
-        ./internal/cli/test_cli.sh
+        chmod +x test_cli.sh
+        ./test_cli.sh
 
     - name: Stress & Memory Tests
       run: go test -v ./tests/stress/...
