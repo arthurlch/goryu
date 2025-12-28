@@ -45,14 +45,14 @@ func newSafeTestContext(req *http.Request) (*context.Context, *safeResponseRecor
 	rr := httptest.NewRecorder()
 	srr := &safeResponseRecorder{ResponseRecorder: rr}
 	ctx := context.NewContext(srr, req)
-	
+
 	// Return a function to safely get the results
 	getResults := func() (int, string) {
 		srr.mu.Lock()
 		defer srr.mu.Unlock()
 		return rr.Code, rr.Body.String()
 	}
-	
+
 	return ctx, srr, getResults
 }
 func TestTimeoutMiddleware(t *testing.T) {
@@ -202,10 +202,10 @@ func TestTimeoutMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		ctx, _, getResults := newSafeTestContext(req)
 		middleware(handler)(ctx)
-		
+
 		// Wait a bit to ensure any lingering goroutines finish
 		time.Sleep(150 * time.Millisecond)
-		
+
 		code, body := getResults()
 		if code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", code)

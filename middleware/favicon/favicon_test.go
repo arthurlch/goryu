@@ -15,6 +15,19 @@ func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseReco
 	return context.NewContext(rr, req), rr
 }
 func TestFaviconMiddleware(t *testing.T) {
+	// Helper function to check if middleware creation failed
+	isErrorMiddleware := func(middleware func(next context.HandlerFunc) context.HandlerFunc) bool {
+		testCalled := false
+		handler := func(c *context.Context) {
+			testCalled = true
+			c.Text(http.StatusOK, "test")
+		}
+		req := httptest.NewRequest("GET", "/favicon.ico", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		// If status is 500 and handler wasn't called, it's the error middleware
+		return rr.Code >= 500 && !testCalled
+	}
 	t.Run("DefaultConfigNoFile", func(t *testing.T) {
 		middleware := favicon.New(favicon.Config{})
 		handler := func(c *context.Context) {
@@ -49,26 +62,42 @@ func TestFaviconMiddleware(t *testing.T) {
 		if err := os.WriteFile(faviconFile, faviconData, 0644); err != nil {
 			t.Fatalf("Could not create test favicon file: %v", err)
 		}
+
+		// Verify file was created and is readable
+		if _, err := os.Stat(faviconFile); err != nil {
+			t.Fatalf("Favicon file not found after creation: %v", err)
+		}
+
+		// Create middleware after file is confirmed to exist
 		middleware := favicon.New(favicon.Config{
 			File:      faviconFile,
 			CacheFile: true,
 		})
+
+		// Check if middleware creation failed
+		if isErrorMiddleware(middleware) {
+			t.Fatal("Middleware creation failed - file loading error")
+		}
+
 		handler := func(c *context.Context) {
 			c.Text(http.StatusOK, "Should not reach here")
 		}
 		req := httptest.NewRequest("GET", "/favicon.ico", nil)
 		ctx, rr := newTestContext(req)
 		middleware(handler)(ctx)
+
 		if rr.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", rr.Code)
+			t.Errorf("Expected status 200, got %d. Response body: %s", rr.Code, rr.Body.String())
 		}
+
 		body := rr.Body.Bytes()
 		if string(body) != string(faviconData) {
-			t.Errorf("Expected favicon data, got %s", string(body))
+			t.Errorf("Expected favicon data '%s', got '%s'", string(faviconData), string(body))
 		}
+
 		contentType := rr.Header().Get("Content-Type")
 		if contentType != "image/x-icon" {
-			t.Errorf("Expected content-type 'image/x-icon', got %s", contentType)
+			t.Errorf("Expected content-type 'image/x-icon', got '%s'", contentType)
 		}
 	})
 	t.Run("CustomURL", func(t *testing.T) {

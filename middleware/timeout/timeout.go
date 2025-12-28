@@ -145,7 +145,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return
 			case <-ctx.Done():
 				timeoutWriter.markTimedOut()
-				
+
 				// Wait for the handler to notice the timeout and stop
 				// Use a short timeout to avoid blocking forever
 				waitTimer := time.NewTimer(100 * time.Millisecond)
@@ -155,7 +155,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				case <-waitTimer.C:
 					// Handler didn't stop in time, proceed anyway
 				}
-				
+
 				c.Writer = originalWriter
 				if ctx.Err() == stdContext.DeadlineExceeded && !timeoutWriter.hasWritten() {
 					cfg.TimeoutHandler(c)
