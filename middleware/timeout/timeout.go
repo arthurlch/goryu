@@ -21,10 +21,17 @@ type timeoutWriter struct {
 	mu         sync.Mutex
 	timedOut   int32
 	headerSent int32
+	written    int32
+}
+
+func (tw *timeoutWriter) Header() http.Header {
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+	return tw.ResponseWriter.Header()
 }
 
 func (tw *timeoutWriter) WriteHeader(status int) {
-	if atomic.LoadInt32(&tw.timedOut) == 1 {
+	if atomic.LoadInt32(&tw.timedOut) == 1 || atomic.LoadInt32(&tw.written) == 1 {
 		return
 	}
 	tw.mu.Lock()
@@ -33,6 +40,7 @@ func (tw *timeoutWriter) WriteHeader(status int) {
 		tw.ResponseWriter.WriteHeader(status)
 	}
 }
+
 func (tw *timeoutWriter) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&tw.timedOut) == 1 {
 		return 0, http.ErrHandlerTimeout
@@ -42,10 +50,19 @@ func (tw *timeoutWriter) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&tw.timedOut) == 1 {
 		return 0, http.ErrHandlerTimeout
 	}
+	if atomic.CompareAndSwapInt32(&tw.headerSent, 0, 1) {
+		tw.ResponseWriter.WriteHeader(http.StatusOK)
+	}
+	atomic.StoreInt32(&tw.written, 1)
 	return tw.ResponseWriter.Write(data)
 }
+
 func (tw *timeoutWriter) markTimedOut() {
 	atomic.StoreInt32(&tw.timedOut, 1)
+}
+
+func (tw *timeoutWriter) hasWritten() bool {
+	return atomic.LoadInt32(&tw.written) == 1 || atomic.LoadInt32(&tw.headerSent) == 1
 }
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
@@ -128,8 +145,19 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return
 			case <-ctx.Done():
 				timeoutWriter.markTimedOut()
+				
+				// Wait for the handler to notice the timeout and stop
+				// Use a short timeout to avoid blocking forever
+				waitTimer := time.NewTimer(100 * time.Millisecond)
+				select {
+				case <-done:
+					waitTimer.Stop()
+				case <-waitTimer.C:
+					// Handler didn't stop in time, proceed anyway
+				}
+				
 				c.Writer = originalWriter
-				if ctx.Err() == stdContext.DeadlineExceeded {
+				if ctx.Err() == stdContext.DeadlineExceeded && !timeoutWriter.hasWritten() {
 					cfg.TimeoutHandler(c)
 				}
 				return

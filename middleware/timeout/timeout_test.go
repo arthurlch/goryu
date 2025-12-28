@@ -7,13 +7,53 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
+// safeResponseRecorder wraps httptest.ResponseRecorder to be thread-safe
+type safeResponseRecorder struct {
+	*httptest.ResponseRecorder
+	mu sync.Mutex
+}
+
+func (srr *safeResponseRecorder) Header() http.Header {
+	srr.mu.Lock()
+	defer srr.mu.Unlock()
+	return srr.ResponseRecorder.Header()
+}
+
+func (srr *safeResponseRecorder) Write(b []byte) (int, error) {
+	srr.mu.Lock()
+	defer srr.mu.Unlock()
+	return srr.ResponseRecorder.Write(b)
+}
+
+func (srr *safeResponseRecorder) WriteHeader(code int) {
+	srr.mu.Lock()
+	defer srr.mu.Unlock()
+	srr.ResponseRecorder.WriteHeader(code)
+}
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
+}
+
+func newSafeTestContext(req *http.Request) (*context.Context, *safeResponseRecorder, func() (int, string)) {
+	rr := httptest.NewRecorder()
+	srr := &safeResponseRecorder{ResponseRecorder: rr}
+	ctx := context.NewContext(srr, req)
+	
+	// Return a function to safely get the results
+	getResults := func() (int, string) {
+		srr.mu.Lock()
+		defer srr.mu.Unlock()
+		return rr.Code, rr.Body.String()
+	}
+	
+	return ctx, srr, getResults
 }
 func TestTimeoutMiddleware(t *testing.T) {
 	t.Run("FastHandler", func(t *testing.T) {
@@ -92,6 +132,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/skip", nil)
 		ctx, rr := newTestContext(req)
 		middleware(handler)(ctx)
+		// No race here since Skip means no goroutine is created
 		if rr.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
@@ -159,12 +200,16 @@ func TestTimeoutMiddleware(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 		}
 		req := httptest.NewRequest("GET", "/", nil)
-		ctx, rr := newTestContext(req)
+		ctx, _, getResults := newSafeTestContext(req)
 		middleware(handler)(ctx)
-		if rr.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", rr.Code)
+		
+		// Wait a bit to ensure any lingering goroutines finish
+		time.Sleep(150 * time.Millisecond)
+		
+		code, body := getResults()
+		if code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", code)
 		}
-		body := rr.Body.String()
 		if !strings.Contains(body, "Quick response") {
 			t.Errorf("Expected body to contain 'Quick response', got %s", body)
 		}

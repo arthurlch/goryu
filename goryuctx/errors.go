@@ -96,14 +96,33 @@ func (c *Context) GetResponseConfig() ResponseConfig {
 }
 
 func (c *Context) SetErrorHandlingMode(mode ErrorHandlingMode) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
 	if c.Keys == nil {
 		c.Keys = make(map[string]interface{})
 	}
 	c.Keys["error_handling_mode"] = mode
+	
+	// Update cached values
+	c.errorHandlingMode = mode
+	c.errorModeSet = true
 }
 
 func (c *Context) GetErrorHandlingMode() ErrorHandlingMode {
+	c.mu.RLock()
 	// Use cached value if already set
+	if c.errorModeSet {
+		mode := c.errorHandlingMode
+		c.mu.RUnlock()
+		return mode
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Check again after acquiring write lock (double-checked locking pattern)
 	if c.errorModeSet {
 		return c.errorHandlingMode
 	}
