@@ -13,10 +13,12 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/session"
 )
+
 type memoryStore struct {
 	sync.RWMutex
 	sessions map[string]*session.Session
 }
+
 func newMemoryStore() *memoryStore {
 	return &memoryStore{
 		sessions: make(map[string]*session.Session),
@@ -27,7 +29,7 @@ func (s *memoryStore) Get(id string) (*session.Session, error) {
 	defer s.RUnlock()
 	sess, ok := s.sessions[id]
 	if !ok {
-		return nil, nil 
+		return nil, nil
 	}
 	newSess := &session.Session{
 		ID:   sess.ID,

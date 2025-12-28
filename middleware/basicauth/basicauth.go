@@ -11,14 +11,16 @@ import (
 	"github.com/arthurlch/goryu/middleware/base"
 	"golang.org/x/crypto/bcrypt"
 )
+
 type Config struct {
 	base.BaseConfig
-	Users map[string]string
-	Validator func(username, password string) bool
-	Realm string
-	MaxAttempts int           
-	RateWindow  time.Duration 
+	Users       map[string]string
+	Validator   func(username, password string) bool
+	Realm       string
+	MaxAttempts int
+	RateWindow  time.Duration
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -37,10 +39,10 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.MaxAttempts == 0 {
-		c.MaxAttempts = 5 
+		c.MaxAttempts = 5
 	}
 	if c.RateWindow == 0 {
-		c.RateWindow = 15 * time.Minute 
+		c.RateWindow = 15 * time.Minute
 	}
 	return nil
 }
@@ -84,7 +86,13 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 		}
 		if storedHashedPassword, ok := cfg.Users[username]; ok {
 			err := bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(password))
-			if subtle.ConstantTimeCompare([]byte{func() byte { if err == nil { return 1 } else { return 0 } }()}, []byte{1}) == 1 {
+			if subtle.ConstantTimeCompare([]byte{func() byte {
+				if err == nil {
+					return 1
+				} else {
+					return 0
+				}
+			}()}, []byte{1}) == 1 {
 				return nil
 			}
 		} else {

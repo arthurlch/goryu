@@ -13,27 +13,27 @@ import (
 // Test basic router creation and default handlers
 func TestNew(t *testing.T) {
 	r := New()
-	
+
 	if r == nil {
 		t.Fatal("Expected router to be created")
 	}
-	
+
 	if r.trees == nil {
 		t.Error("Expected trees map to be initialized")
 	}
-	
+
 	if r.namedRoutes == nil {
 		t.Error("Expected namedRoutes map to be initialized")
 	}
-	
+
 	if r.NotFound == nil {
 		t.Error("Expected NotFound handler to be set")
 	}
-	
+
 	if r.MethodNotAllowed == nil {
 		t.Error("Expected MethodNotAllowed handler to be set")
 	}
-	
+
 	if r.PanicHandler == nil {
 		t.Error("Expected PanicHandler to be set")
 	}
@@ -42,23 +42,23 @@ func TestNew(t *testing.T) {
 // Test basic routing with different HTTP methods
 func TestBasicRouting(t *testing.T) {
 	r := New()
-	
+
 	r.GET("/", func(c *context.Context) {
 		c.Text(200, "home")
 	})
-	
+
 	r.GET("/users", func(c *context.Context) {
 		c.Text(200, "users")
 	})
-	
+
 	r.POST("/users", func(c *context.Context) {
 		c.Text(201, "create user")
 	})
-	
+
 	r.PUT("/users/123", func(c *context.Context) {
 		c.Text(200, "update user")
 	})
-	
+
 	r.DELETE("/users/123", func(c *context.Context) {
 		c.Text(200, "delete user")
 	})
@@ -96,13 +96,13 @@ func TestBasicRouting(t *testing.T) {
 // Test ALL method that registers all HTTP methods
 func TestALLMethod(t *testing.T) {
 	r := New()
-	
+
 	r.ALL("/api", func(c *context.Context) {
 		c.Text(200, "all methods: "+c.Request.Method)
 	})
 
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-	
+
 	for _, method := range methods {
 		req := httptest.NewRequest(method, "/api", nil)
 		w := httptest.NewRecorder()
@@ -111,7 +111,7 @@ func TestALLMethod(t *testing.T) {
 		if w.Code != 200 {
 			t.Errorf("Expected status 200 for %s, got %d", method, w.Code)
 		}
-		
+
 		if method != "HEAD" { // HEAD requests don't return body
 			expected := "all methods: " + method
 			if w.Body.String() != expected {
@@ -174,7 +174,7 @@ func TestWildcardRoutes(t *testing.T) {
 		path     string
 		expected string
 	}{
-		{"/static/", "static:"},                                    // Empty wildcard match
+		{"/static/", "static:"}, // Empty wildcard match
 		{"/static/css/style.css", "static:css/style.css"},
 		{"/static/js/app.js", "static:js/app.js"},
 		{"/static/images/logo.png", "static:images/logo.png"},
@@ -215,8 +215,8 @@ func TestWildcardEmptyPath(t *testing.T) {
 		path     string
 		expected string
 	}{
-		{"/files/", "files:"},           // Empty wildcard match
-		{"/assets/", "assets:"},         // Empty wildcard match for different route
+		{"/files/", "files:"},   // Empty wildcard match
+		{"/assets/", "assets:"}, // Empty wildcard match for different route
 		{"/files/doc.pdf", "files:doc.pdf"},
 		{"/assets/image.jpg", "assets:image.jpg"},
 	}
@@ -288,7 +288,7 @@ func TestNestedGroups(t *testing.T) {
 	api := r.Group("/api")
 	v1 := api.Group("/v1")
 	users := v1.Group("/users")
-	
+
 	users.GET("/:id", func(c *context.Context) {
 		c.Text(200, "nested user:"+c.Param("id"))
 	})
@@ -340,22 +340,22 @@ func TestRouteNaming(t *testing.T) {
 // Test duplicate route name panic
 func TestDuplicateRouteName(t *testing.T) {
 	r := New()
-	
+
 	r.GET("/users", func(c *context.Context) {}).SetName("users")
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Expected panic for duplicate route name")
 		}
 	}()
-	
+
 	r.GET("/posts", func(c *context.Context) {}).SetName("users")
 }
 
 // Test method not allowed with OPTIONS handling
 func TestMethodNotAllowed(t *testing.T) {
 	r := New()
-	
+
 	r.GET("/users", func(c *context.Context) {
 		c.Text(200, "get users")
 	})
@@ -395,7 +395,7 @@ func TestMethodNotAllowed(t *testing.T) {
 func TestHEADMethod(t *testing.T) {
 	t.Run("EnableHEADFallback true (default)", func(t *testing.T) {
 		r := New()
-		
+
 		r.GET("/users", func(c *context.Context) {
 			c.Text(200, "users data")
 		})
@@ -414,7 +414,7 @@ func TestHEADMethod(t *testing.T) {
 		r := New(RouterConfig{
 			EnableHEADFallback: false,
 		})
-		
+
 		r.GET("/users", func(c *context.Context) {
 			c.Text(200, "users data")
 		})
@@ -431,7 +431,7 @@ func TestHEADMethod(t *testing.T) {
 
 	t.Run("Explicit HEAD route", func(t *testing.T) {
 		r := New()
-		
+
 		r.HEAD("/users", func(c *context.Context) {
 			c.Writer.Header().Set("X-Custom", "head-specific")
 			c.Writer.WriteHeader(200)
@@ -458,10 +458,10 @@ func TestHEADMethod(t *testing.T) {
 func TestTrailingSlashHandling(t *testing.T) {
 	t.Run("RedirectTrailingSlash enabled (default)", func(t *testing.T) {
 		r := New(RouterConfig{
-			StrictRouting: true,  // Enable strict routing so /users and /users/ are different
+			StrictRouting:         true, // Enable strict routing so /users and /users/ are different
 			RedirectTrailingSlash: true,
 		})
-		
+
 		r.GET("/users", func(c *context.Context) {
 			c.Text(200, "users")
 		})
@@ -483,10 +483,10 @@ func TestTrailingSlashHandling(t *testing.T) {
 
 	t.Run("RedirectTrailingSlash with query params", func(t *testing.T) {
 		r := New(RouterConfig{
-			StrictRouting: true,
+			StrictRouting:         true,
 			RedirectTrailingSlash: true,
 		})
-		
+
 		r.GET("/search", func(c *context.Context) {
 			c.Text(200, "search results")
 		})
@@ -508,10 +508,10 @@ func TestTrailingSlashHandling(t *testing.T) {
 
 	t.Run("RedirectTrailingSlash adds slash", func(t *testing.T) {
 		r := New(RouterConfig{
-			StrictRouting: true,
+			StrictRouting:         true,
 			RedirectTrailingSlash: true,
 		})
-		
+
 		r.GET("/users/", func(c *context.Context) {
 			c.Text(200, "users with slash")
 		})
@@ -535,7 +535,7 @@ func TestTrailingSlashHandling(t *testing.T) {
 		r := New(RouterConfig{
 			RedirectTrailingSlash: false,
 		})
-		
+
 		r.GET("/users", func(c *context.Context) {
 			c.Text(200, "users")
 		})
@@ -555,10 +555,10 @@ func TestTrailingSlashHandling(t *testing.T) {
 
 	t.Run("POST method redirect uses 308", func(t *testing.T) {
 		r := New(RouterConfig{
-			StrictRouting: true,
+			StrictRouting:         true,
 			RedirectTrailingSlash: true,
 		})
-		
+
 		r.POST("/users", func(c *context.Context) {
 			c.Text(201, "created")
 		})
@@ -577,7 +577,7 @@ func TestTrailingSlashHandling(t *testing.T) {
 // Test ALL method returns RouteCollection
 func TestALLMethodReturnsCollection(t *testing.T) {
 	r := New()
-	
+
 	collection := r.ALL("/api", func(c *context.Context) {
 		c.Text(200, "all methods")
 	})
@@ -617,7 +617,7 @@ func TestALLMethodReturnsCollection(t *testing.T) {
 // Test panic recovery
 func TestPanicRecovery(t *testing.T) {
 	r := New()
-	
+
 	r.GET("/panic", func(c *context.Context) {
 		panic("test panic")
 	})
@@ -638,10 +638,10 @@ func TestPanicRecovery(t *testing.T) {
 // Test group middleware functionality
 func TestGroupMiddleware(t *testing.T) {
 	r := New()
-	
+
 	middleware1Called := false
 	middleware2Called := false
-	
+
 	middleware1 := func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
 			middleware1Called = true
@@ -649,7 +649,7 @@ func TestGroupMiddleware(t *testing.T) {
 			next(c)
 		}
 	}
-	
+
 	middleware2 := func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
 			middleware2Called = true
@@ -691,60 +691,60 @@ func TestGroupMiddleware(t *testing.T) {
 // Test conflicting route registration panics
 func TestConflictingRoutes(t *testing.T) {
 	r := New()
-	
+
 	// Test duplicate exact route
 	r.GET("/users", func(c *context.Context) {})
-	
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Expected panic for duplicate route")
 		}
 	}()
-	
+
 	r.GET("/users", func(c *context.Context) {})
 }
 
 // Test invalid route patterns
 func TestInvalidRoutes(t *testing.T) {
 	r := New()
-	
+
 	// Test route without leading slash
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Expected panic for route without leading slash")
 		}
 	}()
-	
+
 	r.GET("users", func(c *context.Context) {})
 }
 
 // Test wildcard position validation
 func TestWildcardPosition(t *testing.T) {
 	r := New()
-	
+
 	// Wildcard not at end should panic
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Expected panic for wildcard not at end")
 		}
 	}()
-	
+
 	r.GET("/files/*path/more", func(c *context.Context) {})
 }
 
 // Test route priority: static > param > wildcard
 func TestRoutePriority(t *testing.T) {
 	r := New()
-	
+
 	// Register routes in order to test priority
 	r.GET("/users/new", func(c *context.Context) {
 		c.Text(200, "new user form")
 	})
-	
+
 	r.GET("/users/:id", func(c *context.Context) {
 		c.Text(200, "user:"+c.Param("id"))
 	})
-	
+
 	// Use a different route for wildcard to avoid conflicts
 	r.GET("/files/*filepath", func(c *context.Context) {
 		c.Text(200, "wildcard:"+c.Param("filepath"))
@@ -754,8 +754,8 @@ func TestRoutePriority(t *testing.T) {
 		path     string
 		expected string
 	}{
-		{"/users/new", "new user form"},        // Static route wins
-		{"/users/123", "user:123"},             // Param route
+		{"/users/new", "new user form"},                    // Static route wins
+		{"/users/123", "user:123"},                         // Param route
 		{"/files/css/style.css", "wildcard:css/style.css"}, // Wildcard route
 	}
 
@@ -777,13 +777,13 @@ func TestRoutePriority(t *testing.T) {
 // Test edge cases with special characters in paths
 func TestSpecialCharacterPaths(t *testing.T) {
 	r := New()
-	
+
 	// Routes with special characters (URL encoded)
 	r.GET("/users/:name", func(c *context.Context) {
 		name := c.Param("name")
 		c.Text(200, "user:"+name)
 	})
-	
+
 	r.GET("/search/*query", func(c *context.Context) {
 		query := c.Param("query")
 		c.Text(200, "search:"+query)
@@ -798,12 +798,12 @@ func TestSpecialCharacterPaths(t *testing.T) {
 		{"/users/john%20doe", "user:john doe", 200},
 		{"/users/caf%C3%A9", "user:café", 200},
 		{"/users/user%40example.com", "user:user@example.com", 200},
-		
+
 		// Special characters in wildcard (will be decoded by HTTP request parsing)
 		{"/search/hello%20world", "search:hello world", 200},
 		{"/search/test%3Dvalue%26more", "search:test=value&more", 200},
 		{"/search/unicode%20%E2%9C%93", "search:unicode ✓", 200},
-		
+
 		// Raw special characters (not URL encoded but valid in URLs)
 		{"/users/user-name", "user:user-name", 200},
 		{"/users/user_underscore", "user:user_underscore", 200},
@@ -829,18 +829,18 @@ func TestSpecialCharacterPaths(t *testing.T) {
 // Test edge cases with empty and root paths
 func TestEmptyAndRootPaths(t *testing.T) {
 	r := New()
-	
+
 	// Root path
 	r.GET("/", func(c *context.Context) {
 		c.Text(200, "root")
 	})
-	
+
 	// Empty wildcard match
 	r.GET("/files/*path", func(c *context.Context) {
 		path := c.Param("path")
 		c.Text(200, "files:"+path)
 	})
-	
+
 	// Parameter at root level
 	r.GET("/:slug", func(c *context.Context) {
 		slug := c.Param("slug")
@@ -854,15 +854,15 @@ func TestEmptyAndRootPaths(t *testing.T) {
 	}{
 		// Root path variations
 		{"/", "root", 200},
-		
+
 		// Empty wildcard should match
 		{"/files/", "files:", 200},
-		
+
 		// Single character paths
 		{"/a", "slug:a", 200},
 		{"/1", "slug:1", 200},
 		{"/x", "slug:x", 200},
-		
+
 		// Very long path segments
 		{"/verylongslugnamethatshouldstillwork", "slug:verylongslugnamethatshouldstillwork", 200},
 	}
@@ -885,14 +885,14 @@ func TestEmptyAndRootPaths(t *testing.T) {
 // Test route matching edge cases with multiple parameters
 func TestMultipleParameterEdgeCases(t *testing.T) {
 	r := New()
-	
+
 	// Route with many parameters
 	r.GET("/api/:v1/:v2/:v3/:v4/:action", func(c *context.Context) {
-		result := fmt.Sprintf("%s-%s-%s-%s-%s", 
+		result := fmt.Sprintf("%s-%s-%s-%s-%s",
 			c.Param("v1"), c.Param("v2"), c.Param("v3"), c.Param("v4"), c.Param("action"))
 		c.Text(200, result)
 	})
-	
+
 	// Route with parameters and static segments mixed
 	r.GET("/users/:id/profile/:section/edit", func(c *context.Context) {
 		result := fmt.Sprintf("user:%s-section:%s", c.Param("id"), c.Param("section"))
@@ -907,7 +907,7 @@ func TestMultipleParameterEdgeCases(t *testing.T) {
 		// Many parameters
 		{"/api/1/2/3/4/delete", "1-2-3-4-delete", 200},
 		{"/api/a/b/c/d/create", "a-b-c-d-create", 200},
-		
+
 		// Mixed static and parameters
 		{"/users/123/profile/settings/edit", "user:123-section:settings", 200},
 		{"/users/john/profile/privacy/edit", "user:john-section:privacy", 200},
@@ -931,15 +931,15 @@ func TestMultipleParameterEdgeCases(t *testing.T) {
 // Test case sensitivity in routing
 func TestRouteCaseSensitivity(t *testing.T) {
 	r := New()
-	
+
 	r.GET("/Users", func(c *context.Context) {
 		c.Text(200, "uppercase users")
 	})
-	
+
 	r.GET("/users", func(c *context.Context) {
 		c.Text(200, "lowercase users")
 	})
-	
+
 	r.GET("/API/:version", func(c *context.Context) {
 		c.Text(200, "API:"+c.Param("version"))
 	})
@@ -953,7 +953,7 @@ func TestRouteCaseSensitivity(t *testing.T) {
 		{"/Users", "uppercase users", 200},
 		{"/users", "lowercase users", 200},
 		{"/USERS", "", 404}, // Should not match either
-		
+
 		// Case sensitive parameters
 		{"/API/v1", "API:v1", 200},
 		{"/api/v1", "", 404}, // Should not match

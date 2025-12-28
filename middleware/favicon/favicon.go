@@ -10,18 +10,20 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	File string
-	URL string
+	File      string
+	URL       string
 	CacheFile bool
-	MaxAge int
+	MaxAge    int
 }
 type faviconCache struct {
 	data        []byte
 	contentType string
 	mu          sync.RWMutex
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -30,7 +32,7 @@ func (c *Config) Validate() error {
 		c.URL = "/favicon.ico"
 	}
 	if c.MaxAge <= 0 {
-		c.MaxAge = 86400 
+		c.MaxAge = 86400
 	}
 	return nil
 }

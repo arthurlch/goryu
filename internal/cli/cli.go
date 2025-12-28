@@ -49,13 +49,13 @@ func (c *CLI) RegisterCommand(cmd *Command) {
 
 func (c *CLI) Run(args []string) error {
 	if len(args) < 1 {
-		// TUI ! 
+		// TUI !
 		return RunEnhancedTUI()
 	}
 
 	globalFlags := make(map[string]string)
 	filteredArgs := []string{}
-	
+
 	for i := 0; i < len(args); i++ {
 		if strings.HasPrefix(args[i], "--") {
 			parts := strings.SplitN(args[i], "=", 2)
@@ -173,12 +173,12 @@ func (c *CLI) showHelp() {
 	fmt.Println("Usage: goryu <command> [arguments]")
 	fmt.Println("       goryu             (interactive TUI mode)")
 	fmt.Println("\nAvailable commands:")
-	
+
 	groups := map[string][]*Command{
-		"Project":     {},
+		"Project":         {},
 		"Code Generation": {},
-		"Development": {},
-		"Other":       {},
+		"Development":     {},
+		"Other":           {},
 	}
 
 	for _, cmd := range c.commands {

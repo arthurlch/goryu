@@ -10,6 +10,7 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/basicauth"
 )
+
 func newTestContext(req *http.Request) (*goryu.Ctx, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr

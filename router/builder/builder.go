@@ -133,13 +133,13 @@ func (rc *RouteConfig) Description(desc string) *RouteConfig {
 
 // ResourceBuilder builds RESTful routes for a resource
 type ResourceBuilder struct {
-	group          *GroupBuilder
-	path           string
-	controller     interface{}
-	middlewares    []context.Middleware
-	name           string
-	only           []string
-	except         []string
+	group       *GroupBuilder
+	path        string
+	controller  interface{}
+	middlewares []context.Middleware
+	name        string
+	only        []string
+	except      []string
 }
 
 // Middleware adds middleware to all resource routes

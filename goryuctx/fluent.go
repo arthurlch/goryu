@@ -168,14 +168,13 @@ func (c *Context) CORS(origin string) *Context {
 // Security sets common security headers using fluent API
 func (c *Context) Security() *Context {
 	return c.FluentHeaders(map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "DENY",
-		"X-XSS-Protection":       "1; mode=block",
+		"X-Content-Type-Options":    "nosniff",
+		"X-Frame-Options":           "DENY",
+		"X-XSS-Protection":          "1; mode=block",
 		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-		"Referrer-Policy":        "strict-origin-when-cross-origin",
+		"Referrer-Policy":           "strict-origin-when-cross-origin",
 	})
 }
-
 
 func (c *Context) OK(data interface{}) *Context {
 	return c.FluentJSON(200, data)
@@ -213,7 +212,6 @@ func (c *Context) FluentError(code int, message string) *Context {
 	return c.FluentJSON(code, map[string]string{"error": message})
 }
 
-
 func (c *Context) WithStatus(code int) *Context {
 	return c.FluentStatus(code)
 }
@@ -237,8 +235,7 @@ func (c *Context) FluentSend(code int, data interface{}) *Context {
 	}
 }
 
-
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || 
+	return len(s) >= len(substr) && (s == substr ||
 		(len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr)))
 }

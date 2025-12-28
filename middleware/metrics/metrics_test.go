@@ -1,18 +1,21 @@
 package metrics_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
+	"github.com/arthurlch/goryu/middleware/metrics"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/base"
-	"github.com/arthurlch/goryu/middleware/metrics"
 )
+
 type testMetrics struct {
 	counters   map[string]float64
 	histograms map[string][]float64
 	gauges     map[string]float64
 }
+
 func newTestMetrics() *testMetrics {
 	return &testMetrics{
 		counters:   make(map[string]float64),

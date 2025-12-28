@@ -18,6 +18,7 @@ type MiddlewareBuilder struct {
 	errorHandler func(c *context.Context, err error)
 	config       base.BaseConfig
 }
+
 func New(name ...string) *MiddlewareBuilder {
 	middlewareName := "Custom"
 	if len(name) > 0 && name[0] != "" {
@@ -57,7 +58,7 @@ func (mb *MiddlewareBuilder) Logger(logger base.Logger) *MiddlewareBuilder {
 func (mb *MiddlewareBuilder) Build() context.Middleware {
 	if mb.beforeFunc == nil && mb.afterFunc == nil {
 		mb.beforeFunc = func(c *context.Context) error {
-			return nil 
+			return nil
 		}
 	}
 	if mb.afterFunc == nil {
@@ -83,7 +84,7 @@ func NewLogging() *MiddlewareBuilder {
 				return nil
 			}
 			duration := time.Since(startTime.(time.Time))
-			log.Printf("%s %s - %v", 
+			log.Printf("%s %s - %v",
 				c.Request.Method,
 				c.Request.URL.Path,
 				duration,

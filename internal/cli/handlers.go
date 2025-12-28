@@ -47,7 +47,7 @@ func cmdGenerateHandler(ctx *Context) error {
 	dbTool := getFlag(ctx, "db-tool", "")
 
 	fmt.Printf("🎯 Generating %s handler: %s\n", handlerType, name)
-	
+
 	args := []string{name, "--type=" + handlerType, "--path=" + path}
 	if model != "" {
 		args = append(args, "--model="+model)
@@ -175,7 +175,7 @@ func cmdScaffoldAPI(ctx *Context) error {
 	fmt.Printf("   ✓ Tests: %v\n", includeTests)
 
 	fieldList := parseFields(fields)
-	
+
 	moduleName, err := utils.GetModuleName()
 	if err != nil {
 		moduleName = "myapp"
@@ -203,14 +203,14 @@ func cmdScaffoldAPI(ctx *Context) error {
 	}
 	// Validation is handled explicitly in handlers, not as middleware
 	/*
-	if includeValidation {
-		if middlewareList != "" {
-			middlewareList += ","
+		if includeValidation {
+			if middlewareList != "" {
+				middlewareList += ","
+			}
+			middlewareList += "validator"
 		}
-		middlewareList += "validator"
-	}
 	*/
-	
+
 	routeGroup := fmt.Sprintf("/api/%s", strings.ToLower(resource))
 	if err := generateAPIRoutes(resource, moduleName, middlewareList); err != nil {
 		return fmt.Errorf("failed to generate routes: %w", err)
@@ -248,7 +248,7 @@ func cmdScaffoldAPI(ctx *Context) error {
 	fmt.Printf("  • Update database connection in your main.go\n")
 	fmt.Printf("  • Run tests with: go test ./internal/handlers\n")
 	fmt.Printf("  • Start server and access API at %s\n", routeGroup)
-	
+
 	return nil
 }
 
@@ -286,7 +286,7 @@ func cmdScaffoldService(ctx *Context) error {
 		}
 	}
 
-	// alors la ?? Grpc you know, not fully implemented but well ... 
+	// alors la ?? Grpc you know, not fully implemented but well ...
 	if includeGRPC {
 		fmt.Println("\n🔗 Generating gRPC service...")
 		if err := generateGRPCService(name); err != nil {
@@ -327,7 +327,7 @@ func cmdScaffoldService(ctx *Context) error {
 		fmt.Printf("  • Review proto files in %s/api/proto/\n", name)
 	}
 	fmt.Printf("  • Build and run: cd %s && go run cmd/server/main.go\n", name)
-	
+
 	return nil
 }
 
@@ -347,10 +347,10 @@ func cmdDev(ctx *Context) error {
 
 	mainPaths := []string{
 		"cmd/server/main.go",
-		"cmd/main.go", 
+		"cmd/main.go",
 		"main.go",
 	}
-	
+
 	var mainPath string
 	for _, path := range mainPaths {
 		if _, err := os.Stat(path); err == nil {
@@ -358,18 +358,18 @@ func cmdDev(ctx *Context) error {
 			break
 		}
 	}
-	
+
 	if mainPath == "" {
 		return fmt.Errorf("main.go not found in expected locations (cmd/server/main.go, cmd/main.go, main.go)")
 	}
-	
+
 	fmt.Printf("   Main file: %s\n", mainPath)
-	
+
 	debugStr := "false"
 	if debug {
 		debugStr = "true"
 	}
-	
+
 	if hotReload {
 		return runDevWithHotReload(mainPath, port, debugStr)
 	} else {
@@ -396,10 +396,10 @@ func cmdBuild(ctx *Context) error {
 
 	mainPaths := []string{
 		"cmd/server/main.go",
-		"cmd/main.go", 
+		"cmd/main.go",
 		"main.go",
 	}
-	
+
 	var mainPath string
 	for _, path := range mainPaths {
 		if _, err := os.Stat(path); err == nil {
@@ -407,7 +407,7 @@ func cmdBuild(ctx *Context) error {
 			break
 		}
 	}
-	
+
 	if mainPath == "" {
 		return fmt.Errorf("main.go not found in expected locations (cmd/server/main.go, cmd/main.go, main.go)")
 	}
@@ -437,7 +437,7 @@ func cmdConfigValidate(ctx *Context) error {
 func cmdMiddlewareList(ctx *Context) error {
 	fmt.Println("📋 Available middleware:")
 	fmt.Println("\nBuilt-in middleware:")
-	
+
 	builtIn := []struct {
 		name string
 		desc string
@@ -476,7 +476,7 @@ func cmdMiddlewareList(ctx *Context) error {
 	}
 
 	fmt.Println("\nCustom middleware:")
-	
+
 	return nil
 }
 
@@ -487,30 +487,30 @@ func cmdMiddlewareInfo(ctx *Context) error {
 
 	name := ctx.Args[0]
 	fmt.Printf("ℹ️  Middleware: %s\n", name)
-	
+
 	info := getMiddlewareInfo(name)
 	if info == nil {
 		return fmt.Errorf("middleware '%s' not found", name)
 	}
-	
+
 	fmt.Printf("\n📋 Details:\n")
 	fmt.Printf("   Name: %s\n", info.Name)
 	fmt.Printf("   Description: %s\n", info.Description)
 	fmt.Printf("   Category: %s\n", info.Category)
 	fmt.Printf("   Package: %s\n", info.Package)
-	
+
 	if len(info.Dependencies) > 0 {
 		fmt.Printf("   Dependencies: %s\n", strings.Join(info.Dependencies, ", "))
 	}
-	
+
 	fmt.Printf("\n📖 Usage:\n")
 	fmt.Printf("%s\n", info.Usage)
-	
+
 	if info.Example != "" {
 		fmt.Printf("\n💡 Example:\n")
 		fmt.Printf("%s\n", info.Example)
 	}
-	
+
 	if len(info.Options) > 0 {
 		fmt.Printf("\n⚙️  Configuration Options:\n")
 		for _, option := range info.Options {
@@ -520,7 +520,7 @@ func cmdMiddlewareInfo(ctx *Context) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -529,41 +529,41 @@ func cmdConfigMigrate(ctx *Context) error {
 	to := ctx.Flags["to"]
 	inputFile := getFlag(ctx, "input", "config.json")
 	outputFile := getFlag(ctx, "output", "")
-	
+
 	if from == "" || to == "" {
 		return fmt.Errorf("--from and --to are required")
 	}
 
 	fmt.Printf("🔄 Migrating configuration from %s to %s\n", from, to)
 	fmt.Printf("   Input: %s\n", inputFile)
-	
+
 	if outputFile == "" {
 		base := strings.TrimSuffix(inputFile, filepath.Ext(inputFile))
 		outputFile = base + "." + to
 	}
 	fmt.Printf("   Output: %s\n", outputFile)
-	
+
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
 		return fmt.Errorf("input file not found: %s", inputFile)
 	}
-	
+
 	data, err := os.ReadFile(inputFile)
 	if err != nil {
 		return fmt.Errorf("failed to read input file: %w", err)
 	}
-	
+
 	converted, err := migrateConfig(data, from, to)
 	if err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
-	
+
 	if err := os.WriteFile(outputFile, converted, 0644); err != nil {
 		return fmt.Errorf("failed to write output file: %w", err)
 	}
-	
+
 	fmt.Printf("✅ Configuration migrated successfully!\n")
 	fmt.Printf("   Generated: %s\n", outputFile)
-	
+
 	return nil
 }
 
@@ -572,7 +572,7 @@ func cmdRoutesList(ctx *Context) error {
 	format := getFlag(ctx, "format", "table")
 
 	fmt.Println("📍 Application routes:")
-	
+
 	if filter != "" {
 		fmt.Printf("   Filter: %s\n", filter)
 	}
@@ -581,7 +581,7 @@ func cmdRoutesList(ctx *Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to discover routes: %w", err)
 	}
-	
+
 	if len(routes) == 0 {
 		fmt.Println("   No routes found in the project")
 		fmt.Println("\n💡 Routes can be found in:")
@@ -590,19 +590,19 @@ func cmdRoutesList(ctx *Context) error {
 		fmt.Println("   • cmd/server/main.go")
 		return nil
 	}
-	
+
 	if filter != "" {
 		filteredRoutes := []RouteInfo{}
 		for _, route := range routes {
-			if strings.Contains(route.Path, filter) || 
-			   strings.Contains(route.Method, filter) ||
-			   strings.Contains(route.Handler, filter) {
+			if strings.Contains(route.Path, filter) ||
+				strings.Contains(route.Method, filter) ||
+				strings.Contains(route.Handler, filter) {
 				filteredRoutes = append(filteredRoutes, route)
 			}
 		}
 		routes = filteredRoutes
 	}
-	
+
 	switch format {
 	case "json":
 		return displayRoutesJSON(routes)
@@ -625,17 +625,17 @@ func cmdRoutesTest(ctx *Context) error {
 	}
 
 	fmt.Printf("🧪 Testing route: %s %s\n", method, path)
-	
+
 	routes, err := discoverRoutes()
 	if err != nil {
 		return fmt.Errorf("failed to discover routes: %w", err)
 	}
-	
+
 	matches := testRoute(path, method, routes)
-	
+
 	if len(matches) == 0 {
 		fmt.Printf("❌ No matching routes found for %s %s\n", method, path)
-		
+
 		suggestions := findSimilarRoutes(path, routes)
 		if len(suggestions) > 0 {
 			fmt.Println("\n💡 Similar routes:")
@@ -645,7 +645,7 @@ func cmdRoutesTest(ctx *Context) error {
 		}
 		return nil
 	}
-	
+
 	fmt.Printf("✅ Found %d matching route(s):\n", len(matches))
 	for _, match := range matches {
 		fmt.Printf("   %s %s -> %s", match.Method, match.Path, match.Handler)
@@ -657,7 +657,7 @@ func cmdRoutesTest(ctx *Context) error {
 		}
 		fmt.Println()
 	}
-	
+
 	return nil
 }
 
@@ -668,7 +668,7 @@ func cmdVersion(ctx *Context) error {
 
 func cmdValidate(ctx *Context) error {
 	fix := getFlag(ctx, "fix", "false") == "true"
-	
+
 	fmt.Println("🔍 Validating project structure...")
 	if fix {
 		fmt.Println("   Auto-fix: enabled")
@@ -678,7 +678,6 @@ func cmdValidate(ctx *Context) error {
 	// TODO: Refactor runValidate to use Context directly ??
 	return runValidate([]string{})
 }
-
 
 func getFlag(ctx *Context, name string, defaultValue string) string {
 	if val, ok := ctx.Flags[name]; ok {
@@ -694,13 +693,13 @@ func generateRouteConfig(name string, useBuilder bool, group, middleware, method
 	}
 
 	filename := filepath.Join(routesDir, strings.ToLower(name)+".go")
-	
+
 	moduleName, err := utils.GetModuleName()
 	if err != nil {
 		// Fallback or error? defaulting to myapp allows testing without go.mod but prints warning?
 		// Better to require go.mod for code generation usually.
 		// For now default to myapp if fails, but in real usage it should probably fail.
-		moduleName = "myapp" 
+		moduleName = "myapp"
 		fmt.Printf("⚠️  Warning: could not determine module name: %v using 'myapp'\n", err)
 	}
 
@@ -721,7 +720,7 @@ func generateConfigCode(name string, useBuilder bool, configType, format string)
 	}
 
 	filename := filepath.Join(configDir, strings.ToLower(name)+"_config.go")
-	
+
 	var content string
 	if useBuilder {
 		content = generateConfigBuilderContent(name, configType)
@@ -735,7 +734,7 @@ func generateConfigCode(name string, useBuilder bool, configType, format string)
 
 	exampleFile := fmt.Sprintf("config.%s.example", format)
 	exampleContent := generateExampleConfig(configType, format)
-	
+
 	return os.WriteFile(exampleFile, []byte(exampleContent), 0644)
 }
 
@@ -743,6 +742,5 @@ func showVersion() {
 	fmt.Printf("Goryu CLI v%s\n", VERSION)
 	fmt.Println("A GOated web framework") // goated play on words
 }
-
 
 // end of file ... !

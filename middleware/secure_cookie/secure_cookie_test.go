@@ -1,15 +1,18 @@
 package securecookie_test
+
 import (
 	"errors"
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/secure_cookie"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/secure_cookie"
 )
+
 const testHexKey = "a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0a1b2"
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -147,8 +150,8 @@ func TestSecureCookieMiddleware(t *testing.T) {
 			HexKey:     testHexKey,
 			CookieName: "custom-test",
 			CookiePath: "/admin",
-			Secure:     false, 
-			HttpOnly:   false, 
+			Secure:     false,
+			HttpOnly:   false,
 			SameSite:   http.SameSiteStrictMode,
 		}
 		middleware := securecookie.New(config)

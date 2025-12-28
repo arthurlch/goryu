@@ -66,7 +66,7 @@ func TestRemoteIP(t *testing.T) {
 		req.RemoteAddr = "192.0.2.1:12345"
 		req.Header.Set("X-Forwarded-For", "1.1.1.1, 2.2.2.2") // Should be ignored by default
 		ctx, _ := newTestContext(req)
-		
+
 		// Should ignore spoofed headers and use direct IP (secure by default)
 		if ip := ctx.RemoteIP(); ip != "192.0.2.1" {
 			t.Errorf("expected '192.0.2.1' (direct IP), got '%s'", ip)
@@ -78,10 +78,10 @@ func TestRemoteIP(t *testing.T) {
 		req.RemoteAddr = "192.0.2.1:12345" // Simulate proxy IP
 		req.Header.Set("X-Forwarded-For", "1.1.1.1, 2.2.2.2")
 		ctx, _ := newTestContext(req)
-		
+
 		// Configure trusted proxy
 		ctx.Set("trusted_proxies", []string{"192.0.2.1"})
-		
+
 		// Should now trust the proxy header
 		if ip := ctx.RemoteIP(); ip != "1.1.1.1" {
 			t.Errorf("expected '1.1.1.1' (from trusted proxy), got '%s'", ip)
@@ -93,10 +93,10 @@ func TestRemoteIP(t *testing.T) {
 		req.RemoteAddr = "192.0.2.1:12345"
 		req.Header.Set("X-Real-IP", "3.3.3.3")
 		ctx, _ := newTestContext(req)
-		
+
 		// Configure trusted proxy
 		ctx.Set("trusted_proxies", []string{"192.0.2.1"})
-		
+
 		if ip := ctx.RemoteIP(); ip != "3.3.3.3" {
 			t.Errorf("expected '3.3.3.3', got '%s'", ip)
 		}
@@ -106,7 +106,7 @@ func TestRemoteIP(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "4.4.4.4:12345"
 		ctx, _ := newTestContext(req)
-		
+
 		if ip := ctx.RemoteIP(); ip != "4.4.4.4" {
 			t.Errorf("expected '4.4.4.4', got '%s'", ip)
 		}
@@ -117,10 +117,10 @@ func TestRemoteIP(t *testing.T) {
 		req.RemoteAddr = "10.0.0.5:12345" // Within 10.0.0.0/8
 		req.Header.Set("X-Forwarded-For", "203.0.113.1")
 		ctx, _ := newTestContext(req)
-		
+
 		// Configure trusted proxy network
 		ctx.Set("trusted_proxies", []string{"10.0.0.0/8"})
-		
+
 		if ip := ctx.RemoteIP(); ip != "203.0.113.1" {
 			t.Errorf("expected '203.0.113.1' (from CIDR trusted proxy), got '%s'", ip)
 		}

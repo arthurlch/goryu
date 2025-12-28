@@ -1,14 +1,16 @@
 package tracing_test
+
 import (
 	"context"
+	goryucontext "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
+	"github.com/arthurlch/goryu/middleware/tracing"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-	goryucontext "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/base"
-	"github.com/arthurlch/goryu/middleware/tracing"
 )
+
 func newTestContext(req *http.Request) (*goryucontext.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return goryucontext.NewContext(rr, req), rr

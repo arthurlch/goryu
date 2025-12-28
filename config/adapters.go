@@ -80,11 +80,11 @@ func ConvertNewToLegacy(config *Config) *LegacyConfig {
 		},
 		Custom: config.App.Custom,
 	}
-	
+
 	if legacy.Custom == nil {
 		legacy.Custom = make(map[string]interface{})
 	}
-	
+
 	legacy.Custom["database"] = map[string]interface{}{
 		"driver":   config.Database.Driver,
 		"host":     config.Database.Host,
@@ -95,6 +95,6 @@ func ConvertNewToLegacy(config *Config) *LegacyConfig {
 		"path":     config.Database.Path,
 		"sslmode":  config.Database.SSLMode,
 	}
-	
+
 	return legacy
 }

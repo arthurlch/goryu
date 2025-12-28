@@ -9,12 +9,14 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	Path string
-	Expose []string
+	Path    string
+	Expose  []string
 	Exclude []string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

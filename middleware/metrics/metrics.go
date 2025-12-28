@@ -7,6 +7,7 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Metrics interface {
 	IncrementCounter(name string, tags map[string]string)
 	AddToCounter(name string, value float64, tags map[string]string)
@@ -16,12 +17,13 @@ type Metrics interface {
 }
 type Config struct {
 	base.BaseConfig
-	Metrics Metrics
-	CustomTags func(c *context.Context) map[string]string
-	RecordBody bool
+	Metrics         Metrics
+	CustomTags      func(c *context.Context) map[string]string
+	RecordBody      bool
 	GroupStatusCode bool
-	Prefix string
+	Prefix          string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -58,12 +60,12 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	postHandler := func(c *context.Context) error {
 		startVal, exists := c.Get("metrics.start_time")
 		if !exists {
-			return nil 
+			return nil
 		}
 		start := startVal.(time.Time)
 		rwVal, exists := c.Get("metrics.response_writer")
 		if !exists {
-			return nil 
+			return nil
 		}
 		rw := rwVal.(*base.StandardResponseWriter)
 		duration := time.Since(start)
@@ -109,7 +111,9 @@ func getStatusClass(statusCode int) string {
 		return "1xx"
 	}
 }
+
 type noopMetrics struct{}
+
 func (n *noopMetrics) IncrementCounter(name string, tags map[string]string)               {}
 func (n *noopMetrics) AddToCounter(name string, value float64, tags map[string]string)    {}
 func (n *noopMetrics) RecordHistogram(name string, value float64, tags map[string]string) {}

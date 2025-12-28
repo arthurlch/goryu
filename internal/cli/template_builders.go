@@ -109,7 +109,7 @@ func Register%sRoutes(app *goryu.App) {
 
 func generateConfigBuilderContent(name, configType string) string {
 	configName := strings.Title(strings.ToLower(name))
-	
+
 	var configStruct string
 	switch configType {
 	case "server":
@@ -127,14 +127,14 @@ func generateConfigBuilderContent(name, configType string) string {
 			},
 		},
 	}`
-		
+
 	case "database":
 		configStruct = `	config := &%sConfig{
 		Config: &builder.Config{
 			// Initialize database config here
 		},
 	}`
-		
+
 	case "cache":
 		configStruct = `	config := &%sConfig{
 		Config: &builder.Config{
@@ -196,7 +196,7 @@ func generateStandardConfigContent(name, configType string) string {
 	ReadTimeout       time.Duration ` + "`json:\"read_timeout\" env:\"READ_TIMEOUT\"`" + `
 	WriteTimeout      time.Duration ` + "`json:\"write_timeout\" env:\"WRITE_TIMEOUT\"`" + `
 	ShutdownTimeout   time.Duration ` + "`json:\"shutdown_timeout\" env:\"SHUTDOWN_TIMEOUT\"`"
-		
+
 	case "database":
 		fields = `	Driver            string ` + "`json:\"driver\" env:\"DB_DRIVER\"`" + `
 	Host              string ` + "`json:\"host\" env:\"DB_HOST\"`" + `
@@ -205,7 +205,7 @@ func generateStandardConfigContent(name, configType string) string {
 	Username          string ` + "`json:\"username\" env:\"DB_USERNAME\"`" + `
 	Password          string ` + "`json:\"password\" env:\"DB_PASSWORD\"`" + `
 	MaxConnections    int    ` + "`json:\"max_connections\" env:\"DB_MAX_CONNECTIONS\"`"
-		
+
 	case "cache":
 		fields = `	Driver   string ` + "`json:\"driver\" env:\"CACHE_DRIVER\"`" + `
 	Host     string ` + "`json:\"host\" env:\"CACHE_HOST\"`" + `

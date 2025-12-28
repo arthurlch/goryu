@@ -49,14 +49,14 @@ func TestMemoryLeak(t *testing.T) {
 	for i := 0; i < iterations; i++ {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/stress", nil)
-		
+
 		// Simulate different request patterns?
 		if i%2 == 0 {
 			req.Header.Set("Content-Type", "application/json")
 		}
-		
+
 		app.ServeHTTP(w, req)
-		
+
 		if w.Code != 200 {
 			t.Fatalf("Status not 200: %d", w.Code)
 		}
@@ -67,10 +67,10 @@ func TestMemoryLeak(t *testing.T) {
 		runtime.GC()
 		time.Sleep(50 * time.Millisecond)
 	}
-	
+
 	runtime.ReadMemStats(&m2)
 	finalGoroutines := runtime.NumGoroutine()
-	
+
 	t.Logf("Final: Goroutines=%d, HeapAlloc=%d bytes, HeapInUse=%d bytes", finalGoroutines, m2.HeapAlloc, m2.HeapInuse)
 	t.Logf("Growth: %d bytes", int64(m2.HeapAlloc)-int64(m1.HeapAlloc))
 
@@ -97,10 +97,10 @@ func BenchmarkRequestPerformance(b *testing.B) {
 	})
 
 	req := httptest.NewRequest("GET", "/bench", nil)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
 		app.ServeHTTP(w, req)

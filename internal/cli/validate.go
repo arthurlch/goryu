@@ -64,7 +64,6 @@ func runValidate(args []string) error {
 			fmt.Println("✅ Go files are syntactically valid")
 		}
 
-	 
 		fmt.Println("\n📦 Validating dependencies...")
 		if depIssues := validateDependencies(); len(depIssues) > 0 {
 			warnings = append(warnings, depIssues...)
@@ -118,7 +117,7 @@ func validateConfiguration(configFile string) []string {
 		issues = append(issues, fmt.Sprintf("Configuration loading failed: %v", err))
 		return issues
 	}
-	
+
 	cfgBuilder.Validate()
 	if cfgBuilder.HasErrors() {
 		for _, validationErr := range cfgBuilder.Errors() {
@@ -126,7 +125,7 @@ func validateConfiguration(configFile string) []string {
 		}
 		return issues
 	}
-	
+
 	cfg, err := cfgBuilder.Build()
 	if err != nil {
 		issues = append(issues, fmt.Sprintf("Configuration build failed: %v", err))
@@ -295,7 +294,7 @@ func validateGoSyntax(filename string) error {
 		switch x := n.(type) {
 		case *ast.FuncDecl:
 			if x.Name.IsExported() && x.Doc == nil {
-				// Maybe shall be warning ?? 
+				// Maybe shall be warning ??
 			}
 		case *ast.GenDecl:
 			if x.Tok == token.TYPE {

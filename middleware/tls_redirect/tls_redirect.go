@@ -8,14 +8,16 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	StatusCode int
-	CustomPort int
+	StatusCode        int
+	CustomPort        int
 	ForwardedProtocol string
-	ForwardedHost string
-	RedirectFunc func(c *context.Context, httpsURL string)
+	ForwardedHost     string
+	RedirectFunc      func(c *context.Context, httpsURL string)
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

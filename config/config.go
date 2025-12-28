@@ -17,7 +17,7 @@ type Manager struct {
 type Source interface {
 	Load() (map[string]interface{}, error)
 	Name() string
-	Priority() int 
+	Priority() int
 }
 
 // legacy types for backward compatibility - DEPRECATED
@@ -27,8 +27,8 @@ type Source interface {
 
 // DEPRECATEDO
 type LegacyConfig struct {
-	App    LegacyAppConfig    `json:"app" env:"APP" yaml:"app"`
-	Server LegacyServerConfig `json:"server" env:"SERVER" yaml:"server"`
+	App    LegacyAppConfig        `json:"app" env:"APP" yaml:"app"`
+	Server LegacyServerConfig     `json:"server" env:"SERVER" yaml:"server"`
 	Custom map[string]interface{} `json:"custom" env:"CUSTOM" yaml:"custom"`
 }
 
@@ -77,11 +77,11 @@ func (c *LegacyConfig) ToNewConfig() *Config {
 			Path:   "./app.db",
 		},
 	}
-	
+
 	if dbConfig, ok := c.Custom["database"].(map[string]interface{}); ok {
 		migrateDBConfig(&config.Database, dbConfig)
 	}
-	
+
 	return config
 }
 
@@ -187,7 +187,7 @@ func (m *Manager) getSortedSources() []Source {
 	sources := make([]Source, len(m.sources))
 	copy(sources, m.sources)
 
-	// bubble sort by priority 
+	// bubble sort by priority
 	// if I grind leetcode I will make it quickSort
 	for i := 0; i < len(sources)-1; i++ {
 		for j := 0; j < len(sources)-i-1; j++ {
@@ -313,7 +313,6 @@ func mergeDataToValue(v reflect.Value, data map[string]interface{}, prefix strin
 			fullName = prefix + "." + fieldName
 		}
 
-		
 		if field.Kind() == reflect.Struct && fieldType.Type.Name() != "Duration" {
 			if nestedData, exists := data[fieldName]; exists {
 				if nestedMap, ok := nestedData.(map[string]interface{}); ok {
@@ -440,4 +439,3 @@ func (c *Config) ToJSON() (string, error) {
 	}
 	return string(data), nil
 }
-

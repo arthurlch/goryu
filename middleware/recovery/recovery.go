@@ -8,11 +8,13 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	EnableStackTrace bool
+	EnableStackTrace      bool
 	CustomRecoveryHandler func(c *context.Context, err interface{})
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

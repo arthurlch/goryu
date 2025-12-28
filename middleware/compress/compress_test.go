@@ -1,15 +1,17 @@
 package compress_test
+
 import (
 	"compress/gzip"
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
+	"github.com/arthurlch/goryu/middleware/compress"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/base"
-	"github.com/arthurlch/goryu/middleware/compress"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -100,7 +102,7 @@ func TestCompressMiddleware(t *testing.T) {
 	t.Run("CustomCompressibleTypes", func(t *testing.T) {
 		config := compress.Config{
 			CompressibleTypes: []string{"application/custom"},
-			MinLength:         10, 
+			MinLength:         10,
 		}
 		middleware := compress.New(config)
 		handler := func(c *context.Context) {
@@ -124,7 +126,7 @@ func TestCompressMiddleware(t *testing.T) {
 			c.Text(http.StatusOK, content)
 		}
 		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Accept-Encoding", "deflate") 
+		req.Header.Set("Accept-Encoding", "deflate")
 		ctx, rr := newTestContext(req)
 		middleware(handler)(ctx)
 		if rr.Header().Get("Content-Encoding") != "deflate" {
@@ -139,7 +141,7 @@ func TestCompressMiddleware(t *testing.T) {
 			c.Text(http.StatusOK, content)
 		}
 		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Accept-Encoding", "deflate, gzip") 
+		req.Header.Set("Accept-Encoding", "deflate, gzip")
 		ctx, rr := newTestContext(req)
 		middleware(handler)(ctx)
 		if rr.Header().Get("Content-Encoding") != "gzip" {
@@ -192,19 +194,19 @@ func TestCompressMiddleware(t *testing.T) {
 			MinLength:         10,
 		}
 		middleware := compress.New(config)
-		
+
 		handler := func(c *context.Context) {
 			c.SetHeader("Content-Type", "text/plain")
 			content := strings.Repeat("Hello, World! ", 100)
 			c.Text(http.StatusOK, content)
 		}
-		
+
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip")
 		ctx, rr := newTestContext(req)
-		
+
 		middleware(handler)(ctx)
-		
+
 		if rr.Header().Get("Content-Encoding") != "gzip" {
 			t.Error("text/plain should be compressed with text/* wildcard")
 		}

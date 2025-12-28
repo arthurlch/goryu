@@ -10,22 +10,24 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Probe func(ctx stdContext.Context) error
 type Config struct {
 	base.BaseConfig
-	LivenessPath string
-	ReadinessPath string
-	HealthPath string
-	Timeout time.Duration
-	LivenessProbes map[string]Probe
+	LivenessPath    string
+	ReadinessPath   string
+	HealthPath      string
+	Timeout         time.Duration
+	LivenessProbes  map[string]Probe
 	ReadinessProbes map[string]Probe
-	HealthProbes map[string]Probe
+	HealthProbes    map[string]Probe
 }
 type HealthStatus struct {
 	Status string                 `json:"status"`
 	Errors map[string]string      `json:"errors,omitempty"`
 	Checks map[string]interface{} `json:"checks,omitempty"`
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -165,10 +167,12 @@ func runHealthChecks(ctx stdContext.Context, probes map[string]Probe, timeout ti
 	}
 	return status
 }
+
 type probeResult struct {
 	name string
 	err  error
 }
+
 func DatabaseProbe(pingFunc func(stdContext.Context) error) Probe {
 	return func(ctx stdContext.Context) error {
 		return pingFunc(ctx)

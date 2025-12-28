@@ -130,7 +130,7 @@ func TestDatabaseConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -199,7 +199,7 @@ func TestAppConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -288,7 +288,7 @@ func TestServerConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -375,7 +375,7 @@ func TestNewConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -395,9 +395,9 @@ func TestNewConfigValidation(t *testing.T) {
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
-		(len(s) > len(substr) && 
-			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > len(substr) &&
+			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
 				func() bool {
 					for i := 0; i <= len(s)-len(substr); i++ {
 						if s[i:i+len(substr)] == substr {

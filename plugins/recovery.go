@@ -33,7 +33,6 @@ func (b *RecoveryBuilder) DisableStackTrace() *RecoveryBuilder {
 	return b
 }
 
-
 func (b *RecoveryBuilder) Handler(handler func(c *context.Context, err interface{})) *RecoveryBuilder {
 	b.config.CustomRecoveryHandler = handler
 	return b
@@ -74,8 +73,7 @@ func (b *RecoveryBuilder) Build() context.Middleware {
 
 func (b *RecoveryBuilder) Validate() error {
 	b.ClearErrors()
-	
-	
+
 	return b.BaseBuilder.Validate()
 }
 

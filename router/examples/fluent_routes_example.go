@@ -7,7 +7,7 @@ package goryu
 
 func main() {
     app := goryu.New()
-    
+
     // NEW: Fluent route registration with the Route() method
     app.Route().
         Group("/api/v1", func(v1 *builder.SimpleGroupBuilder) {
@@ -17,39 +17,39 @@ func main() {
                 cors.Default(),
                 rateLimit.PerIP(100),
             )
-            
+
             // Individual routes with fluent configuration
             v1.GET("/health", func(c *goryu.Ctx) {
                 c.OK(map[string]string{"status": "healthy"})
             }).
                 Name("api.health").
                 Description("Health check endpoint")
-            
+
             // RESTful resource with automatic route generation
             v1.Resource("/users", &UserController{}).
                 Name("users").
                 Build()
-            
+
             // Partial resource with filtering
             v1.Resource("/settings", &SettingsController{}).
                 Only("index", "update").
                 Name("settings").
                 Build()
-            
+
             // Nested groups
             v1.Group("/admin", func(admin *builder.SimpleGroupBuilder) {
                 admin.Middleware(auth.RequireRole("admin"))
-                
+
                 admin.GET("/dashboard", adminDashboard).
                     Name("admin.dashboard")
-                
+
                 admin.Resource("/audit", &AuditController{}).
                     Except("destroy").
                     Name("admin.audit").
                     Build()
             })
         })
-    
+
     app.Listen(":8080")
 }
 
@@ -64,7 +64,7 @@ func (uc *UserController) Index(c *goryu.Ctx) {    // GET /api/v1/users
     c.OK(users)
 }
 
-func (uc *UserController) Create(c *goryu.Ctx) {   // POST /api/v1/users  
+func (uc *UserController) Create(c *goryu.Ctx) {   // POST /api/v1/users
     var user User
     if err := c.BindJSON(&user); err != nil {
         c.BadRequest("Invalid user data")
@@ -108,14 +108,14 @@ func setupRoutesOld(app *goryu.App) {
     api := app.Group("/api/v1")
     api.Use(logger.New())
     api.Use(cors.Default())
-    
+
     api.GET("/health", healthHandler)
     api.GET("/users", userController.Index)
     api.POST("/users", userController.Create)
     api.GET("/users/:id", userController.Show)
     api.PUT("/users/:id", userController.Update)
     api.DELETE("/users/:id", userController.Destroy)
-    
+
     admin := api.Group("/admin")
     admin.Use(auth.RequireRole("admin"))
     admin.GET("/dashboard", adminDashboard)
@@ -127,13 +127,13 @@ func setupRoutesNew(app *goryu.App) {
     app.Route().
         Group("/api/v1", func(v1 *builder.SimpleGroupBuilder) {
             v1.Middleware(logger.New(), cors.Default())
-            
+
             v1.GET("/health", healthHandler).Name("api.health")
-            
+
             v1.Resource("/users", &UserController{}).
                 Name("users").
                 Build()
-            
+
             v1.Group("/admin", func(admin *builder.SimpleGroupBuilder) {
                 admin.Middleware(auth.RequireRole("admin"))
                 admin.GET("/dashboard", adminDashboard).Name("admin.dashboard")
@@ -143,7 +143,7 @@ func setupRoutesNew(app *goryu.App) {
 
 // BENEFITS:
 // ✅ More expressive and readable
-// ✅ Automatic RESTful route generation  
+// ✅ Automatic RESTful route generation
 // ✅ Hierarchical middleware application
 // ✅ Built-in route naming and descriptions
 // ✅ Type-safe controller method mapping

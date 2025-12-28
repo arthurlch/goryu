@@ -9,16 +9,18 @@ import (
 
 	"github.com/arthurlch/goryu"
 )
+
 type Config struct {
-	ShowDetails bool
-	ShowStackTrace bool
-	LogErrors bool
-	CustomHandler func(c *goryu.Ctx, err error)
-	ErrorTransformer func(err error) error
+	ShowDetails       bool
+	ShowStackTrace    bool
+	LogErrors         bool
+	CustomHandler     func(c *goryu.Ctx, err error)
+	ErrorTransformer  func(err error) error
 	ResponseFormatter func(c *goryu.Ctx, err *AppError) interface{}
-	DevMode bool
+	DevMode           bool
 }
 type ErrorHandlerFunc func(c *goryu.Ctx) error
+
 func New(config ...Config) goryu.Middleware {
 	cfg := Config{
 		ShowDetails:    true,

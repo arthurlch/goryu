@@ -25,12 +25,12 @@ func New() *Builder {
 
 func FromFile(path string) (*Builder, error) {
 	b := New()
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	ext := filepath.Ext(path)
 	switch ext {
 	case ".json":
@@ -44,42 +44,42 @@ func FromFile(path string) (*Builder, error) {
 	default:
 		return nil, fmt.Errorf("unsupported config file format: %s", ext)
 	}
-	
+
 	return b, nil
 }
 
 func FromEnvironment() *Builder {
 	b := New()
-	
+
 	// load from environment variables with GORYU_ prefix
 	// Example: GORYU_SERVER_PORT=8080
-	
+
 	if port := os.Getenv("GORYU_SERVER_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
 			b.config.Server.Port = p
 		}
 	}
-	
+
 	if host := os.Getenv("GORYU_SERVER_HOST"); host != "" {
 		b.config.Server.Host = host
 	}
-	
+
 	if name := os.Getenv("GORYU_APP_NAME"); name != "" {
 		b.config.App.Name = name
 	}
-	
+
 	if env := os.Getenv("GORYU_APP_ENVIRONMENT"); env != "" {
 		b.config.App.Environment = env
 	}
-	
+
 	if header := os.Getenv("GORYU_APP_SERVER_HEADER"); header != "" {
 		b.config.App.ServerHeader = header
 	}
-	
+
 	if disable := os.Getenv("GORYU_APP_DISABLE_STARTUP_MESSAGE"); disable == "true" {
 		b.config.App.DisableStartupMessage = true
 	}
-	
+
 	if certFile := os.Getenv("GORYU_TLS_CERT_FILE"); certFile != "" {
 		b.config.Server.TLS.CertFile = certFile
 		if keyFile := os.Getenv("GORYU_TLS_KEY_FILE"); keyFile != "" {
@@ -87,36 +87,35 @@ func FromEnvironment() *Builder {
 			b.config.Server.TLS.Enabled = true
 		}
 	}
-	
+
 	if minVersion := os.Getenv("GORYU_TLS_MIN_VERSION"); minVersion != "" {
 		b.config.Server.TLS.MinVersion = minVersion
 	}
-	
 
 	if strict := os.Getenv("GORYU_ROUTER_STRICT"); strict == "true" {
 		b.config.Router.StrictRouting = true
 	}
-	
+
 	if caseSensitive := os.Getenv("GORYU_ROUTER_CASE_SENSITIVE"); caseSensitive == "true" {
 		b.config.Router.CaseSensitive = true
 	}
-	
+
 	if csrf := os.Getenv("GORYU_SECURITY_CSRF"); csrf == "false" {
 		b.config.Security.CSRFProtection = false
 	}
-	
+
 	if hsts := os.Getenv("GORYU_SECURITY_HSTS"); hsts == "true" {
 		b.config.Security.HSTS.Enabled = true
 	}
-	
+
 	if staticRoot := os.Getenv("GORYU_STATIC_ROOT"); staticRoot != "" {
 		b.config.Static.Root = staticRoot
 	}
-	
+
 	if staticIndex := os.Getenv("GORYU_STATIC_INDEX"); staticIndex != "" {
 		b.config.Static.Index = staticIndex
 	}
-	
+
 	return b
 }
 
@@ -144,7 +143,6 @@ func (b *Builder) Static(fn func(*StaticConfig)) *Builder {
 	fn(&b.config.Static)
 	return b
 }
-
 
 func (b *Builder) Security(fn func(*SecurityConfig)) *Builder {
 	fn(&b.config.Security)
@@ -214,11 +212,11 @@ func (b *Builder) HasErrors() bool {
 
 func (b *Builder) Build() (*Config, error) {
 	b.Validate()
-	
+
 	if b.HasErrors() {
 		return nil, b.errors
 	}
-	
+
 	return b.config.Clone(), nil
 }
 
@@ -250,13 +248,13 @@ func (b *Builder) SaveToFile(path string) error {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
-	
+
 	ext := filepath.Ext(path)
 	format := "json"
 	if ext == ".yaml" || ext == ".yml" {
 		format = "yaml"
 	}
-	
+
 	return b.WriteTo(file, format)
 }
 

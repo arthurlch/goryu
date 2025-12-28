@@ -1,14 +1,16 @@
 package expvar_test
+
 import (
 	"expvar"
+	context "github.com/arthurlch/goryu/goryuctx"
+	expvarMW "github.com/arthurlch/goryu/middleware/expvar"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	expvarMW "github.com/arthurlch/goryu/middleware/expvar"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr

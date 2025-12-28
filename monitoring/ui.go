@@ -429,7 +429,7 @@ func (m *Monitor) UIHandler(appName string) context.HandlerFunc {
 	if appName == "" {
 		appName = "Goryu App"
 	}
-	
+
 	// Create template once
 	tmpl, err := template.New("dashboard").Parse(dashboardHTML)
 	if err != nil {
@@ -438,7 +438,7 @@ func (m *Monitor) UIHandler(appName string) context.HandlerFunc {
 
 	return func(c *context.Context) {
 		c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-		
+
 		data := struct {
 			AppName string
 		}{

@@ -153,11 +153,11 @@ func (b *CORSBuilder) Build() context.Middleware {
 
 func (b *CORSBuilder) Validate() error {
 	b.ClearErrors()
-	
+
 	if len(b.config.AllowOrigins) == 0 {
 		b.AddError(fmt.Errorf("at least one allowed origin must be specified"))
 	}
-	
+
 	hasWildcardOrigin := false
 	for _, origin := range b.config.AllowOrigins {
 		if origin == "*" {
@@ -165,15 +165,15 @@ func (b *CORSBuilder) Validate() error {
 			break
 		}
 	}
-	
+
 	if hasWildcardOrigin && b.config.AllowCredentials {
 		b.AddError(fmt.Errorf("credentials cannot be enabled with wildcard origins"))
 	}
-	
+
 	if len(b.config.AllowMethods) == 0 {
 		b.AddError(fmt.Errorf("at least one allowed method must be specified"))
 	}
-	
+
 	if hasWildcardOrigin {
 		if allowAll, _ := b.GetMetadata("allow_all_origins"); allowAll != true {
 			if permissive, _ := b.GetMetadata("permissive"); permissive != true {
@@ -182,11 +182,11 @@ func (b *CORSBuilder) Validate() error {
 			}
 		}
 	}
-	
+
 	if b.config.MaxAge < 0 {
 		b.AddError(fmt.Errorf("max age cannot be negative"))
 	}
-	
+
 	return b.BaseBuilder.Validate()
 }
 
@@ -197,7 +197,7 @@ func (b *CORSBuilder) Reset() Builder {
 func (b *CORSBuilder) Clone() Builder {
 	clone := NewCORSBuilder()
 	clone.config = b.config
-	
+
 	// ddeep copy slices
 	if len(b.config.AllowOrigins) > 0 {
 		clone.config.AllowOrigins = make([]string, len(b.config.AllowOrigins))
@@ -215,7 +215,7 @@ func (b *CORSBuilder) Clone() Builder {
 		clone.config.ExposeHeaders = make([]string, len(b.config.ExposeHeaders))
 		copy(clone.config.ExposeHeaders, b.config.ExposeHeaders)
 	}
-	
+
 	return clone
 }
 

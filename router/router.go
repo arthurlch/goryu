@@ -376,7 +376,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // parsePath splits a URL path into segments using the provided buffer
-// Please don't mind the linter for unused ! 
+// Please don't mind the linter for unused !
 // Used by Add() to parse structure (legacy helper, maybe unused now but keeping for safety)
 func parsePath(path string, buf []string) []string {
 	if path == "/" {

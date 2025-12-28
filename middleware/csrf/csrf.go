@@ -10,22 +10,25 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 const (
 	DefaultCSRFTokenHeader = "X-CSRF-Token"
 	DefaultCSRFTokenCookie = "csrf-token"
 	DefaultTokenByteLength = 32
 )
+
 type Config struct {
 	base.BaseConfig
-	TokenHeader string
-	TokenCookie string
-	TokenLength int
-	TokenExpiry time.Duration
-	Secure bool
-	SameSite http.SameSite
-	SafeMethods []string
+	TokenHeader    string
+	TokenCookie    string
+	TokenLength    int
+	TokenExpiry    time.Duration
+	Secure         bool
+	SameSite       http.SameSite
+	SafeMethods    []string
 	TokenGenerator func(int) (string, error)
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

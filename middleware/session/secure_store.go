@@ -13,25 +13,27 @@ import (
 	"sync"
 	"time"
 )
+
 type SecureStore struct {
-	mu            sync.RWMutex
-	sessions      map[string]*encryptedSession
-	encryptionKey []byte
-	gcm           cipher.AEAD
-	maxSize       int
-	maxAge        time.Duration
+	mu                   sync.RWMutex
+	sessions             map[string]*encryptedSession
+	encryptionKey        []byte
+	gcm                  cipher.AEAD
+	maxSize              int
+	maxAge               time.Duration
 	enableFingerprinting bool
 	fingerprintFields    []string
-	cleanupInterval time.Duration
-	stopCleanup     chan bool
+	cleanupInterval      time.Duration
+	stopCleanup          chan bool
 }
 type encryptedSession struct {
-	Data        []byte    
-	Fingerprint string    
+	Data        []byte
+	Fingerprint string
 	CreatedAt   time.Time
 	AccessedAt  time.Time
-	Version     int       
+	Version     int
 }
+
 func NewSecureStore(encryptionKey string, options ...SecureStoreOption) (*SecureStore, error) {
 	if len(encryptionKey) < 32 {
 		return nil, errors.New("encryption key must be at least 32 characters")
@@ -46,13 +48,13 @@ func NewSecureStore(encryptionKey string, options ...SecureStoreOption) (*Secure
 		return nil, fmt.Errorf("failed to create GCM: %w", err)
 	}
 	store := &SecureStore{
-		sessions:        make(map[string]*encryptedSession),
-		encryptionKey:   key[:],
-		gcm:            gcm,
-		maxSize:        1024 * 1024, 
-		maxAge:         24 * time.Hour,
-		cleanupInterval: 1 * time.Hour,
-		stopCleanup:    make(chan bool),
+		sessions:          make(map[string]*encryptedSession),
+		encryptionKey:     key[:],
+		gcm:               gcm,
+		maxSize:           1024 * 1024,
+		maxAge:            24 * time.Hour,
+		cleanupInterval:   1 * time.Hour,
+		stopCleanup:       make(chan bool),
 		fingerprintFields: []string{"User-Agent", "Accept-Language"},
 	}
 	for _, opt := range options {
@@ -61,7 +63,9 @@ func NewSecureStore(encryptionKey string, options ...SecureStoreOption) (*Secure
 	go store.cleanupRoutine()
 	return store, nil
 }
+
 type SecureStoreOption func(*SecureStore)
+
 func WithMaxSize(size int) SecureStoreOption {
 	return func(s *SecureStore) {
 		s.maxSize = size

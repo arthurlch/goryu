@@ -302,7 +302,7 @@ func TestHTTPMethods(t *testing.T) {
 	app := goryu.New()
 
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-	
+
 	// Register a single ALL handler that responds to all methods
 	app.ALL("/all", func(c *goryu.Ctx) {
 		c.Text(http.StatusOK, "Method: "+c.Request.Method)
@@ -317,7 +317,7 @@ func TestHTTPMethods(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Errorf("Expected status %d for %s method, got %d", http.StatusOK, method, rr.Code)
 		}
-		
+
 		if method != "HEAD" { // HEAD requests don't return body
 			expected := "Method: " + method
 			if rr.Body.String() != expected {
@@ -679,7 +679,7 @@ func TestAllHTTPMethods(t *testing.T) {
 		{"PUT", "/put", "PUT"},
 		{"DELETE", "/delete", "DELETE"},
 		{"PATCH", "/patch", "PATCH"},
-		{"HEAD", "/head", ""},     // HEAD doesn't return body
+		{"HEAD", "/head", ""}, // HEAD doesn't return body
 		{"OPTIONS", "/options", "OPTIONS"},
 	}
 

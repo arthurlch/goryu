@@ -1,11 +1,13 @@
 package cors_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/cors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/cors"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -83,7 +85,7 @@ func TestCorsMiddleware(t *testing.T) {
 		middleware := cors.New(cors.Config{
 			AllowOrigins: []string{"http://localhost:8080"},
 		})
-		req := httptest.NewRequest("GET", "/", nil) 
+		req := httptest.NewRequest("GET", "/", nil)
 		ctx, rr := newTestContext(req)
 		middleware(handler)(ctx)
 		if rr.Header().Get("Access-Control-Allow-Origin") != "" {

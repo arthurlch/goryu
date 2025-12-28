@@ -133,14 +133,14 @@ func buildPostgresDSNFromConfig(config *config.DatabaseConfig) (string, error) {
 	if err := validateDatabaseComponents(config.Username, config.Password, config.Host, config.Database, config.SSLMode); err != nil {
 		return "", err
 	}
-	
-	// SECUCHECK: Properly URL encode credentials and database name to prevent injection ! 
+
+	// SECUCHECK: Properly URL encode credentials and database name to prevent injection !
 	username := url.QueryEscape(config.Username)
 	password := url.QueryEscape(config.Password)
 	database := url.QueryEscape(config.Database)
 	host := url.QueryEscape(config.Host)
 	sslmode := url.QueryEscape(config.SSLMode)
-	
+
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		username, password, host, config.Port, database, sslmode), nil
 }
@@ -150,13 +150,13 @@ func buildMySQLDSNFromConfig(config *config.DatabaseConfig) (string, error) {
 	if err := validateDatabaseComponents(config.Username, config.Password, config.Host, config.Database, config.Charset); err != nil {
 		return "", err
 	}
-	
+
 	// SECUCHECK: Properly URL encode credentials and database name to prevent injection
 	username := url.QueryEscape(config.Username)
 	password := url.QueryEscape(config.Password)
 	database := url.QueryEscape(config.Database)
 	host := url.QueryEscape(config.Host)
-	
+
 	params := "parseTime=true"
 	if config.Charset != "" {
 		// SECUCHECK: Validate and escape charset parameter
@@ -165,7 +165,7 @@ func buildMySQLDSNFromConfig(config *config.DatabaseConfig) (string, error) {
 		}
 		params += "&charset=" + url.QueryEscape(config.Charset)
 	}
-	
+
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
 		username, password, host, config.Port, database, params), nil
 }
@@ -175,7 +175,7 @@ func buildSQLiteDSN(config map[string]interface{}) (string, error) {
 	return path, nil
 }
 
-//  (legacy)
+// (legacy)
 func buildPostgresDSN(config map[string]interface{}) (string, error) {
 	host := getStringFromConfig(config, "host", "localhost")
 	port := getIntFromConfig(config, "port", 5432)
@@ -190,12 +190,12 @@ func buildPostgresDSN(config map[string]interface{}) (string, error) {
 	if username == "" {
 		return "", fmt.Errorf("username is required for PostgreSQL")
 	}
-	
+
 	// SECUCHECK: Validate all components before building DSN
 	if err := validateDatabaseComponents(username, password, host, database, sslmode); err != nil {
 		return "", err
 	}
-	
+
 	// SECUCHECK: Properly URL encode credentials and database name to prevent injection
 	usernameEncoded := url.QueryEscape(username)
 	passwordEncoded := url.QueryEscape(password)
@@ -221,12 +221,12 @@ func buildMySQLDSN(config map[string]interface{}) (string, error) {
 	if username == "" {
 		return "", fmt.Errorf("username is required for MySQL")
 	}
-	
+
 	// SECUCHECK: Validate all components before building DSN
 	if err := validateDatabaseComponents(username, password, host, database, ""); err != nil {
 		return "", err
 	}
-	
+
 	// SECUCHECK: Properly URL encode credentials and database name to prevent injection
 	usernameEncoded := url.QueryEscape(username)
 	passwordEncoded := url.QueryEscape(password)
@@ -259,19 +259,19 @@ func getIntFromConfig(config map[string]interface{}, key string, defaultValue in
 func validateDatabaseComponents(username, password, host, database, extra string) error {
 	// SECUCHECK: Check for SQL injection patterns and dangerous characters
 	dangerousChars := []string{
-		";",        // SQL statement separator
-		"--",       // SQL comment
-		"/*",       // SQL comment start
-		"*/",       // SQL comment end  
-		"'",        // SQL string delimiter
-		"\"",       // SQL string delimiter
-		"\x00",     // Null byte
-		"\n",       // Newline
-		"\r",       // Carriage return
-		"\t",       // Tab
-		"\\",       // Backslash escape
+		";",    // SQL statement separator
+		"--",   // SQL comment
+		"/*",   // SQL comment start
+		"*/",   // SQL comment end
+		"'",    // SQL string delimiter
+		"\"",   // SQL string delimiter
+		"\x00", // Null byte
+		"\n",   // Newline
+		"\r",   // Carriage return
+		"\t",   // Tab
+		"\\",   // Backslash escape
 	}
-	
+
 	components := map[string]string{
 		"username": username,
 		"password": password,
@@ -279,23 +279,23 @@ func validateDatabaseComponents(username, password, host, database, extra string
 		"database": database,
 		"extra":    extra,
 	}
-	
+
 	for name, value := range components {
 		if value == "" && (name == "username" || name == "database" || name == "host") {
-			continue 
+			continue
 		}
-		
+
 		for _, dangerous := range dangerousChars {
 			if strings.Contains(value, dangerous) {
 				return fmt.Errorf("invalid %s: contains dangerous character '%s' (potential SQL injection)", name, dangerous)
 			}
 		}
-		
+
 		// SECUCHECK: Check length limits to prevent buffer overflow attacks
 		if len(value) > 255 {
 			return fmt.Errorf("invalid %s: exceeds maximum length of 255 characters", name)
 		}
-		
+
 		// SECUCHECK: Check for control characters
 		for _, char := range value {
 			if char < 32 && char != 9 && char != 10 && char != 13 { // Allow tab, LF, CR
@@ -303,7 +303,7 @@ func validateDatabaseComponents(username, password, host, database, extra string
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -311,35 +311,35 @@ func validateSQLitePath(path string) error {
 	if path == "" {
 		return fmt.Errorf("SQLite path cannot be empty")
 	}
-	
+
 	// SECUCHECK: traversal attempts
 	if strings.Contains(path, "..") {
 		return fmt.Errorf("invalid SQLite path: contains directory traversal (..) - potential security risk")
 	}
-	
+
 	// SECUCHECK: Clean the path and allow reasonable normalization
 	cleaned := filepath.Clean(path)
 	if strings.Contains(path, "..") && strings.Contains(cleaned, "..") {
 		return fmt.Errorf("invalid SQLite path: contains directory traversal after normalization")
 	}
-	
+
 	// SECUCHECK: Check for dangerous path components
 	dangerousPaths := []string{
 		"/etc/",
 		"/var/",
 		"/usr/",
-		"/bin/", 
+		"/bin/",
 		"/sbin/",
 		"C:\\Windows\\",
 		"C:\\Program Files\\",
 	}
-	
+
 	for _, dangerous := range dangerousPaths {
 		if strings.HasPrefix(strings.ToLower(cleaned), strings.ToLower(dangerous)) {
 			return fmt.Errorf("invalid SQLite path: access to system directory '%s' not allowed", dangerous)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -347,23 +347,23 @@ func validateCharset(charset string) error {
 	if charset == "" {
 		return nil
 	}
-	
+
 	// SECUCHECK: Whitelist allowed charset values to prevent injection
 	allowedCharsets := map[string]bool{
-		"utf8":        true,
-		"utf8mb3":     true,
-		"utf8mb4":     true,
-		"latin1":      true,
-		"ascii":       true,
-		"binary":      true,
-		"ucs2":        true,
-		"utf16":       true,
-		"utf32":       true,
+		"utf8":    true,
+		"utf8mb3": true,
+		"utf8mb4": true,
+		"latin1":  true,
+		"ascii":   true,
+		"binary":  true,
+		"ucs2":    true,
+		"utf16":   true,
+		"utf32":   true,
 	}
-	
+
 	if !allowedCharsets[strings.ToLower(charset)] {
 		return fmt.Errorf("invalid charset: '%s' is not a recognized safe charset", charset)
 	}
-	
+
 	return nil
 }

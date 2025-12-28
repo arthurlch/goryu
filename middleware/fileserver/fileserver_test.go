@@ -1,13 +1,15 @@
 package fileserver_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/fileserver"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/fileserver"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr

@@ -11,6 +11,7 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Tracer interface {
 	StartSpan(ctx stdContext.Context, name string) (Span, stdContext.Context)
 	Extract(headers http.Header) (SpanContext, error)
@@ -29,20 +30,24 @@ type SpanContext interface {
 	IsSampled() bool
 }
 type StatusCode int
+
 const (
 	StatusCodeUnset StatusCode = iota
 	StatusCodeOk
 	StatusCodeError
 )
+
 type Config struct {
 	base.BaseConfig
-	Tracer Tracer
+	Tracer            Tracer
 	SpanNameGenerator func(c *context.Context) string
-	CustomTags func(c *context.Context) map[string]interface{}
-	SampleRate float64
+	CustomTags        func(c *context.Context) map[string]interface{}
+	SampleRate        float64
 }
 type contextKey string
+
 const traceContextKey contextKey = "trace_context"
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -56,7 +61,7 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.SampleRate <= 0 {
-		c.SampleRate = 1.0 
+		c.SampleRate = 1.0
 	}
 	return nil
 }
@@ -126,12 +131,14 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
 	return New()
 }
+
 type tracingResponseWriter struct {
 	http.ResponseWriter
 	span         Span
 	statusCode   int
 	responseSize int
 }
+
 func (w *tracingResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 	w.ResponseWriter.WriteHeader(statusCode)
@@ -164,9 +171,11 @@ func GetSpan(c *context.Context) (Span, bool) {
 	}
 	return nil, false
 }
+
 type SimpleTracer struct {
 	spans []*SimpleSpan
 }
+
 func NewSimpleTracer() *SimpleTracer {
 	return &SimpleTracer{
 		spans: make([]*SimpleSpan, 0),
@@ -216,6 +225,7 @@ func (t *SimpleTracer) Inject(spanContext SpanContext, headers http.Header) erro
 func (t *SimpleTracer) GetSpans() []*SimpleSpan {
 	return t.spans
 }
+
 type SimpleSpan struct {
 	Name         string
 	TraceID      string
@@ -237,6 +247,7 @@ type SpanStatus struct {
 	Code    StatusCode
 	Message string
 }
+
 func (s *SimpleSpan) SetTag(key string, value interface{}) {
 	s.Tags[key] = value
 }
@@ -263,11 +274,13 @@ func (s *SimpleSpan) Context() SpanContext {
 		isSampled: s.IsSampled,
 	}
 }
+
 type SimpleSpanContext struct {
 	traceID   string
 	spanID    string
 	isSampled bool
 }
+
 func (c *SimpleSpanContext) TraceID() string {
 	return c.traceID
 }
@@ -282,7 +295,9 @@ func generateID() string {
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
+
 type noopTracer struct{}
+
 func (n *noopTracer) StartSpan(ctx stdContext.Context, name string) (Span, stdContext.Context) {
 	return &noopSpan{}, ctx
 }
@@ -292,13 +307,17 @@ func (n *noopTracer) Extract(headers http.Header) (SpanContext, error) {
 func (n *noopTracer) Inject(spanContext SpanContext, headers http.Header) error {
 	return nil
 }
+
 type noopSpan struct{}
+
 func (n *noopSpan) SetTag(key string, value interface{})                    {}
 func (n *noopSpan) SetStatus(code StatusCode, message string)               {}
 func (n *noopSpan) AddEvent(name string, attributes map[string]interface{}) {}
 func (n *noopSpan) End()                                                    {}
 func (n *noopSpan) Context() SpanContext                                    { return &noopSpanContext{} }
+
 type noopSpanContext struct{}
+
 func (n *noopSpanContext) TraceID() string { return "" }
 func (n *noopSpanContext) SpanID() string  { return "" }
 func (n *noopSpanContext) IsSampled() bool { return false }

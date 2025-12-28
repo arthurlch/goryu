@@ -7,9 +7,9 @@ type Route struct {
 	Path        string
 	Handler     interface{} // Will hold context.HandlerFunc to avoid circular imports
 	Name        string
-	Description string      // Route description for documentation
-	ParamNames  []string    // Optimization: Store param names to avoid map usage in traversal
-	
+	Description string   // Route description for documentation
+	ParamNames  []string // Optimization: Store param names to avoid map usage in traversal
+
 	// Router field will be set by the router package using SetRouter method
 	Router interface{} // Will hold *router.Router to avoid circular imports
 }

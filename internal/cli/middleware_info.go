@@ -158,12 +158,12 @@ func getMiddlewareInfo(name string) *MiddlewareInfo {
 			},
 		},
 		"metrics": {
-			Name:        "Metrics",
-			Description: "Prometheus metrics collection middleware",
-			Category:    "Monitoring",
-			Package:     "github.com/arthurlch/goryu/middleware/metrics",
+			Name:         "Metrics",
+			Description:  "Prometheus metrics collection middleware",
+			Category:     "Monitoring",
+			Package:      "github.com/arthurlch/goryu/middleware/metrics",
 			Dependencies: []string{"github.com/prometheus/client_golang"},
-			Usage:       "app.Use(metrics.New(metrics.Config{...}))",
+			Usage:        "app.Use(metrics.New(metrics.Config{...}))",
 			Example: `app.Use(metrics.New(metrics.Config{
     Namespace: "myapp",
     Subsystem: "http",
@@ -225,12 +225,12 @@ func getMiddlewareInfo(name string) *MiddlewareInfo {
 			},
 		},
 		"tracing": {
-			Name:        "OpenTelemetry Tracing",
-			Description: "Distributed tracing middleware with OpenTelemetry",
-			Category:    "Monitoring",
-			Package:     "github.com/arthurlch/goryu/middleware/tracing",
+			Name:         "OpenTelemetry Tracing",
+			Description:  "Distributed tracing middleware with OpenTelemetry",
+			Category:     "Monitoring",
+			Package:      "github.com/arthurlch/goryu/middleware/tracing",
 			Dependencies: []string{"go.opentelemetry.io/otel"},
-			Usage:       "app.Use(tracing.New(tracing.Config{...}))",
+			Usage:        "app.Use(tracing.New(tracing.Config{...}))",
 			Example: `app.Use(tracing.New(tracing.Config{
     ServiceName: "my-service",
     ServiceVersion: "1.0.0",
@@ -311,6 +311,6 @@ app.POST("/login", func(c *goryu.Context) {
 			},
 		},
 	}
-	
+
 	return middlewareData[name]
 }

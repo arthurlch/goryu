@@ -1,16 +1,19 @@
 package base
+
 import (
 	"errors"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"net/http"
 	"time"
-	context "github.com/arthurlch/goryu/goryuctx"
 )
+
 type ExampleConfig struct {
 	BaseConfig
-	Timeout       time.Duration
-	CustomHeader  string
+	Timeout        time.Duration
+	CustomHeader   string
 	AllowedMethods []string
 }
+
 func (c *ExampleConfig) Configure(base *BaseConfig) {
 	c.BaseConfig = *base
 }
@@ -86,8 +89,8 @@ func NewExamplePostProcessMiddleware(config ExampleConfig) func(next context.Han
 }
 func Example(timeout time.Duration, customHeader string) func(next context.HandlerFunc) context.HandlerFunc {
 	return NewExampleMiddleware(ExampleConfig{
-		Timeout:      timeout,
-		CustomHeader: customHeader,
+		Timeout:        timeout,
+		CustomHeader:   customHeader,
 		AllowedMethods: []string{"GET", "POST"},
 	})
 }

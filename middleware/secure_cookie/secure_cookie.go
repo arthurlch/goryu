@@ -15,22 +15,26 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type contextKey string
+
 const secureCookieContextKey = contextKey("secure-cookie-data")
 const secureCookieInstanceKey = contextKey("secure-cookie-instance")
+
 var (
 	ErrValueNotFound = errors.New("securecookie: value not found")
 	ErrInvalidValue  = errors.New("securecookie: invalid value")
 )
+
 type Config struct {
 	base.BaseConfig
-	HexKey string
+	HexKey     string
 	CookieName string
 	CookiePath string
-	CookieTTL time.Duration
-	Secure bool
-	SameSite http.SameSite
-	HttpOnly bool
+	CookieTTL  time.Duration
+	Secure     bool
+	SameSite   http.SameSite
+	HttpOnly   bool
 }
 type SecureCookie struct {
 	gcm        cipher.AEAD
@@ -41,6 +45,7 @@ type SecureCookie struct {
 	sameSite   http.SameSite
 	httpOnly   bool
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -216,7 +221,7 @@ func (sc *SecureCookie) createExpiredCookie() *http.Cookie {
 		Name:     sc.cookieName,
 		Value:    "",
 		Path:     sc.cookiePath,
-		MaxAge:   -1, 
+		MaxAge:   -1,
 		HttpOnly: sc.httpOnly,
 		Secure:   sc.secure,
 		SameSite: sc.sameSite,

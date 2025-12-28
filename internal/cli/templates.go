@@ -488,7 +488,7 @@ export GORYU_DATABASE_PASSWORD=pass
 `, projectName)
 }
 
-func generateDBMainFile(projectName string) string { // hmmm 
+func generateDBMainFile(projectName string) string { // hmmm
 	return fmt.Sprintf(`package main
 
 import (

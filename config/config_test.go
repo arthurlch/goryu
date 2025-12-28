@@ -248,16 +248,16 @@ func TestConfigValidation(t *testing.T) {
 	t.Run("ValidConfig", func(t *testing.T) {
 		config := &Config{
 			App: AppConfig{
-				Name: "test-app",
+				Name:        "test-app",
 				Environment: "development",
-				LogLevel: "info",
+				LogLevel:    "info",
 			},
 			Server: ServerConfig{
 				Port: 8080,
 			},
 			Database: DatabaseConfig{
 				Driver: "sqlite3",
-				Path: "./test.db",
+				Path:   "./test.db",
 			},
 		}
 
@@ -270,16 +270,16 @@ func TestConfigValidation(t *testing.T) {
 	t.Run("InvalidPort", func(t *testing.T) {
 		config := &Config{
 			App: AppConfig{
-				Name: "test",
+				Name:        "test",
 				Environment: "development",
-				LogLevel: "info",
+				LogLevel:    "info",
 			},
 			Server: ServerConfig{
 				Port: 99999, // Invalid port
 			},
 			Database: DatabaseConfig{
 				Driver: "sqlite3",
-				Path: "./test.db",
+				Path:   "./test.db",
 			},
 		}
 
@@ -294,14 +294,14 @@ func TestConfigValidation(t *testing.T) {
 			App: AppConfig{
 				// Missing name - should cause error
 				Environment: "development",
-				LogLevel: "info",
+				LogLevel:    "info",
 			},
 			Server: ServerConfig{
 				Port: 8080,
 			},
 			Database: DatabaseConfig{
 				Driver: "sqlite3",
-				Path: "./test.db",
+				Path:   "./test.db",
 			},
 		}
 
@@ -342,7 +342,7 @@ func TestConfigHelpers(t *testing.T) {
 		// Use the new adapter
 		adapter := NewFrameworkAdapter(config)
 		goryuCfg := adapter.ToGoryuConfig()
-		
+
 		// No type assertion needed, directly access fields
 		if goryuCfg.AppName != "test-app" {
 			t.Errorf("Expected AppName 'test-app', got '%s'", goryuCfg.AppName)

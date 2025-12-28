@@ -9,10 +9,12 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/auth"
 )
+
 type AuthIntegration struct {
 	sessionConfig *Config
 	authService   *auth.AuthService
 }
+
 func NewAuthIntegration(sessionConfig *Config, authService *auth.AuthService) *AuthIntegration {
 	return &AuthIntegration{
 		sessionConfig: sessionConfig,
@@ -71,7 +73,7 @@ func SessionAuthMiddleware(sessionConfig *Config) func(next context.HandlerFunc)
 				session.Set("last_activity", time.Now().Unix())
 				if lastActivity := session.Get("last_activity"); lastActivity != nil {
 					if lastActivityTime, ok := lastActivity.(int64); ok {
-						idleTimeout := 30 * time.Minute 
+						idleTimeout := 30 * time.Minute
 						if time.Since(time.Unix(lastActivityTime, 0)) > idleTimeout {
 							Destroy(c)
 							c.JSON(401, map[string]string{"error": "Session expired due to inactivity"})
@@ -100,16 +102,18 @@ func SessionAuthMiddleware(sessionConfig *Config) func(next context.HandlerFunc)
 		}
 	}
 }
+
 type responseWriter struct {
 	http.ResponseWriter
 	status int
 }
+
 func (rw *responseWriter) WriteHeader(status int) {
 	rw.status = status
 	rw.ResponseWriter.WriteHeader(status)
 }
 func CreateIntegratedAuthSetup(app *goryu.App, jwtSecret, sessionKey string) (*auth.AuthService, *AuthIntegration) {
-	sessionStore, err := NewSecureStore(sessionKey, 
+	sessionStore, err := NewSecureStore(sessionKey,
 		WithMaxAge(24*time.Hour),
 		WithFingerprinting("User-Agent", "Accept-Language"),
 	)
@@ -130,12 +134,14 @@ func CreateIntegratedAuthSetup(app *goryu.App, jwtSecret, sessionKey string) (*a
 	app.Use(SessionAuthMiddleware(sessionConfig))
 	return authService, integration
 }
+
 type SessionUser struct {
 	ID           string
 	Email        string
 	LoginTime    time.Time
 	LastActivity time.Time
 }
+
 func GetSessionUser(c *context.Context) (*SessionUser, error) {
 	session, err := Get(c)
 	if err != nil {

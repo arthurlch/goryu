@@ -21,11 +21,11 @@ func generateAPIRoutes(resource string, moduleName string, middleware string) er
 
 	middlewareStr := ""
 	imports := fmt.Sprintf(`"%s/internal/handlers"`, moduleName)
-	
+
 	if middleware != "" {
 		imports += fmt.Sprintf(`
 	"%s/internal/middleware"`, moduleName)
-		
+
 		mws := strings.Split(middleware, ",")
 		for _, mw := range mws {
 			mwName := strings.Title(strings.TrimSpace(mw))

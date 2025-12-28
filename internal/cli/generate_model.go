@@ -77,7 +77,7 @@ func runGenerateModel(args []string) error {
 			// For ent, we don't generate a model file, we tell user to init
 			cmd := fmt.Sprintf("go run entgo.io/ent/cmd/ent init %s", utils.ToGoIdentifier(name))
 			fmt.Printf("🚀 Running: %s\n", cmd)
-			// In a real CLI we might run the command. For now, let's just print instructions or run it 
+			// In a real CLI we might run the command. For now, let's just print instructions or run it
 			// if we want to be "Integrated Correctly". The user wants integration.
 			// Implementing running the command is risky if ent is not installed, but go run handles it.
 			// Let's just print for now as implemented in tips, but avoid generating the useless model file.

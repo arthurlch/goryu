@@ -28,20 +28,20 @@ type Context struct {
 	Request *http.Request
 	Params  map[string]string
 	Keys    map[string]interface{}
-	Route   *route.Route 
-	
+	Route   *route.Route
+
 	// Optimization: Reused buffer for path splitting to avoid allocations
 	PathBuffer []string
 	// Optimization: Reused buffer for param values to avoid map usage in traversal
 	ParamValues []string
-	
+
 	// SECUCHECK: Sync for thread-safe operations
-	mu           sync.RWMutex 
-	responseSent int32        // SECUCHECK: Atomic flag to prevent response race conditions
-	
-	errors       []error                
-	errorHandler func(c *Context, err error) 
-	
+	mu           sync.RWMutex
+	responseSent int32 // SECUCHECK: Atomic flag to prevent response race conditions
+
+	errors       []error
+	errorHandler func(c *Context, err error)
+
 	// Performance optimization: cache error handling mode
 	errorHandlingMode ErrorHandlingMode
 	errorModeSet      bool
@@ -70,18 +70,18 @@ func (c *Context) Reset(writer http.ResponseWriter, request *http.Request) {
 	if c.Keys != nil {
 		clear(c.Keys)
 	}
-	
+
 	// Optimization: Reset PathBuffer
 	c.PathBuffer = c.PathBuffer[:0]
 	// Optimization: Reset ParamValues
 	c.ParamValues = c.ParamValues[:0]
-	
+
 	c.mu.Lock()
 	c.responseSent = 0
 	c.errors = c.errors[:0] // keep capacity
 	c.errorHandler = nil
 	c.mu.Unlock()
-	
+
 	// Reset cached error mode
 	c.errorModeSet = false
 	c.errorHandlingMode = ErrorModeReturn
@@ -146,13 +146,12 @@ func (c *Context) Param(key string) string {
 	return ""
 }
 
-
 func (c *Context) collectError(err error) *Context {
 	if err != nil {
 		c.mu.Lock()
 		c.errors = append(c.errors, err)
 		c.mu.Unlock()
-		
+
 		if c.errorHandler != nil {
 			c.errorHandler(c, err)
 		}
@@ -196,4 +195,3 @@ func (c *Context) FirstError() error {
 }
 
 // Methods moved to response.go
-

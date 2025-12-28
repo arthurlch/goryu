@@ -1,14 +1,16 @@
 package timeout_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
+	"github.com/arthurlch/goryu/middleware/timeout"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/base"
-	"github.com/arthurlch/goryu/middleware/timeout"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -38,7 +40,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 		}
 		middleware := timeout.New(config)
 		handler := func(c *context.Context) {
-			time.Sleep(50 * time.Millisecond) 
+			time.Sleep(50 * time.Millisecond)
 			c.Text(http.StatusOK, "Slow response")
 		}
 		req := httptest.NewRequest("GET", "/", nil)
@@ -84,7 +86,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 		}
 		middleware := timeout.New(config)
 		handler := func(c *context.Context) {
-			time.Sleep(50 * time.Millisecond) 
+			time.Sleep(50 * time.Millisecond)
 			c.Text(http.StatusOK, "Not timed out")
 		}
 		req := httptest.NewRequest("GET", "/skip", nil)
@@ -169,7 +171,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 	})
 	t.Run("ZeroTimeout", func(t *testing.T) {
 		config := timeout.Config{
-			Timeout: 0, 
+			Timeout: 0,
 		}
 		middleware := timeout.New(config)
 		handler := func(c *context.Context) {
@@ -188,7 +190,7 @@ func TestTimeoutMiddleware(t *testing.T) {
 	})
 	t.Run("NegativeTimeout", func(t *testing.T) {
 		config := timeout.Config{
-			Timeout: -10 * time.Millisecond, 
+			Timeout: -10 * time.Millisecond,
 		}
 		middleware := timeout.New(config)
 		handler := func(c *context.Context) {

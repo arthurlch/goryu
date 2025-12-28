@@ -1,10 +1,13 @@
 package errors
+
 import (
 	"github.com/arthurlch/goryu"
 )
+
 type ContextError struct {
 	*goryu.Ctx
 }
+
 func Error(c *goryu.Ctx) *ContextError {
 	return &ContextError{Ctx: c}
 }
@@ -56,10 +59,12 @@ func ValidateAndHandle(c *goryu.Ctx, validator func() error) bool {
 	}
 	return true
 }
+
 type Chain struct {
 	c   *goryu.Ctx
 	err error
 }
+
 func NewChain(c *goryu.Ctx) *Chain {
 	return &Chain{c: c}
 }

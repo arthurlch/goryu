@@ -25,7 +25,7 @@ func (e ValidationErrors) Error() string {
 	if len(e) == 0 {
 		return ""
 	}
-	
+
 	var messages []string
 	for _, err := range e {
 		messages = append(messages, err.Error())
@@ -45,14 +45,14 @@ func NewValidator() *Validator {
 
 func (v *Validator) Validate(cfg *Config) ValidationErrors {
 	v.errors = make(ValidationErrors, 0)
-	
+
 	v.validateApp(&cfg.App)
 	v.validateServer(&cfg.Server)
 	v.validateRouter(&cfg.Router)
 	v.validateStatic(&cfg.Static)
 	v.validateSecurity(&cfg.Security)
 	v.validateLimits(&cfg.Limits)
-	
+
 	return v.errors
 }
 
@@ -61,7 +61,7 @@ func (v *Validator) validateApp(cfg *AppConfig) {
 	if !contains(validEnvironments, cfg.Environment) {
 		v.addError("app.environment", fmt.Sprintf("must be one of: %v", validEnvironments))
 	}
-	
+
 	if cfg.Version != "" && !isValidVersion(cfg.Version) {
 		v.addError("app.version", "must be a valid semantic version (e.g., 1.0.0)")
 	}
@@ -72,12 +72,12 @@ func (v *Validator) validateServer(cfg *ServerConfig) {
 	if cfg.Port < 0 || cfg.Port > 65535 {
 		v.addError("server.port", "must be between 0 and 65535")
 	}
-	
+
 	// and here host
 	if cfg.Host != "" && !isValidHost(cfg.Host) {
 		v.addError("server.host", "must be a valid hostname or IP address")
 	}
-	
+
 	if cfg.ReadTimeout < 0 {
 		v.addError("server.read_timeout", "must be non-negative")
 	}
@@ -90,33 +90,33 @@ func (v *Validator) validateServer(cfg *ServerConfig) {
 	if cfg.ShutdownTimeout < 0 {
 		v.addError("server.shutdown_timeout", "must be non-negative")
 	}
-	
+
 	if cfg.MaxHeaderSize < 0 {
 		v.addError("server.max_header_size", "must be non-negative")
 	}
 	if cfg.MaxHeaderSize > 0 && cfg.MaxHeaderSize < 1024 {
 		v.addError("server.max_header_size", "must be at least 1024 bytes if set")
 	}
-	
+
 	if cfg.TLS.Enabled {
 		if cfg.TLS.CertFile == "" {
 			v.addError("server.tls.cert_file", "required when TLS is enabled")
 		} else if !fileExists(cfg.TLS.CertFile) {
 			v.addError("server.tls.cert_file", "file does not exist")
 		}
-		
+
 		if cfg.TLS.KeyFile == "" {
 			v.addError("server.tls.key_file", "required when TLS is enabled")
 		} else if !fileExists(cfg.TLS.KeyFile) {
 			v.addError("server.tls.key_file", "file does not exist")
 		}
-		
+
 		validTLSVersions := []string{"TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"}
 		if !contains(validTLSVersions, cfg.TLS.MinVersion) {
 			v.addError("server.tls.min_version", fmt.Sprintf("must be one of: %v", validTLSVersions))
 		}
 	}
-	
+
 	if cfg.ReadTimeout == 0 {
 		v.addWarning("server.read_timeout", "consider setting a read timeout to prevent slow client attacks")
 	}
@@ -136,15 +136,15 @@ func (v *Validator) validateStatic(cfg *StaticConfig) {
 			v.addError("static.root", "directory does not exist")
 		}
 	}
-	
+
 	if cfg.MaxAge < 0 {
 		v.addError("static.max_age", "must be non-negative")
 	}
-	
+
 	if cfg.CacheDuration < 0 {
 		v.addError("static.cache_duration", "must be non-negative")
 	}
-	
+
 	if cfg.Index != "" && !isValidFilename(cfg.Index) {
 		v.addError("static.index", "must be a valid filename")
 	}
@@ -154,26 +154,26 @@ func (v *Validator) validateSecurity(cfg *SecurityConfig) {
 	if cfg.CSRFProtection && cfg.CSRFTokenLength < 16 {
 		v.addError("security.csrf_token_length", "must be at least 16 bytes for security")
 	}
-	
+
 	validFrameOptions := []string{"DENY", "SAMEORIGIN", "ALLOW-FROM"}
 	if cfg.XFrameOptions != "" && !startsWithAny(cfg.XFrameOptions, validFrameOptions) {
 		v.addError("security.x_frame_options", fmt.Sprintf("must start with one of: %v", validFrameOptions))
 	}
-	
+
 	if cfg.HSTS.Enabled {
 		if cfg.HSTS.MaxAge < time.Hour {
 			v.addWarning("security.hsts.max_age", "consider setting HSTS max-age to at least 1 hour")
 		}
-		
+
 		v.addWarning("security.hsts.enabled", "HSTS requires HTTPS to be effective")
 	}
-	
+
 	for i, host := range cfg.AllowedHosts {
 		if !isValidHostPattern(host) {
 			v.addError(fmt.Sprintf("security.allowed_hosts[%d]", i), "must be a valid hostname or pattern")
 		}
 	}
-	
+
 	for i, proxy := range cfg.TrustedProxies {
 		if !isValidIPOrCIDR(proxy) {
 			v.addError(fmt.Sprintf("security.trusted_proxies[%d]", i), "must be a valid IP address or CIDR")
@@ -188,26 +188,26 @@ func (v *Validator) validateLimits(cfg *LimitsConfig) {
 	if cfg.MaxRouteDepth > 100 {
 		v.addWarning("limits.max_route_depth", "very deep routes may impact performance")
 	}
-	
+
 	if cfg.MaxTotalRoutes < 1 {
 		v.addError("limits.max_total_routes", "must be at least 1")
 	}
-	
+
 	if cfg.MaxParametersPerRoute < 0 {
 		v.addError("limits.max_parameters_per_route", "must be non-negative")
 	}
-	
+
 	if cfg.MaxRequestBodySize < 0 {
 		v.addError("limits.max_request_body_size", "must be non-negative")
 	}
 	if cfg.MaxRequestBodySize > 0 && cfg.MaxRequestBodySize < 1024 {
 		v.addWarning("limits.max_request_body_size", "very small body size limit may cause issues")
 	}
-	
+
 	if cfg.MaxMultipartMemory < 0 {
 		v.addError("limits.max_multipart_memory", "must be non-negative")
 	}
-	
+
 	if cfg.MaxConcurrentRequests < 0 {
 		v.addError("limits.max_concurrent_requests", "must be non-negative")
 	}
@@ -222,7 +222,7 @@ func (v *Validator) addError(field, message string) {
 
 func (v *Validator) addWarning(field, message string) {
 	// For now, warnings are just logged, not returned as errors
-	// 
+	//
 }
 
 func contains(slice []string, item string) bool {
@@ -265,20 +265,20 @@ func isValidHost(host string) bool {
 	if net.ParseIP(host) != nil {
 		return true
 	}
-	
+
 	if len(host) == 0 || len(host) > 255 {
 		return false
 	}
-	
+
 	return true
 }
 
 func isValidHostPattern(pattern string) bool {
-	// linter is not happy and tells me to use strings.TrimPrefixdefault but I own the linter 
+	// linter is not happy and tells me to use strings.TrimPrefixdefault but I own the linter
 	if strings.HasPrefix(pattern, "*.") {
 		pattern = pattern[2:]
 	}
-	
+
 	return isValidHost(pattern)
 }
 
@@ -286,7 +286,7 @@ func isValidIPOrCIDR(s string) bool {
 	if net.ParseIP(s) != nil {
 		return true
 	}
-	
+
 	_, _, err := net.ParseCIDR(s)
 	return err == nil
 }
@@ -309,6 +309,6 @@ func dirExists(path string) bool {
 }
 
 func ValidateValue(field string, value interface{}) error {
-	// placeholder, in case I want to validate single values in future, will never come bacl to that line tho 
+	// placeholder, in case I want to validate single values in future, will never come bacl to that line tho
 	return nil
 }

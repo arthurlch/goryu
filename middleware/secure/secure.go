@@ -6,18 +6,20 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	XSSProtection string
-	ContentTypeNosniff string
-	XFrameOptions string
-	HSTSMaxAge int
+	XSSProtection         string
+	ContentTypeNosniff    string
+	XFrameOptions         string
+	HSTSMaxAge            int
 	HSTSIncludeSubdomains bool
-	HSTSPreload bool
+	HSTSPreload           bool
 	ContentSecurityPolicy string
-	ReferrerPolicy string
-	PermissionsPolicy string
+	ReferrerPolicy        string
+	PermissionsPolicy     string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

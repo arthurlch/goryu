@@ -1,13 +1,15 @@
 package recovery_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
+	"github.com/arthurlch/goryu/middleware/recovery"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/base"
-	"github.com/arthurlch/goryu/middleware/recovery"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr

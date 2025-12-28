@@ -1,13 +1,15 @@
 package limiter_test
+
 import (
 	"fmt"
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/limiter"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/limiter"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -83,10 +85,10 @@ func TestLimiterSecurityLimits(t *testing.T) {
 	}
 	t.Run("Memory Exhaustion Prevention", func(t *testing.T) {
 		config := limiter.Config{
-			Max:         10,
-			Expiration:  10 * time.Minute, 
-			MaxClients:  5,                
-			CleanupInterval: 10 * time.Minute, 
+			Max:             10,
+			Expiration:      10 * time.Minute,
+			MaxClients:      5,
+			CleanupInterval: 10 * time.Minute,
 			KeyGenerator: func(c *context.Context) string {
 				return c.Request.Header.Get("X-Client-ID")
 			},
@@ -111,10 +113,10 @@ func TestLimiterSecurityLimits(t *testing.T) {
 	})
 	t.Run("Cleanup Expired Entries", func(t *testing.T) {
 		config := limiter.Config{
-			Max:         1,
-			Expiration:  50 * time.Millisecond,  
-			MaxClients:  100,
-			CleanupInterval: 60 * time.Millisecond, 
+			Max:             1,
+			Expiration:      50 * time.Millisecond,
+			MaxClients:      100,
+			CleanupInterval: 60 * time.Millisecond,
 			KeyGenerator: func(c *context.Context) string {
 				return c.Request.Header.Get("X-Client-ID")
 			},
@@ -144,7 +146,7 @@ func TestLimiterSecurityLimits(t *testing.T) {
 	})
 	t.Run("Limits Configuration", func(t *testing.T) {
 		config := limiter.Config{
-			MaxClients: 200000, 
+			MaxClients: 200000,
 		}
 		middleware := limiter.New(config)
 		req := httptest.NewRequest("GET", "/", nil)

@@ -108,7 +108,7 @@ func (sgb *SimpleGroupBuilder) wrapHandler(handler context.HandlerFunc) context.
 	for i := len(sgb.middlewares) - 1; i >= 0; i-- {
 		handler = sgb.middlewares[i](handler)
 	}
-	
+
 	// Apply app middleware
 	return sgb.app.ApplyMiddleware(handler)
 }
@@ -180,7 +180,7 @@ func (srb *SimpleResourceBuilder) Except(actions ...string) *SimpleResourceBuild
 // Build creates the resource routes
 func (srb *SimpleResourceBuilder) Build() *SimpleGroupBuilder {
 	resourceController := NewResourceController(srb.controller)
-	
+
 	actions := map[string]struct {
 		method string
 		path   string
@@ -191,22 +191,22 @@ func (srb *SimpleResourceBuilder) Build() *SimpleGroupBuilder {
 		"update":  {"PUT", srb.path + "/:id"},
 		"destroy": {"DELETE", srb.path + "/:id"},
 	}
-	
+
 	for action, config := range actions {
 		if !srb.shouldIncludeAction(action) {
 			continue
 		}
-		
+
 		handler := resourceController.GetHandler(action)
 		if handler == nil {
 			continue
 		}
-		
+
 		// Apply resource middleware
 		for i := len(srb.middlewares) - 1; i >= 0; i-- {
 			handler = srb.middlewares[i](handler)
 		}
-		
+
 		// Register the route
 		var routeConfig *SimpleRouteConfig
 		switch config.method {
@@ -219,13 +219,13 @@ func (srb *SimpleResourceBuilder) Build() *SimpleGroupBuilder {
 		case "DELETE":
 			routeConfig = srb.group.DELETE(config.path, handler)
 		}
-		
+
 		// Set route name if provided
 		if srb.name != "" && routeConfig != nil {
 			routeConfig.Name(srb.name + "." + action)
 		}
 	}
-	
+
 	return srb.group
 }
 
@@ -243,7 +243,7 @@ func (srb *SimpleResourceBuilder) shouldIncludeAction(action string) bool {
 			return false
 		}
 	}
-	
+
 	if len(srb.except) > 0 {
 		for _, a := range srb.except {
 			if a == action {
@@ -251,6 +251,6 @@ func (srb *SimpleResourceBuilder) shouldIncludeAction(action string) bool {
 			}
 		}
 	}
-	
+
 	return true
 }

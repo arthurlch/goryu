@@ -9,14 +9,15 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	Max int
-	Expiration time.Duration
-	MaxClients int
+	Max             int
+	Expiration      time.Duration
+	MaxClients      int
 	CleanupInterval time.Duration
-	KeyGenerator func(c *context.Context) string
-	LimitReached func(c *context.Context)
+	KeyGenerator    func(c *context.Context) string
+	LimitReached    func(c *context.Context)
 }
 type secureLimiter struct {
 	mu              sync.RWMutex
@@ -30,6 +31,7 @@ type client struct {
 	count      int
 	lastAccess time.Time
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -41,10 +43,10 @@ func (c *Config) Validate() error {
 		c.Expiration = 1 * time.Minute
 	}
 	if c.MaxClients <= 0 {
-		c.MaxClients = 10000 
+		c.MaxClients = 10000
 	}
 	if c.CleanupInterval <= 0 {
-		c.CleanupInterval = 1 * time.Minute 
+		c.CleanupInterval = 1 * time.Minute
 	}
 	if c.MaxClients > 100000 {
 		return base.NewConfigError("MaxClients", "cannot exceed 100,000 entries")
@@ -86,10 +88,10 @@ func (sl *secureLimiter) checkRate(key string, max int) (bool, int) {
 		delete(sl.clients, key)
 	}
 	if len(sl.clients) >= sl.maxClients {
-		sl.evictOldestClients(sl.maxClients / 10) 
+		sl.evictOldestClients(sl.maxClients / 10)
 	}
 	sl.clients[key] = &client{count: 1, lastAccess: now}
-	return true, 1 
+	return true, 1
 }
 func (sl *secureLimiter) cleanupExpired(now time.Time) {
 	expiredKeys := make([]string, 0)
@@ -103,11 +105,13 @@ func (sl *secureLimiter) cleanupExpired(now time.Time) {
 	}
 	sl.lastCleanup = now
 }
+
 type clientHeap []clientHeapItem
 type clientHeapItem struct {
 	key        string
 	lastAccess time.Time
 }
+
 func (h clientHeap) Len() int           { return len(h) }
 func (h clientHeap) Less(i, j int) bool { return h[i].lastAccess.Before(h[j].lastAccess) }
 func (h clientHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }

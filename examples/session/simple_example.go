@@ -11,6 +11,7 @@ import (
 	"github.com/arthurlch/goryu/internal/utils"
 	"github.com/arthurlch/goryu/middleware/session"
 )
+
 func main() {
 	app := goryu.New()
 	sessionKey, err := utils.GenerateSecureKey32()
@@ -35,7 +36,7 @@ func main() {
 	}
 	app.Use(session.New(sessionConfig))
 	integration := session.NewAuthIntegration(&sessionConfig, nil)
-	_ = integration 
+	_ = integration
 	app.GET("/", func(c *goryuContext.Context) {
 		c.JSON(200, map[string]string{"message": "Welcome"})
 	})
@@ -55,8 +56,8 @@ func main() {
 			LastActivity: time.Now(),
 		}
 		c.JSON(200, map[string]interface{}{
-			"user_id":      user.ID,
-			"login_time":   user.LoginTime,
+			"user_id":       user.ID,
+			"login_time":    user.LoginTime,
 			"last_activity": user.LastActivity,
 		})
 	})
@@ -78,4 +79,3 @@ func main() {
 func boolPtr(b bool) *bool {
 	return &b
 }
-

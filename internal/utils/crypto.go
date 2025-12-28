@@ -10,12 +10,12 @@ func GenerateSecureKey(length int) (string, error) {
 	if length <= 0 {
 		return "", fmt.Errorf("key length must be positive")
 	}
-	
+
 	key := make([]byte, length)
 	if _, err := rand.Read(key); err != nil {
 		return "", fmt.Errorf("failed to generate secure key: %w", err)
 	}
-	
+
 	return hex.EncodeToString(key), nil
 }
 

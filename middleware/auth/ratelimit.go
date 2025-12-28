@@ -1,28 +1,31 @@
 package auth
+
 import (
 	"net"
 	"strings"
 	"sync"
 	"time"
 )
+
 type AttemptRecord struct {
-	Count      int
+	Count        int
 	FirstAttempt time.Time
 	LastAttempt  time.Time
-	Blocked     bool
+	Blocked      bool
 	BlockedUntil time.Time
 }
 type RateLimiter struct {
-	mu               sync.RWMutex
-	ipAttempts       map[string]*AttemptRecord
-	emailAttempts    map[string]*AttemptRecord
-	maxAttempts      int
-	windowDuration   time.Duration
-	blockDuration    time.Duration
-	cleanupInterval  time.Duration
-	cleanupTicker    *time.Ticker
-	stopCleanup      chan bool
+	mu              sync.RWMutex
+	ipAttempts      map[string]*AttemptRecord
+	emailAttempts   map[string]*AttemptRecord
+	maxAttempts     int
+	windowDuration  time.Duration
+	blockDuration   time.Duration
+	cleanupInterval time.Duration
+	cleanupTicker   *time.Ticker
+	stopCleanup     chan bool
 }
+
 func NewRateLimiter(maxAttempts int, windowDuration, blockDuration time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		ipAttempts:      make(map[string]*AttemptRecord),
@@ -218,7 +221,7 @@ func (rl *RateLimiter) Stats() map[string]interface{} {
 		}
 	}
 	return map[string]interface{}{
-		"total_ips_tracked":     len(rl.ipAttempts),
+		"total_ips_tracked":    len(rl.ipAttempts),
 		"total_emails_tracked": len(rl.emailAttempts),
 		"blocked_ips":          ipBlocked,
 		"blocked_emails":       emailBlocked,

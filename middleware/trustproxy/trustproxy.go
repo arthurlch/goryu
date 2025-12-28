@@ -8,13 +8,16 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
 	TrustedProxies []string
-	ProxyHeader string
-	ContextKey string
+	ProxyHeader    string
+	ContextKey     string
 }
+
 const TrustedProxyIPKey = "trusted_client_ip"
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

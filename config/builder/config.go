@@ -23,21 +23,21 @@ type AppConfig struct {
 }
 
 type ServerConfig struct {
-	Port              int           `json:"port" yaml:"port"`
-	Host              string        `json:"host" yaml:"host"`
-	ReadTimeout       time.Duration `json:"read_timeout" yaml:"read_timeout"`
-	WriteTimeout      time.Duration `json:"write_timeout" yaml:"write_timeout"`
-	IdleTimeout       time.Duration `json:"idle_timeout" yaml:"idle_timeout"`
-	ShutdownTimeout   time.Duration `json:"shutdown_timeout" yaml:"shutdown_timeout"`
-	MaxHeaderSize     int           `json:"max_header_size" yaml:"max_header_size"`
-	DisableKeepalive  bool          `json:"disable_keepalive" yaml:"disable_keepalive"`
-	TLS               TLSConfig     `json:"tls" yaml:"tls"`
+	Port             int           `json:"port" yaml:"port"`
+	Host             string        `json:"host" yaml:"host"`
+	ReadTimeout      time.Duration `json:"read_timeout" yaml:"read_timeout"`
+	WriteTimeout     time.Duration `json:"write_timeout" yaml:"write_timeout"`
+	IdleTimeout      time.Duration `json:"idle_timeout" yaml:"idle_timeout"`
+	ShutdownTimeout  time.Duration `json:"shutdown_timeout" yaml:"shutdown_timeout"`
+	MaxHeaderSize    int           `json:"max_header_size" yaml:"max_header_size"`
+	DisableKeepalive bool          `json:"disable_keepalive" yaml:"disable_keepalive"`
+	TLS              TLSConfig     `json:"tls" yaml:"tls"`
 }
 
 type TLSConfig struct {
-	Enabled  bool   `json:"enabled" yaml:"enabled"`
-	CertFile string `json:"cert_file" yaml:"cert_file"`
-	KeyFile  string `json:"key_file" yaml:"key_file"`
+	Enabled    bool   `json:"enabled" yaml:"enabled"`
+	CertFile   string `json:"cert_file" yaml:"cert_file"`
+	KeyFile    string `json:"key_file" yaml:"key_file"`
 	MinVersion string `json:"min_version" yaml:"min_version"`
 }
 
@@ -63,14 +63,14 @@ type StaticConfig struct {
 }
 
 type SecurityConfig struct {
-	CSRFProtection    bool     `json:"csrf_protection" yaml:"csrf_protection"`
-	CSRFTokenLength   int      `json:"csrf_token_length" yaml:"csrf_token_length"`
-	XSSProtection     string   `json:"xss_protection" yaml:"xss_protection"`
-	ContentTypeNosniff bool    `json:"content_type_nosniff" yaml:"content_type_nosniff"`
-	XFrameOptions     string   `json:"x_frame_options" yaml:"x_frame_options"`
-	HSTS              HSTSConfig `json:"hsts" yaml:"hsts"`
-	AllowedHosts      []string `json:"allowed_hosts" yaml:"allowed_hosts"`
-	TrustedProxies    []string `json:"trusted_proxies" yaml:"trusted_proxies"`
+	CSRFProtection     bool       `json:"csrf_protection" yaml:"csrf_protection"`
+	CSRFTokenLength    int        `json:"csrf_token_length" yaml:"csrf_token_length"`
+	XSSProtection      string     `json:"xss_protection" yaml:"xss_protection"`
+	ContentTypeNosniff bool       `json:"content_type_nosniff" yaml:"content_type_nosniff"`
+	XFrameOptions      string     `json:"x_frame_options" yaml:"x_frame_options"`
+	HSTS               HSTSConfig `json:"hsts" yaml:"hsts"`
+	AllowedHosts       []string   `json:"allowed_hosts" yaml:"allowed_hosts"`
+	TrustedProxies     []string   `json:"trusted_proxies" yaml:"trusted_proxies"`
 }
 
 type HSTSConfig struct {
@@ -99,13 +99,13 @@ func DefaultConfig() *Config {
 			ServerHeader:          "",
 		},
 		Server: ServerConfig{
-			Port:           3000,
-			Host:           "",
-			ReadTimeout:    30 * time.Second,
-			WriteTimeout:   30 * time.Second,
-			IdleTimeout:    120 * time.Second,
-			ShutdownTimeout: 30 * time.Second,
-			MaxHeaderSize:  1 << 20, // 1MB
+			Port:             3000,
+			Host:             "",
+			ReadTimeout:      30 * time.Second,
+			WriteTimeout:     30 * time.Second,
+			IdleTimeout:      120 * time.Second,
+			ShutdownTimeout:  30 * time.Second,
+			MaxHeaderSize:    1 << 20, // 1MB
 			DisableKeepalive: false,
 			TLS: TLSConfig{
 				Enabled:    false,
@@ -138,7 +138,7 @@ func DefaultConfig() *Config {
 			ContentTypeNosniff: true,
 			XFrameOptions:      "DENY",
 			HSTS: HSTSConfig{
-				Enabled:           false, // Disabled by default, enable for production
+				Enabled:           false,                  // Disabled by default, enable for production
 				MaxAge:            31536000 * time.Second, // 1 year
 				IncludeSubdomains: true,
 				Preload:           false,
@@ -161,7 +161,7 @@ func (c *Config) Merge(other *Config) {
 	if other == nil {
 		return
 	}
-	
+
 	if other.App.Name != "" {
 		c.App.Name = other.App.Name
 	}
@@ -175,7 +175,7 @@ func (c *Config) Merge(other *Config) {
 		c.App.ServerHeader = other.App.ServerHeader
 	}
 	c.App.DisableStartupMessage = other.App.DisableStartupMessage
-	
+
 	if other.Server.Port != 0 {
 		c.Server.Port = other.Server.Port
 	}
@@ -197,16 +197,16 @@ func (c *Config) Merge(other *Config) {
 	if other.Server.MaxHeaderSize != 0 {
 		c.Server.MaxHeaderSize = other.Server.MaxHeaderSize
 	}
-	
+
 	// ... gotta merging other sections
 }
 
 func (c *Config) Clone() *Config {
 	clone := *c
-	
+
 	clone.Security.AllowedHosts = append([]string(nil), c.Security.AllowedHosts...)
 	clone.Security.TrustedProxies = append([]string(nil), c.Security.TrustedProxies...)
-	
+
 	return &clone
 }
 

@@ -7,13 +7,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
 type JWTAuth struct {
-	secretKey         []byte
-	issuer           string
-	accessExpiry     time.Duration
-	refreshExpiry    time.Duration
+	secretKey          []byte
+	issuer             string
+	accessExpiry       time.Duration
+	refreshExpiry      time.Duration
 	verificationExpiry time.Duration
-	resetExpiry      time.Duration
+	resetExpiry        time.Duration
 }
 type AuthClaims struct {
 	jwt.RegisteredClaims
@@ -30,17 +31,18 @@ type ResetClaims struct {
 	jwt.RegisteredClaims
 	Type string `json:"type"`
 }
+
 func NewJWTAuth(secretKey, issuer string) (*JWTAuth, error) {
 	if len(secretKey) < 32 {
 		return nil, errors.New("JWT secret key must be at least 32 characters")
 	}
 	return &JWTAuth{
 		secretKey:          []byte(secretKey),
-		issuer:            issuer,
-		accessExpiry:      15 * time.Minute,
-		refreshExpiry:     7 * 24 * time.Hour,
+		issuer:             issuer,
+		accessExpiry:       15 * time.Minute,
+		refreshExpiry:      7 * 24 * time.Hour,
 		verificationExpiry: 24 * time.Hour,
-		resetExpiry:       15 * time.Minute,
+		resetExpiry:        15 * time.Minute,
 	}, nil
 }
 func (j *JWTAuth) SetExpiryTimes(access, refresh, verification, reset time.Duration) {

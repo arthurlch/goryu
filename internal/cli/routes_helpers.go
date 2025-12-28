@@ -25,42 +25,42 @@ type RouteInfo struct {
 
 func discoverRoutes() ([]RouteInfo, error) {
 	var routes []RouteInfo
-	
+
 	searchPaths := []string{
 		"internal/handlers",
-		"internal/routes", 
+		"internal/routes",
 		"cmd/server",
 		"main.go",
 	}
-	
+
 	for _, searchPath := range searchPaths {
 		if _, err := os.Stat(searchPath); os.IsNotExist(err) {
 			continue
 		}
-		
+
 		err := filepath.Walk(searchPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			
+
 			if !strings.HasSuffix(path, ".go") {
 				return nil
 			}
-			
+
 			fileRoutes, err := parseRoutesFromFile(path)
 			if err != nil {
 				return nil
 			}
-			
+
 			routes = append(routes, fileRoutes...)
 			return nil
 		})
-		
+
 		if err != nil {
 			return nil, err
 		}
 	}
-	
+
 	return routes, nil
 }
 
@@ -70,24 +70,24 @@ func parseRoutesFromFile(filename string) ([]RouteInfo, error) {
 	if err == nil && len(astRoutes) > 0 {
 		return astRoutes, nil
 	}
-	
+
 	regexRoutes, err := parseRoutesFromRegex(filename)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return regexRoutes, nil
 }
 
 func parseRoutesFromAST(filename string) ([]RouteInfo, error) {
 	var routes []RouteInfo
-	
+
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
@@ -97,7 +97,7 @@ func parseRoutesFromAST(filename string) ([]RouteInfo, error) {
 		}
 		return true
 	})
-	
+
 	return routes, nil
 }
 
@@ -107,7 +107,7 @@ func parseCallExprForRoute(fset *token.FileSet, call *ast.CallExpr, filename str
 		if isHTTPMethod(method) && len(call.Args) >= 2 {
 			path := extractStringLiteral(call.Args[0])
 			handler := extractHandlerName(call.Args[1])
-			
+
 			if path != "" && handler != "" {
 				pos := fset.Position(call.Pos())
 				return &RouteInfo{
@@ -120,7 +120,7 @@ func parseCallExprForRoute(fset *token.FileSet, call *ast.CallExpr, filename str
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -149,26 +149,26 @@ func extractHandlerName(expr ast.Expr) string {
 
 func parseRoutesFromRegex(filename string) ([]RouteInfo, error) {
 	var routes []RouteInfo
-	
+
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	
+
 	patterns := []*regexp.Regexp{
 		regexp.MustCompile(`app\.(\w+)\s*\(\s*["']([^"']+)["']\s*,\s*(\w+(?:\.\w+)?)`),
 		regexp.MustCompile(`\.(\w+)\s*\(\s*["']([^"']+)["']\s*,\s*(\w+(?:\.\w+)?)`),
 		regexp.MustCompile(`router\.(\w+)\s*\(\s*["']([^"']+)["']\s*,\s*(\w+(?:\.\w+)?)`),
 	}
-	
+
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
-	
+
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-		
+
 		for _, pattern := range patterns {
 			matches := pattern.FindStringSubmatch(line)
 			if len(matches) == 4 {
@@ -185,14 +185,14 @@ func parseRoutesFromRegex(filename string) ([]RouteInfo, error) {
 			}
 		}
 	}
-	
+
 	return routes, scanner.Err()
 }
 
 func isHTTPMethod(method string) bool {
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT"}
 	method = strings.ToUpper(method)
-	for _, m := range methods { // ignore linter ! 
+	for _, m := range methods { // ignore linter !
 		if method == m {
 			return true
 		}
@@ -202,7 +202,7 @@ func isHTTPMethod(method string) bool {
 
 func testRoute(path, method string, routes []RouteInfo) []RouteInfo {
 	var matches []RouteInfo
-	
+
 	for _, route := range routes {
 		if route.Method == method || route.Method == "USE" {
 			if matchPath(path, route.Path) {
@@ -213,43 +213,43 @@ func testRoute(path, method string, routes []RouteInfo) []RouteInfo {
 			}
 		}
 	}
-	
+
 	return matches
 }
 
 func matchPath(testPath, routePath string) bool {
 	pattern := routePath
-	
+
 	pattern = regexp.MustCompile(`:(\w+)`).ReplaceAllString(pattern, `([^/]+)`)
-	
+
 	pattern = strings.ReplaceAll(pattern, "*", "(.*)")
-	
+
 	if pattern == testPath {
 		return true
 	}
-	
+
 	regex, err := regexp.Compile("^" + pattern + "$")
 	if err != nil {
 		return false
 	}
-	
+
 	return regex.MatchString(testPath)
 }
 
 func extractParams(testPath, routePath string) []string {
 	var params []string
-	
+
 	paramRegex := regexp.MustCompile(`:(\w+)`)
 	paramNames := paramRegex.FindAllStringSubmatch(routePath, -1)
-	
+
 	pattern := routePath
 	pattern = regexp.MustCompile(`:(\w+)`).ReplaceAllString(pattern, `([^/]+)`)
-	
+
 	regex, err := regexp.Compile("^" + pattern + "$")
 	if err != nil {
 		return params
 	}
-	
+
 	matches := regex.FindStringSubmatch(testPath)
 	if len(matches) > 1 {
 		for i, paramName := range paramNames {
@@ -258,37 +258,37 @@ func extractParams(testPath, routePath string) []string {
 			}
 		}
 	}
-	
+
 	return params
 }
 
 func findSimilarRoutes(path string, routes []RouteInfo) []RouteInfo {
 	var similar []RouteInfo
-	
+
 	for _, route := range routes {
 		if isSimilarPath(path, route.Path) {
 			similar = append(similar, route)
 		}
 	}
-	
+
 	return similar
 }
 
 func isSimilarPath(path1, path2 string) bool {
 	parts1 := strings.Split(strings.Trim(path1, "/"), "/")
 	parts2 := strings.Split(strings.Trim(path2, "/"), "/")
-	
+
 	if len(parts1) != len(parts2) {
 		return false
 	}
-	
+
 	matches := 0
 	for i := 0; i < len(parts1); i++ {
 		if parts1[i] == parts2[i] || strings.HasPrefix(parts2[i], ":") {
 			matches++
 		}
 	}
-	
+
 	return float64(matches)/float64(len(parts1)) >= 0.5
 }
 
@@ -297,13 +297,13 @@ func displayRoutesTable(routes []RouteInfo) error {
 		fmt.Println("\n   No routes to display")
 		return nil
 	}
-	
+
 	fmt.Println()
-	
+
 	methodWidth := 6
 	pathWidth := 4
 	handlerWidth := 7
-	
+
 	for _, route := range routes {
 		if len(route.Method) > methodWidth {
 			methodWidth = len(route.Method)
@@ -315,23 +315,23 @@ func displayRoutesTable(routes []RouteInfo) error {
 			handlerWidth = len(route.Handler)
 		}
 	}
-	
+
 	methodWidth += 2
 	pathWidth += 2
 	handlerWidth += 2
-	
-	fmt.Printf("   %-*s %-*s %-*s %s\n", 
-		methodWidth, "METHOD", 
-		pathWidth, "PATH", 
+
+	fmt.Printf("   %-*s %-*s %-*s %s\n",
+		methodWidth, "METHOD",
+		pathWidth, "PATH",
 		handlerWidth, "HANDLER",
 		"FILE")
-	
+
 	fmt.Printf("   %s %s %s %s\n",
 		strings.Repeat("-", methodWidth),
 		strings.Repeat("-", pathWidth),
 		strings.Repeat("-", handlerWidth),
 		strings.Repeat("-", 20))
-	
+
 	for _, route := range routes {
 		fmt.Printf("   %-*s %-*s %-*s %s:%d\n",
 			methodWidth, route.Method,
@@ -339,9 +339,9 @@ func displayRoutesTable(routes []RouteInfo) error {
 			handlerWidth, route.Handler,
 			route.File, route.Line)
 	}
-	
+
 	fmt.Printf("\n   Total: %d routes\n", len(routes))
-	
+
 	return nil
 }
 
@@ -350,7 +350,7 @@ func displayRoutesJSON(routes []RouteInfo) error {
 	if err != nil {
 		return err
 	}
-	
+
 	fmt.Println(string(data))
 	return nil
 }

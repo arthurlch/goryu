@@ -34,7 +34,7 @@ func main() {
 			ByIP().
 			JSONResponse().
 			Build())
-	
+
 	// Alternative: Create and configure before using
 	corsMiddleware := goryu.CORS().
 		Production().
@@ -42,14 +42,14 @@ func main() {
 		AllowMethods("GET", "POST").
 		MaxAge(86400).
 		Build()
-	
+
 	app.Use(corsMiddleware)
-	
+
 	// REST API with configured middleware
 	app.GET("/api/users", func(c *goryu.Ctx) {
 		c.JSON(200, map[string]string{"message": "Users endpoint"})
 	})
-	
+
 	app.Listen(":8080")
 }
 
@@ -63,7 +63,7 @@ func exampleLoggerConfigurations() {
 		EnableColors().
 		TimeFormat("15:04:05").
 		Build()
-	
+
 	// Production JSON logging
 	prodLogger := goryu.Logger().
 		Production().
@@ -71,13 +71,13 @@ func exampleLoggerConfigurations() {
 		DisableColors().
 		TimeFormat(time.RFC3339).
 		Build()
-	
+
 	// Custom format logging
 	customLogger := goryu.Logger().
 		Format("[CUSTOM] ${time} | ${status} | ${method} ${path} | ${latency}").
 		TimeZone("UTC").
 		Build()
-	
+
 	// Common log format
 	commonLogger := goryu.Logger().
 		CommonLog().
@@ -91,14 +91,14 @@ func exampleRecoveryConfigurations() {
 		Development().
 		EnableStackTrace(true).
 		Build()
-	
+
 	// Production recovery with minimal info
 	prodRecovery := goryu.Recovery().
 		Production().
 		DisableStackTrace().
 		JSONResponse().
 		Build()
-	
+
 	// Custom recovery handler
 	customRecovery := goryu.Recovery().
 		Handler(func(c *goryu.Ctx, err interface{}) {
@@ -121,13 +121,13 @@ func exampleCORSConfigurations() {
 		AllowOrigins("https://mydomain.com").
 		AllowMethods("GET", "POST").
 		Build()
-	
+
 	// Development CORS (permissive)
 	devCORS := goryu.CORS().
 		Development().
 		AllowOrigins("http://localhost:3000", "http://localhost:8080").
 		Build()
-	
+
 	// API CORS with credentials
 	apiCORS := goryu.CORS().
 		AllowOrigins("https://app.mydomain.com").
@@ -137,7 +137,7 @@ func exampleCORSConfigurations() {
 		ExposeHeaders("X-Total-Count", "X-Page-Count").
 		MaxAge(3600).
 		Build()
-	
+
 	// Microservice CORS
 	microserviceCORS := goryu.CORS().
 		AllowOrigins("https://gateway.mydomain.com").
@@ -154,19 +154,19 @@ func exampleRateLimitConfigurations() {
 		ByIP().
 		JSONResponse().
 		Build()
-	
+
 	// API key-based rate limiting
 	apiKeyRateLimit := goryu.RateLimit(1000, time.Hour).
 		ByAPIKey("X-API-Key").
 		JSONResponse().
 		Build()
-	
+
 	// User-based rate limiting
 	userRateLimit := goryu.RateLimit(200, time.Minute).
 		ByUserID().
 		CustomMessage("Rate limit exceeded for your account").
 		Build()
-	
+
 	// Strict rate limiting for expensive operations
 	strictRateLimit := goryu.RateLimit(5, time.Minute).
 		ByIP().
@@ -178,13 +178,13 @@ func exampleRateLimitConfigurations() {
 			})
 		}).
 		Build()
-	
+
 	// Burst rate limiting
 	burstRateLimit := goryu.RateLimit(50, time.Minute).
 		Burst(100, 10*time.Second). // Allow 100 requests in 10 seconds
 		ByIP().
 		Build()
-	
+
 	// Preset configurations
 	conservativeLimit := goryu.RateLimit(0, 0).Conservative().Build() // 60/min by IP
 	moderateLimit := goryu.RateLimit(0, 0).Moderate().Build()         // 200/min by IP
@@ -196,7 +196,7 @@ func examplePluginSystem() {
 	// List all registered plugins
 	plugins := goryu.ListPlugins()
 	fmt.Printf("Available plugins: %v\n", plugins)
-	
+
 	// Get a specific plugin
 	if corsPlugin, exists := goryu.Plugin("cors"); exists {
 		middleware := corsPlugin.(*plugins.CORSBuilder).
@@ -204,7 +204,7 @@ func examplePluginSystem() {
 			Build()
 		app.Use(middleware)
 	}
-	
+
 	// Register a custom plugin
 	goryu.RegisterPlugin("custom-auth", func() plugins.Builder {
 		return &CustomAuthBuilder{}
@@ -214,9 +214,9 @@ func examplePluginSystem() {
 // Environment-based Configuration
 func exampleEnvironmentConfiguration() {
 	env := os.Getenv("ENVIRONMENT")
-	
+
 	var logger, recovery, cors, rateLimit goryu.Middleware
-	
+
 	switch env {
 	case "production":
 		logger = goryu.Logger().Production().Build()
@@ -227,7 +227,7 @@ func exampleEnvironmentConfiguration() {
 		rateLimit = goryu.RateLimit(200, time.Minute).
 			ByAPIKey("X-API-Key").
 			Build()
-	
+
 	case "staging":
 		logger = goryu.Logger().JSON().Build()
 		recovery = goryu.Recovery().EnableStackTrace(false).Build()
@@ -235,36 +235,36 @@ func exampleEnvironmentConfiguration() {
 			AllowOrigins("https://staging.mydomain.com").
 			Build()
 		rateLimit = goryu.RateLimit(500, time.Minute).ByIP().Build()
-	
+
 	default: // development
 		logger = goryu.Logger().Development().Build()
 		recovery = goryu.Recovery().Development().Build()
 		cors = goryu.CORS().Development().Build()
 		rateLimit = goryu.RateLimit(1000, time.Minute).ByIP().Build()
 	}
-	
+
 	app := goryu.New().
 		Use(logger).
 		Use(recovery).
 		Use(cors).
 		Use(rateLimit)
-	
+
 	app.Listen(":8080")
 }
 
 // Conditional Middleware
 func exampleConditionalMiddleware() {
 	app := goryu.New()
-	
+
 	// Always use logger and recovery
 	app.Use(goryu.Logger().Development().Build())
 	app.Use(goryu.Recovery().Development().Build())
-	
+
 	// Conditional CORS
 	if os.Getenv("ENABLE_CORS") == "true" {
 		app.Use(goryu.CORS().Development().Build())
 	}
-	
+
 	// Conditional rate limiting
 	if rateLimit := os.Getenv("RATE_LIMIT"); rateLimit != "" {
 		if limit, err := strconv.Atoi(rateLimit); err == nil {
@@ -284,13 +284,13 @@ func setupMiddlewareOld(app *goryu.App) {
 		DisableColors: false,
 	}
 	app.Use(logger.New(loggerConfig))
-	
+
 	// Recovery with manual config
 	recoveryConfig := recovery.Config{
 		EnableStackTrace: true,
 	}
 	app.Use(recovery.New(recoveryConfig))
-	
+
 	// CORS with manual config
 	corsConfig := cors.Config{
 		AllowOrigins: []string{"*"},
@@ -298,7 +298,7 @@ func setupMiddlewareOld(app *goryu.App) {
 		AllowHeaders: []string{"*"},
 	}
 	app.Use(cors.New(corsConfig))
-	
+
 	// Rate limiting with manual config
 	limiterConfig := limiter.Config{
 		Max: 100,

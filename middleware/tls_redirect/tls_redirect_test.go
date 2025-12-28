@@ -1,12 +1,14 @@
 package tlsredirect_test
+
 import (
 	"crypto/tls"
+	context "github.com/arthurlch/goryu/goryuctx"
+	tlsredirect "github.com/arthurlch/goryu/middleware/tls_redirect"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	tlsredirect "github.com/arthurlch/goryu/middleware/tls_redirect"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr

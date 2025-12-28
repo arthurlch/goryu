@@ -1,11 +1,13 @@
 package circuitbreaker
+
 import (
 	"errors"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"net/http"
 	"testing"
 	"time"
-	context "github.com/arthurlch/goryu/goryuctx"
 )
+
 func TestNewCircuitBreaker(t *testing.T) {
 	config := Config{
 		MaxRequests:  5,
@@ -53,7 +55,7 @@ func TestCircuitBreakerClosedState(t *testing.T) {
 	}
 	cb := NewCircuitBreaker(config)
 	err := cb.Execute(func() error {
-		return nil 
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Expected success in closed state, got error: %v", err)
@@ -100,7 +102,7 @@ func TestCircuitBreakerHalfOpenState(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	err := cb.Execute(func() error {
-		return nil 
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Expected request to be allowed in half-open state, got error: %v", err)
@@ -131,7 +133,7 @@ func TestCircuitBreakerStateTransitions(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	_ = cb.Execute(func() error {
-		return nil 
+		return nil
 	})
 	foundHalfOpen := false
 	foundClosed := false
@@ -159,7 +161,7 @@ func TestCircuitBreakerMetrics(t *testing.T) {
 	}
 	cb := NewCircuitBreaker(config)
 	_ = cb.Execute(func() error {
-		return nil 
+		return nil
 	})
 	_ = cb.Execute(func() error {
 		return errors.New("failure")
@@ -234,11 +236,13 @@ func BenchmarkCircuitBreakerExecute(b *testing.B) {
 		})
 	}
 }
+
 type mockResponseWriter struct {
 	statusCode int
 	data       []byte
 	headers    map[string][]string
 }
+
 func (m *mockResponseWriter) Header() http.Header {
 	if m.headers == nil {
 		m.headers = make(map[string][]string)

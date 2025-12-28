@@ -112,7 +112,7 @@ func (f *FileSource) Load() (map[string]interface{}, error) {
 	case ".yaml", ".yml":
 		// For YAML support, I would use gopkg.in/yaml.v2 or similar
 		// For now, I'll just return an error indicating YAML is not supported, better and easier.
-		// Actually I don't want to add a new dependency just for YAML parsing ????? 
+		// Actually I don't want to add a new dependency just for YAML parsing ?????
 		// The less dependency the better I feel, goryu should rely on my unreliable code
 		return nil, fmt.Errorf("YAML support not implemented yet")
 
@@ -144,26 +144,26 @@ func NewDefaultSource() *DefaultSource {
 			"log_level":   "info",
 		},
 		"server": map[string]interface{}{
-			"host": "localhost",
-			"port": 8080,
-			"read_timeout": "30s",
-			"write_timeout": "30s",
+			"host":             "localhost",
+			"port":             8080,
+			"read_timeout":     "30s",
+			"write_timeout":    "30s",
 			"shutdown_timeout": "30s",
 		},
 		"database": map[string]interface{}{
-			"driver": "sqlite3",
-			"path":   "./app.db",
-			"max_open_conns": 25,
-			"max_idle_conns": 5,
-			"conn_max_lifetime": "1h",
+			"driver":             "sqlite3",
+			"path":               "./app.db",
+			"max_open_conns":     25,
+			"max_idle_conns":     5,
+			"conn_max_lifetime":  "1h",
 			"conn_max_idle_time": "30m",
 		},
 		"framework": map[string]interface{}{
-			"strict_routing": false,
-			"case_sensitive": false,
+			"strict_routing":          false,
+			"case_sensitive":          false,
 			"redirect_trailing_slash": true,
-			"enable_head_fallback": true,
-			"disable_startup_msg": false,
+			"enable_head_fallback":    true,
+			"disable_startup_msg":     false,
 		},
 	}
 
@@ -183,7 +183,7 @@ func (d *DefaultSource) Name() string {
 }
 
 func (d *DefaultSource) Priority() int {
-	return 1 // Low priority 
+	return 1 // Low priority
 }
 
 func copyMap(src, dst map[string]interface{}) {

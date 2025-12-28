@@ -10,20 +10,22 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	Timeout time.Duration
+	Timeout        time.Duration
 	TimeoutHandler context.HandlerFunc
 }
 type timeoutWriter struct {
 	http.ResponseWriter
 	mu         sync.Mutex
-	timedOut   int32 
-	headerSent int32 
+	timedOut   int32
+	headerSent int32
 }
+
 func (tw *timeoutWriter) WriteHeader(status int) {
 	if atomic.LoadInt32(&tw.timedOut) == 1 {
-		return 
+		return
 	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
@@ -33,7 +35,7 @@ func (tw *timeoutWriter) WriteHeader(status int) {
 }
 func (tw *timeoutWriter) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&tw.timedOut) == 1 {
-		return 0, http.ErrHandlerTimeout 
+		return 0, http.ErrHandlerTimeout
 	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
@@ -86,7 +88,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return
 			}
 			ctx, cancel := stdContext.WithTimeout(c.Request.Context(), cfg.Timeout)
-			defer cancel() 
+			defer cancel()
 			timeoutWriter := &timeoutWriter{
 				ResponseWriter: c.Writer,
 			}
@@ -94,10 +96,10 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 			c.Writer = timeoutWriter
 			c.Request = c.Request.WithContext(ctx)
 			type result struct {
-				panicked bool
+				panicked   bool
 				panicValue interface{}
 			}
-			done := make(chan result, 1) 
+			done := make(chan result, 1)
 			go func() {
 				defer func() {
 					res := result{}
@@ -119,14 +121,14 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 			}()
 			select {
 			case res := <-done:
-				c.Writer = originalWriter 
+				c.Writer = originalWriter
 				if res.panicked {
-					panic(res.panicValue) 
+					panic(res.panicValue)
 				}
 				return
 			case <-ctx.Done():
 				timeoutWriter.markTimedOut()
-				c.Writer = originalWriter 
+				c.Writer = originalWriter
 				if ctx.Err() == stdContext.DeadlineExceeded {
 					cfg.TimeoutHandler(c)
 				}

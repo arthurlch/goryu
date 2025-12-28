@@ -79,17 +79,17 @@ var defaultArchitectures = map[string]ProjectArchitecture{
 			"config",
 		},
 		Files: map[string]string{
-			"go.mod":                            "gomod_db",
-			"README.md":                         "readme_db",
-			"config/config.json":                "api_config",
-			"cmd/server/main.go":                "main_db",
-			"internal/handlers/health.go":       "health_handler",
-			"internal/handlers/home.go":         "home_handler",
-			"internal/db/connection.go":         "db_connection",
-			"internal/repository/base.go":       "base_repository",
-			".gitignore":                        "gitignore",
-			"Makefile":                          "makefile",
-			"Dockerfile":                        "dockerfile",
+			"go.mod":                      "gomod_db",
+			"README.md":                   "readme_db",
+			"config/config.json":          "api_config",
+			"cmd/server/main.go":          "main_db",
+			"internal/handlers/health.go": "health_handler",
+			"internal/handlers/home.go":   "home_handler",
+			"internal/db/connection.go":   "db_connection",
+			"internal/repository/base.go": "base_repository",
+			".gitignore":                  "gitignore",
+			"Makefile":                    "makefile",
+			"Dockerfile":                  "dockerfile",
 		},
 		Variables: map[string]string{
 			"app_name":  "{{.ProjectName}}",
@@ -207,7 +207,7 @@ func (fa *FlexibleArchitecture) GenerateProject(projectName, archName string, cu
 				return fmt.Errorf("failed to write GORM.md: %w", err)
 			}
 		}
-		
+
 		fmt.Printf("   ✓ Configured for %s\n", dbTool)
 	}
 

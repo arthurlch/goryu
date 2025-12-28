@@ -33,7 +33,7 @@ func runInit(projectName string, template string, projectPath string, module str
 	if projectPath != "." && projectPath != "" {
 		targetPath = filepath.Join(projectPath, projectName)
 	}
-	
+
 	if _, err := os.Stat(targetPath); err == nil {
 		return fmt.Errorf("directory %s already exists", targetPath)
 	}
@@ -44,8 +44,8 @@ func runInit(projectName string, template string, projectPath string, module str
 	}
 
 	customOptions := map[string]string{
-		"module": module,
-		"path":   targetPath,
+		"module":  module,
+		"path":    targetPath,
 		"db_tool": dbTool,
 	}
 

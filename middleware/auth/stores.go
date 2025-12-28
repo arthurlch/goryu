@@ -1,16 +1,19 @@
 package auth
+
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"sync"
 	"time"
-	"github.com/google/uuid"
 )
+
 type InMemoryUserStore struct {
-	mu       sync.RWMutex
-	users    map[string]*User
-	byEmail  map[string]*User
+	mu      sync.RWMutex
+	users   map[string]*User
+	byEmail map[string]*User
 }
+
 func NewInMemoryUserStore() *InMemoryUserStore {
 	return &InMemoryUserStore{
 		users:   make(map[string]*User),
@@ -126,13 +129,15 @@ func (s *InMemoryUserStore) ListUsers(offset, limit int) ([]*User, error) {
 	}
 	return users[start:end], nil
 }
+
 type InMemoryTokenStore struct {
-	mu       sync.RWMutex
-	tokens   map[string]time.Time
-	used     map[string]bool
-	cleanup  *time.Ticker
-	stop     chan bool
+	mu      sync.RWMutex
+	tokens  map[string]time.Time
+	used    map[string]bool
+	cleanup *time.Ticker
+	stop    chan bool
 }
+
 func NewInMemoryTokenStore() *InMemoryTokenStore {
 	store := &InMemoryTokenStore{
 		tokens: make(map[string]time.Time),
@@ -206,8 +211,8 @@ func (s *InMemoryTokenStore) Stats() map[string]interface{} {
 		}
 	}
 	return map[string]interface{}{
-		"total_tokens": len(s.tokens),
-		"used_tokens":  usedCount,
+		"total_tokens":  len(s.tokens),
+		"used_tokens":   usedCount,
 		"active_tokens": len(s.tokens) - usedCount,
 	}
 }

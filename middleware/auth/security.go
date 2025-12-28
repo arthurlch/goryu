@@ -16,24 +16,26 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/scrypt"
 )
+
 const (
-	MinBcryptCost = 12
-	MaxLoginAttempts = 5
-	LoginAttemptWindow = 15 * time.Minute
-	PasswordResetTokenExpiry = 15 * time.Minute
+	MinBcryptCost                = 12
+	MaxLoginAttempts             = 5
+	LoginAttemptWindow           = 15 * time.Minute
+	PasswordResetTokenExpiry     = 15 * time.Minute
 	EmailVerificationTokenExpiry = 24 * time.Hour
-	EmailSendWindow = 1 * time.Minute
-	MaxEmailsPerWindow = 3
-	SecureTokenLength = 32
+	EmailSendWindow              = 1 * time.Minute
+	MaxEmailsPerWindow           = 3
+	SecureTokenLength            = 32
 )
+
 var (
-	PasswordMinLength = 8
-	PasswordMaxLength = 128
-	passwordHasUpper = regexp.MustCompile(`[A-Z]`)
-	passwordHasLower = regexp.MustCompile(`[a-z]`)
-	passwordHasDigit = regexp.MustCompile(`\d`)
-	passwordHasSpecial = regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`)
-	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	PasswordMinLength   = 8
+	PasswordMaxLength   = 128
+	passwordHasUpper    = regexp.MustCompile(`[A-Z]`)
+	passwordHasLower    = regexp.MustCompile(`[a-z]`)
+	passwordHasDigit    = regexp.MustCompile(`\d`)
+	passwordHasSpecial  = regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`)
+	emailRegex          = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	commonWeakPasswords = map[string]bool{
 		"password":    true,
 		"123456":      true,
@@ -44,13 +46,16 @@ var (
 		"password1":   true,
 	}
 )
+
 type PasswordStrength int
+
 const (
 	PasswordWeak PasswordStrength = iota
 	PasswordMedium
 	PasswordStrong
 	PasswordVeryStrong
 )
+
 func (ps PasswordStrength) String() string {
 	switch ps {
 	case PasswordWeak:
@@ -65,6 +70,7 @@ func (ps PasswordStrength) String() string {
 		return "unknown"
 	}
 }
+
 type SecurePasswordConfig struct {
 	MinLength           int
 	MaxLength           int
@@ -75,6 +81,7 @@ type SecurePasswordConfig struct {
 	ForbidCommonWords   bool
 	ForbidUserInfo      bool
 }
+
 func DefaultPasswordConfig() SecurePasswordConfig {
 	return SecurePasswordConfig{
 		MinLength:           PasswordMinLength,
@@ -87,13 +94,15 @@ func DefaultPasswordConfig() SecurePasswordConfig {
 		ForbidUserInfo:      true,
 	}
 }
+
 type PasswordValidationResult struct {
-	IsValid    bool
-	Strength   PasswordStrength
-	Score      int
-	Errors     []string
-	Warnings   []string
+	IsValid  bool
+	Strength PasswordStrength
+	Score    int
+	Errors   []string
+	Warnings []string
 }
+
 func ValidatePassword(password string, config SecurePasswordConfig, userInfo ...string) PasswordValidationResult {
 	result := PasswordValidationResult{
 		IsValid:  true,
@@ -292,7 +301,7 @@ func randomIndex(max int) int {
 	randomBytes := make([]byte, 1)
 	for {
 		rand.Read(randomBytes)
-		if int(randomBytes[0]) < (256-(256%max)) {
+		if int(randomBytes[0]) < (256 - (256 % max)) {
 			return int(randomBytes[0]) % max
 		}
 	}
@@ -311,7 +320,7 @@ func GenerateSecureBackupCodes(count int) ([]string, error) {
 		if _, err := rand.Read(code2); err != nil {
 			return nil, fmt.Errorf("failed to generate backup code: %v", err)
 		}
-		codes[i] = fmt.Sprintf("%s-%s", 
+		codes[i] = fmt.Sprintf("%s-%s",
 			strings.ToUpper(hex.EncodeToString(code1)[:4]),
 			strings.ToUpper(hex.EncodeToString(code2)[:4]))
 	}

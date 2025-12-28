@@ -10,9 +10,11 @@ import (
 	"github.com/arthurlch/goryu/middleware/errors"
 	"github.com/golang-jwt/jwt/v5"
 )
+
 type AuthHandlers struct {
 	service *AuthService
 }
+
 func NewAuthHandlers(service *AuthService) *AuthHandlers {
 	return &AuthHandlers{
 		service: service,
@@ -140,7 +142,7 @@ func (ah *AuthHandlers) VerifyEmail(c *goryu.Ctx) {
 	}
 	ah.service.logSecurityEvent("email_verified", map[string]interface{}{
 		"email": claims.Subject,
-		"ip": ah.service.getClientIP(c),
+		"ip":    ah.service.getClientIP(c),
 	})
 	c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -203,7 +205,7 @@ func (ah *AuthHandlers) Logout(c *goryu.Ctx) {
 	userID, _ := c.Get(UserIDKey)
 	ah.service.logSecurityEvent("user_logout", map[string]interface{}{
 		"user_id": userID,
-		"ip": ah.service.getClientIP(c),
+		"ip":      ah.service.getClientIP(c),
 	})
 	c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -247,10 +249,10 @@ func (ah *AuthHandlers) RefreshToken(c *goryu.Ctx) {
 	ah.service.tokenStore.AddToken(newRefreshJTI)
 	ah.service.setSecureCookies(c, newAccessToken, newRefreshToken)
 	c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"access_token": newAccessToken,
+		"success":       true,
+		"access_token":  newAccessToken,
 		"refresh_token": newRefreshToken,
-		"expires_in": int64(ah.service.config.SessionDuration.Seconds()),
+		"expires_in":    int64(ah.service.config.SessionDuration.Seconds()),
 	})
 }
 func (ah *AuthHandlers) ChangePassword(c *goryu.Ctx) {
@@ -279,7 +281,7 @@ func (ah *AuthHandlers) ChangePassword(c *goryu.Ctx) {
 		c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"success": false,
 			"message": "Password does not meet security requirements",
-			"errors": map[string]string{"password": strings.Join(passwordResult.Errors, "; ")},
+			"errors":  map[string]string{"password": strings.Join(passwordResult.Errors, "; ")},
 		})
 		return
 	}
@@ -293,7 +295,7 @@ func (ah *AuthHandlers) ChangePassword(c *goryu.Ctx) {
 	}
 	ah.service.logSecurityEvent("password_changed", map[string]interface{}{
 		"user_id": userID,
-		"ip": ah.service.getClientIP(c),
+		"ip":      ah.service.getClientIP(c),
 	})
 	c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -310,7 +312,7 @@ func (ah *AuthHandlers) GetProfile(c *goryu.Ctx) {
 	}
 	c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
-		"user": ah.service.toPublicUser(user),
+		"user":    ah.service.toPublicUser(user),
 	})
 }
 func (ah *AuthHandlers) UpdateProfile(c *goryu.Ctx) {
@@ -330,7 +332,7 @@ func (ah *AuthHandlers) UpdateProfile(c *goryu.Ctx) {
 	}
 	ah.service.logSecurityEvent("profile_updated", map[string]interface{}{
 		"user_id": userID,
-		"ip": ah.service.getClientIP(c),
+		"ip":      ah.service.getClientIP(c),
 	})
 	c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -363,8 +365,8 @@ func (ah *AuthHandlers) DeleteAccount(c *goryu.Ctx) {
 	}
 	ah.service.logSecurityEvent("account_deleted", map[string]interface{}{
 		"user_id": userID,
-		"email": user.Email,
-		"ip": ah.service.getClientIP(c),
+		"email":   user.Email,
+		"ip":      ah.service.getClientIP(c),
 	})
 	ah.clearAuthCookies(c)
 	c.JSON(http.StatusOK, map[string]interface{}{

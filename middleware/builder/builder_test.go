@@ -1,12 +1,14 @@
 package builder
+
 import (
 	"errors"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-	context "github.com/arthurlch/goryu/goryuctx"
 )
+
 func TestMiddlewareBuilder_Before(t *testing.T) {
 	beforeCalled := false
 	middleware := New("Test").
@@ -197,11 +199,11 @@ func TestConvenienceMiddleware_Security(t *testing.T) {
 	w := httptest.NewRecorder()
 	app.ServeHTTP(w, req)
 	expectedHeaders := map[string]string{
-		"X-Content-Type-Options":      "nosniff",
-		"X-Frame-Options":             "DENY",
-		"X-XSS-Protection":            "1; mode=block",
-		"Strict-Transport-Security":   "max-age=31536000; includeSubDomains",
-		"Referrer-Policy":             "strict-origin-when-cross-origin",
+		"X-Content-Type-Options":    "nosniff",
+		"X-Frame-Options":           "DENY",
+		"X-XSS-Protection":          "1; mode=block",
+		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+		"Referrer-Policy":           "strict-origin-when-cross-origin",
 	}
 	for header, expectedValue := range expectedHeaders {
 		if w.Header().Get(header) != expectedValue {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 )
+
 type MockEmailSender struct {
 	SentEmails []EmailRecord
 }
@@ -13,6 +14,7 @@ type EmailRecord struct {
 	Content string
 	Type    string
 }
+
 func NewMockEmailSender() *MockEmailSender {
 	return &MockEmailSender{
 		SentEmails: make([]EmailRecord, 0),
@@ -54,11 +56,13 @@ func (m *MockEmailSender) GetSentEmails() []EmailRecord {
 func (m *MockEmailSender) ClearSentEmails() {
 	m.SentEmails = make([]EmailRecord, 0)
 }
+
 type SimpleLogger struct {
 	EnableSecurityLog bool
 	EnableErrorLog    bool
 	EnableInfoLog     bool
 }
+
 func NewSimpleLogger() *SimpleLogger {
 	return &SimpleLogger{
 		EnableSecurityLog: true,

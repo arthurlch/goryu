@@ -10,7 +10,7 @@ import (
 func generateBasicModelContent(name, fields string) string {
 	modelName := utils.ToGoIdentifier(name)
 	var structFields string
-	
+
 	if fields != "" {
 		fieldList := parseFields(fields)
 		var fieldStrings []string
@@ -58,7 +58,7 @@ func generateDBModelContent(name, dbTool, fields string) string {
 func generateGormModelContentSimple(name, fields string) string {
 	modelName := utils.ToGoIdentifier(name)
 	var structFields string
-	
+
 	if fields != "" {
 		fieldList := parseFields(fields)
 		var fieldStrings []string
@@ -98,7 +98,7 @@ func New%sRepository(db *gorm.DB) *%sRepository {
 
 func generateGormTag(field Field) string {
 	gormTags := []string{}
-	
+
 	switch field.Type {
 	case "string":
 		gormTags = append(gormTags, "size:255")
@@ -112,12 +112,12 @@ func generateGormTag(field Field) string {
 	case "bool":
 		gormTags = append(gormTags, "default:false")
 	case "time.Time":
-		// GORM handles time automatically so well 
+		// GORM handles time automatically so well
 	}
-	
+
 	if len(gormTags) > 0 {
 		return fmt.Sprintf("gorm:\"%s\" %s", strings.Join(gormTags, ";"), field.Tag)
 	}
-	
+
 	return field.Tag
 }

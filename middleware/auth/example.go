@@ -7,6 +7,7 @@ import (
 
 	"github.com/arthurlch/goryu"
 )
+
 func SetupAuthMiddleware(app *goryu.App, secretKey string) (*AuthService, *AuthHandlers) {
 	jwtAuth, err := NewJWTAuth(secretKey, "goryu-app")
 	if err != nil {

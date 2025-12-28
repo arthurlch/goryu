@@ -47,28 +47,27 @@ func (r *Router) handleRouterError(operation, message string) {
 	}
 
 	mode := r.GetErrorHandlingMode()
-	
+
 	switch mode {
 	case RouterErrorModePanic:
 		// Maintain backward compatibility - panic as before
 		panic(err.Error())
-		
+
 	case RouterErrorModeLog:
 		// Log the error but continue execution
 		log.Printf("Router error: %v", err)
-		
+
 	case RouterErrorModeReturn:
 		// This would require API changes to return errors
 		// For now, treat as log mode since we can't change method signatures
 		log.Printf("Router error (would return): %v", err)
-		
+
 	case RouterErrorModeSilent:
 		// Completely ignore the error
 		return
-		
+
 	default:
 		// Fallback to panic mode for unknown modes
 		panic(err.Error())
 	}
 }
-

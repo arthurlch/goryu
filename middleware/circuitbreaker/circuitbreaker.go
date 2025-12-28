@@ -8,32 +8,36 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type State int
+
 const (
 	StateClosed State = iota
 	StateOpen
 	StateHalfOpen
 )
+
 type Config struct {
 	base.BaseConfig
-	MaxRequests    uint32        
-	Interval       time.Duration 
-	Timeout        time.Duration 
-	FailureRatio   float64       
-	MinRequests    uint32        
-	OnStateChange  func(State)   
-	IsFailure      func(error) bool 
+	MaxRequests   uint32
+	Interval      time.Duration
+	Timeout       time.Duration
+	FailureRatio  float64
+	MinRequests   uint32
+	OnStateChange func(State)
+	IsFailure     func(error) bool
 }
 type CircuitBreaker struct {
-	config         Config
-	mutex          sync.RWMutex
-	state          State
-	failures       uint32
-	requests       uint32
-	lastFailure    time.Time
-	lastRequest    time.Time
-	halfOpenCount  uint32
+	config        Config
+	mutex         sync.RWMutex
+	state         State
+	failures      uint32
+	requests      uint32
+	lastFailure   time.Time
+	lastRequest   time.Time
+	halfOpenCount uint32
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -251,9 +255,9 @@ func (cb *CircuitBreaker) Metrics() map[string]interface{} {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
 	return map[string]interface{}{
-		"state":        cb.state.String(),
-		"failures":     cb.failures,
-		"requests":     cb.requests,
+		"state":    cb.state.String(),
+		"failures": cb.failures,
+		"requests": cb.requests,
 		"failure_rate": func() float64 {
 			if cb.requests == 0 {
 				return 0

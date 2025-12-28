@@ -1,20 +1,23 @@
 package errors
+
 import (
 	"fmt"
 	"net/http"
 	"time"
 )
+
 type AppError struct {
-	Code    string `json:"code"`              
-	Message string `json:"message"`           
-	Status  int    `json:"-"`                 
-	Details    map[string]interface{} `json:"details,omitempty"`    
-	Internal   error                  `json:"-"`                    
-	Timestamp  time.Time              `json:"timestamp"`            
-	RequestID  string                 `json:"request_id,omitempty"` 
-	StackTrace []string               `json:"-"`                    
-	Source     string                 `json:"source,omitempty"`     
+	Code       string                 `json:"code"`
+	Message    string                 `json:"message"`
+	Status     int                    `json:"-"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+	Internal   error                  `json:"-"`
+	Timestamp  time.Time              `json:"timestamp"`
+	RequestID  string                 `json:"request_id,omitempty"`
+	StackTrace []string               `json:"-"`
+	Source     string                 `json:"source,omitempty"`
 }
+
 func (e *AppError) Error() string {
 	if e.Internal != nil {
 		return fmt.Sprintf("%s: %s (internal: %v)", e.Code, e.Message, e.Internal)
@@ -44,9 +47,11 @@ func (e *AppError) WithSource(source string) *AppError {
 	e.Source = source
 	return e
 }
+
 type ErrorBuilder struct {
 	err *AppError
 }
+
 func NewError(code string, message string) *ErrorBuilder {
 	return &ErrorBuilder{
 		err: &AppError{

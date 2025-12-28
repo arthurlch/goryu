@@ -75,7 +75,7 @@ func main() {
 
 	app.POST("/users", func(c *goryu.Ctx) {
 		var req UserRequest
-		
+
 		// Use the new simplified BodyParser with auto-validation
 		if err := c.BodyParser(&req); err != nil {
 			c.JSON(400, goryu.Map{"error": err.Error()})
@@ -88,7 +88,7 @@ func main() {
 			"user_email": req.Email,
 			"action":     "create_user",
 		})
-		
+
 		// Use goryu.Map for cleaner JSON construction
 		c.JSON(201, goryu.Map{
 			"id":      123,
@@ -110,7 +110,7 @@ func main() {
 
 	// The monitoring endpoints are automatically registered:
 	// GET /_health     - Health check status
-	// GET /_metrics    - Application metrics  
+	// GET /_metrics    - Application metrics
 	// GET /_events     - Recent events (with ?limit=N parameter)
 	// GET /_dashboard  - Visual monitoring dashboard
 

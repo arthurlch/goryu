@@ -1,15 +1,17 @@
 package base
+
 import (
 	"bytes"
 	"errors"
+	context "github.com/arthurlch/goryu/goryuctx"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-	context "github.com/arthurlch/goryu/goryuctx"
 )
+
 func TestStandardMiddleware(t *testing.T) {
 	t.Run("Normal execution", func(t *testing.T) {
 		called := false
@@ -261,8 +263,8 @@ func TestExampleMiddleware(t *testing.T) {
 	})
 	t.Run("Invalid configuration", func(t *testing.T) {
 		middleware := NewExampleMiddleware(ExampleConfig{
-			Timeout:      0, 
-			CustomHeader: "", 
+			Timeout:      0,
+			CustomHeader: "",
 		})
 		handler := middleware(func(c *context.Context) {
 			c.Text(200, "should not reach here")
@@ -283,7 +285,7 @@ func TestExamplePostProcessMiddleware(t *testing.T) {
 			CustomHeader: "X-Custom",
 		})
 		handler := middleware(func(c *context.Context) {
-			time.Sleep(10 * time.Millisecond) 
+			time.Sleep(10 * time.Millisecond)
 			c.Text(200, "success")
 		})
 		w := httptest.NewRecorder()

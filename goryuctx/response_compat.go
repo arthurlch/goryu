@@ -28,7 +28,7 @@ func (c *Context) SetHeaderSilent(key string, value string) {
 func (c *Context) JSONSilent(code int, obj interface{}) {
 	err := c.JSON(code, obj)
 	if err != nil {
-		// SECUCHECK: Shall not expose error details 
+		// SECUCHECK: Shall not expose error details
 		log.Printf("Warning: Error sending JSON response")
 	}
 }
@@ -118,7 +118,7 @@ func (c *Context) Send(code int, data ...interface{}) error {
 		}
 		return nil
 	}
-	
+
 	switch v := data[0].(type) {
 	case string:
 		return c.Text(code, v)

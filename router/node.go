@@ -15,7 +15,7 @@ const (
 	catchAll
 )
 
-// node represents a node in the Radix tree 
+// node represents a node in the Radix tree
 // I wasn't aware about this data structure before, but it's quite efficient for routing and it seems to be used in other frameworks too.
 // MEMO: https://en.wikipedia.org/wiki/Radix_tree
 type node struct {
@@ -313,7 +313,7 @@ walk: // Outer loop label
 				return n.handler, n.route, params, false
 			}
 			// Check for trailing slash recommendation
-			// should omit nil check; len() for nil slices is defined as zero 
+			// should omit nil check; len() for nil slices is defined as zero
 			// Well f..u linter chan
 			return nil, nil, params, n.children != nil && len(n.children) == 1 && n.children[0].path == "/"
 

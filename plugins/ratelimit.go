@@ -127,8 +127,8 @@ func (b *RateLimitBuilder) Handler(handler func(c *context.Context)) *RateLimitB
 func (b *RateLimitBuilder) JSONResponse() *RateLimitBuilder {
 	b.config.LimitReached = func(c *context.Context) {
 		c.JSON(http.StatusTooManyRequests, map[string]interface{}{
-			"error":   "Rate limit exceeded",
-			"message": "Too many requests, please try again later",
+			"error":       "Rate limit exceeded",
+			"message":     "Too many requests, please try again later",
 			"retry_after": int(b.config.Expiration.Seconds()),
 		})
 	}
@@ -156,7 +156,7 @@ func (b *RateLimitBuilder) CleanupInterval(interval time.Duration) *RateLimitBui
 func (b *RateLimitBuilder) Burst(burstMax int, burstDuration time.Duration) *RateLimitBuilder {
 	b.SetMetadata("burst_max", burstMax)
 	b.SetMetadata("burst_duration", burstDuration)
-	
+
 	// For now, just use the burst max as the regular max
 	// A more sophisticated implementation could use a token bucket algorithm
 	b.config.Max = burstMax
@@ -189,40 +189,40 @@ func (b *RateLimitBuilder) Build() context.Middleware {
 
 func (b *RateLimitBuilder) Validate() error {
 	b.ClearErrors()
-	
+
 	if b.config.Max <= 0 {
 		b.AddError(fmt.Errorf("max requests must be greater than 0, got %d", b.config.Max))
 	}
-	
+
 	if b.config.Expiration <= 0 {
 		b.AddError(fmt.Errorf("expiration must be greater than 0, got %v", b.config.Expiration))
 	}
-	
+
 	if b.config.KeyGenerator == nil {
 		b.AddError(fmt.Errorf("key generator function cannot be nil"))
 	}
-	
+
 	if b.config.LimitReached == nil {
 		b.AddError(fmt.Errorf("limit reached handler cannot be nil"))
 	}
-	
+
 	if b.config.MaxClients <= 0 {
 		b.AddError(fmt.Errorf("max clients must be greater than 0, got %d", b.config.MaxClients))
 	}
-	
+
 	if b.config.CleanupInterval <= 0 {
 		b.AddError(fmt.Errorf("cleanup interval must be greater than 0, got %v", b.config.CleanupInterval))
 	}
-	
+
 	if b.config.Max > 10000 {
 		// Not an error, but could be logged as a warning
 		b.SetMetadata("warning", "Very high rate limit detected - ensure this is intentional")
 	}
-	
+
 	if b.config.Max < 5 && b.config.Expiration <= time.Minute {
 		b.SetMetadata("warning", "Very strict rate limit detected - may impact user experience")
 	}
-	
+
 	return b.BaseBuilder.Validate()
 }
 
@@ -246,13 +246,13 @@ func getClientIP(c *context.Context) string {
 			}
 		}
 	}
-	
+
 	if xri := c.Request.Header.Get("X-Real-IP"); xri != "" {
 		if net.ParseIP(xri) != nil {
 			return xri
 		}
 	}
-	
+
 	host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 	if err != nil {
 		return c.Request.RemoteAddr

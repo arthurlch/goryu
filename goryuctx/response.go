@@ -37,7 +37,7 @@ func isComplexObject(obj interface{}) bool {
 		if obj == nil {
 			return false
 		}
-		
+
 		rv := reflect.ValueOf(obj)
 		switch rv.Kind() {
 		case reflect.Struct:
@@ -69,7 +69,7 @@ func (c *Context) JSON(code int, obj interface{}) error {
 	if c.GetErrorHandlingMode() == ErrorModeReturn {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Writer.WriteHeader(code)
-		
+
 		// Smart JSON selection: use sonic for complex objects, standard for simple ones
 		var data []byte
 		var err error
@@ -90,7 +90,7 @@ func (c *Context) JSON(code int, obj interface{}) error {
 			}
 			return c.handleResponseError("JSON", responseErr, SerializationError)
 		}
-		
+
 		_, err = c.Writer.Write(data)
 		if err != nil {
 			responseErr := &ResponseError{
@@ -104,12 +104,12 @@ func (c *Context) JSON(code int, obj interface{}) error {
 		}
 		return nil
 	}
-	
+
 	// Slow path with panic recovery
 	return c.safeExecute("JSON", SerializationError, func() error {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Writer.WriteHeader(code)
-		
+
 		// Smart JSON selection: use sonic for complex objects, standard for simple ones
 		var data []byte
 		var err error
@@ -129,7 +129,7 @@ func (c *Context) JSON(code int, obj interface{}) error {
 				Critical:  true,
 			}
 		}
-		
+
 		_, err = c.Writer.Write(data)
 		if err != nil {
 			return &ResponseError{
@@ -162,7 +162,7 @@ func (c *Context) Text(code int, text string) error {
 		}
 		return nil
 	}
-	
+
 	// Slow path with panic recovery
 	return c.safeExecute("Text", WriteError, func() error {
 		c.Writer.Header().Set("Content-Type", "text/plain")
@@ -187,7 +187,7 @@ func (c *Context) JSONHeavy(code int, obj interface{}) error {
 	if c.GetErrorHandlingMode() == ErrorModeReturn {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Writer.WriteHeader(code)
-		
+
 		// Use configured JSON engine for potentially better performance on large objects
 		data, err := goryujson.Default.Marshal(obj)
 		if err != nil {
@@ -200,7 +200,7 @@ func (c *Context) JSONHeavy(code int, obj interface{}) error {
 			}
 			return c.handleResponseError("JSONHeavy", responseErr, SerializationError)
 		}
-		
+
 		_, err = c.Writer.Write(data)
 		if err != nil {
 			responseErr := &ResponseError{
@@ -214,12 +214,12 @@ func (c *Context) JSONHeavy(code int, obj interface{}) error {
 		}
 		return nil
 	}
-	
+
 	// Slow path with panic recovery
 	return c.safeExecute("JSONHeavy", SerializationError, func() error {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Writer.WriteHeader(code)
-		
+
 		// Use configured JSON engine
 		data, err := goryujson.Default.Marshal(obj)
 		if err != nil {
@@ -231,7 +231,7 @@ func (c *Context) JSONHeavy(code int, obj interface{}) error {
 				Critical:  true,
 			}
 		}
-		
+
 		_, err = c.Writer.Write(data)
 		if err != nil {
 			return &ResponseError{
@@ -305,14 +305,14 @@ func (c *Context) Error(err error, statusCode ...int) error {
 	}
 
 	log.Printf("HTTP %d Error occurred", code)
-	
+
 	message := http.StatusText(code)
 	if code == http.StatusInternalServerError {
-		message = "Internal Server Error" 
+		message = "Internal Server Error"
 	}
-	
+
 	http.Error(c.Writer, message, code)
-	return err 
+	return err
 }
 
 func (c *Context) ErrorWithMessage(err error, statusCode int, message string) error {
@@ -376,7 +376,7 @@ func (c *Context) SendFile(path string) error {
 	return c.safeExecute("SendFile", FileError, func() error {
 		// SECUCHECK: I should clean the path to prevent directory traversal
 		cleanPath := filepath.Clean(path)
-		
+
 		file, err := os.Open(cleanPath)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -392,11 +392,11 @@ func (c *Context) SendFile(path string) error {
 				Type:      FileError,
 				Operation: "SendFile",
 				Err:       err,
-				Code:      0, 
+				Code:      0,
 				Critical:  true,
 			}
 		}
-		defer func() { 
+		defer func() {
 			if closeErr := file.Close(); closeErr != nil {
 				log.Printf("Error closing file %s: %v", cleanPath, closeErr)
 			}
@@ -411,7 +411,7 @@ func (c *Context) SendFile(path string) error {
 				Type:      FileError,
 				Operation: "SendFile",
 				Err:       fmt.Errorf("error getting file info for %s: %w", cleanPath, err),
-				Code:      0, 
+				Code:      0,
 				Critical:  true,
 			}
 		}
@@ -422,7 +422,7 @@ func (c *Context) SendFile(path string) error {
 				Type:      FileError,
 				Operation: "SendFile",
 				Err:       fmt.Errorf("path is a directory: %s", cleanPath),
-				Code:      0, 
+				Code:      0,
 				Critical:  true,
 			}
 		}

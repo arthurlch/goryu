@@ -11,13 +11,15 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type Config struct {
 	base.BaseConfig
-	Root string
+	Root       string
 	PathPrefix string
-	Browse bool
-	Index []string
+	Browse     bool
+	Index      []string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -76,7 +78,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 			info, err := os.Stat(cleanFullPath)
 			if err != nil {
 				if os.IsNotExist(err) {
-					next(c) 
+					next(c)
 					return
 				}
 				base.DefaultErrorHandler(c, base.MiddlewareError{
@@ -148,11 +150,11 @@ func validateAndSanitizeFilePath(root, requestPath string) (string, error) {
 		return "", fmt.Errorf("directory traversal attack detected")
 	}
 	suspiciousPatterns := []string{
-		"~",            
-		"\\",           
-		"\x00",         
-		"<",            
-		">",            
+		"~",
+		"\\",
+		"\x00",
+		"<",
+		">",
 	}
 	lowerPath := strings.ToLower(cleanPath)
 	for _, pattern := range suspiciousPatterns {
@@ -164,15 +166,15 @@ func validateAndSanitizeFilePath(root, requestPath string) (string, error) {
 }
 func containsTraversalAttempt(originalPath, decodedPath string) bool {
 	traversalPatterns := []string{
-		"..",                    
-		"%2e%2e",               
-		"%252e%252e",           
-		"..%2f",                
-		"%2e.",                 
-		".%2e",                 
-		"..\\",                 
-		"..%5c",                
-		"\u002e\u002e",         
+		"..",
+		"%2e%2e",
+		"%252e%252e",
+		"..%2f",
+		"%2e.",
+		".%2e",
+		"..\\",
+		"..%5c",
+		"\u002e\u002e",
 	}
 	checkPaths := []string{originalPath, decodedPath}
 	for _, path := range checkPaths {

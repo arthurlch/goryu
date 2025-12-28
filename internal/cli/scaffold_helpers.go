@@ -17,17 +17,17 @@ type Field struct {
 
 func parseFields(fields string) []Field {
 	var result []Field
-	fieldDefs := strings.Split(fields, ",") 
-	
+	fieldDefs := strings.Split(fields, ",")
+
 	for _, fieldDef := range fieldDefs {
 		parts := strings.Split(strings.TrimSpace(fieldDef), ":")
 		if len(parts) == 2 {
 			name := strings.TrimSpace(parts[0])
 			typ := strings.TrimSpace(parts[1])
-			
+
 			goType := convertToGoType(typ)
 			jsonTag := fmt.Sprintf(`json:"%s"`, name)
-			
+
 			result = append(result, Field{
 				Name: utils.ToGoIdentifier(name),
 				Type: goType,
@@ -35,7 +35,7 @@ func parseFields(fields string) []Field {
 			})
 		}
 	}
-	
+
 	return result
 }
 
@@ -69,10 +69,10 @@ func generateRepository(resource string, fields []Field, moduleName string) erro
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
 		return err
 	}
-	
+
 	resourceName := utils.ToGoIdentifier(resource)
 	filename := filepath.Join(repoDir, strings.ToLower(resource)+"_repository.go")
-	
+
 	content := fmt.Sprintf(`package repository
 
 import (
@@ -179,7 +179,7 @@ func (r *%sRepository) List(ctx context.Context, offset, limit int) ([]*models.%
 	
 	return items, rows.Err()
 }
-`, moduleName, resourceName, resourceName, resourceName, resourceName, 
+`, moduleName, resourceName, resourceName, resourceName, resourceName,
 		resourceName, strings.ToLower(resource), resourceName,
 		"`", strings.ToLower(resource), generateFieldList(fields, false), generatePlaceholders(len(fields)), "`",
 		generateFieldValues(fields, strings.ToLower(resource)),
@@ -199,7 +199,7 @@ func (r *%sRepository) List(ctx context.Context, offset, limit int) ([]*models.%
 		"`", generateFieldList(fields, true), strings.ToLower(resource), "`",
 		resourceName, strings.ToLower(resource), resourceName, generateScanFields(fields, strings.ToLower(resource)),
 		strings.ToLower(resource))
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
@@ -208,10 +208,10 @@ func generateValidation(resource string, fields []Field, moduleName string) erro
 	if err := os.MkdirAll(validationDir, 0755); err != nil {
 		return err
 	}
-	
+
 	resourceName := utils.ToGoIdentifier(resource)
 	filename := filepath.Join(validationDir, strings.ToLower(resource)+"_validation.go")
-	
+
 	content := fmt.Sprintf(`package validation
 
 import (
@@ -236,7 +236,7 @@ func Validate%sUpdate(model *models.%s) []string {
 	return Validate%s(model)
 }
 `, moduleName, "`", "\\", "`", resourceName, resourceName, generateValidationChecks(fields), resourceName, resourceName, resourceName)
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
@@ -244,7 +244,7 @@ func generateAPITests(resource string, fields []Field, moduleName string) error 
 	testsDir := "internal/handlers"
 	resourceName := utils.ToGoIdentifier(resource)
 	filename := filepath.Join(testsDir, strings.ToLower(resource)+"_test.go")
-	
+
 	content := fmt.Sprintf(`package handlers
 
 import (
@@ -364,7 +364,7 @@ func TestList%s(t *testing.T) {
 		strings.ToLower(resource),
 		resourceName, strings.ToLower(resource), resourceName, strings.ToLower(resource),
 		resourceName, strings.ToLower(resource), resourceName, strings.ToLower(resource))
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
@@ -373,10 +373,10 @@ func generateAPIDocumentation(resource string, fields []Field, routeGroup string
 	if err := os.MkdirAll(docsDir, 0755); err != nil {
 		return err
 	}
-	
+
 	resourceName := utils.ToGoIdentifier(resource)
 	filename := filepath.Join(docsDir, strings.ToLower(resource)+".md")
-	
+
 	content := fmt.Sprintf(`# %s API
 
 ## Overview
@@ -503,7 +503,7 @@ Lists all %s with pagination.
 		strings.ToLower(resource),
 		resourceName,
 		"```", generateModelDoc(fields), "```")
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
@@ -639,7 +639,6 @@ func generateModelDoc(fields []Field) string {
 	return strings.Join(docs, ",\n")
 }
 
-
 func generateServiceStructure(name string) error {
 	serviceName := strings.ToLower(name)
 	directories := []string{
@@ -653,20 +652,20 @@ func generateServiceStructure(name string) error {
 		filepath.Join(serviceName, "deployments"),
 		filepath.Join(serviceName, "scripts"),
 	}
-	
+
 	for _, dir := range directories {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
 func generateServiceImplementation(name string, includeHTTP, includeGRPC bool) error {
 	serviceName := utils.ToGoIdentifier(name)
 	filename := filepath.Join(strings.ToLower(name), "internal", "service", strings.ToLower(name)+".go")
-	
+
 	content := fmt.Sprintf(`package service
 
 import (
@@ -706,14 +705,14 @@ func (s *%sServiceImpl) GetHealth(ctx context.Context) (*HealthResponse, error) 
 `, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
 		"`json:\"status\"`", "`json:\"data,omitempty\"`", "`json:\"message\"`",
 		serviceName, serviceName)
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
 func generateHTTPService(name string) error {
 	serviceName := utils.ToGoIdentifier(name)
 	filename := filepath.Join(strings.ToLower(name), "internal", "handlers", "http.go")
-	
+
 	content := fmt.Sprintf(`package handlers
 
 import (
@@ -754,14 +753,14 @@ func (h *HTTPHandler) GetHealth(c *goryu.Context) {
 	c.JSON(http.StatusOK, health)
 }
 `, strings.ToLower(name), serviceName, serviceName)
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
 func generateGRPCService(name string) error {
 	serviceName := utils.ToGoIdentifier(name)
 	lowerName := strings.ToLower(name)
-	
+
 	// make proto file
 	protoFile := filepath.Join(lowerName, "api", "proto", lowerName+".proto")
 	protoContent := fmt.Sprintf(`syntax = "proto3";
@@ -781,11 +780,11 @@ message HealthResponse {
   string message = 2;
 }
 `, lowerName, lowerName, serviceName)
-	
+
 	if err := os.WriteFile(protoFile, []byte(protoContent), 0644); err != nil {
 		return err
 	}
-	
+
 	// make gRPC handler (but well not fully supported yet)
 	grpcFile := filepath.Join(lowerName, "internal", "handlers", "grpc.go")
 	grpcContent := fmt.Sprintf(`package handlers
@@ -818,14 +817,14 @@ func (h *GRPCHandler) GetHealth(ctx context.Context, req *pb.HealthRequest) (*pb
 	}, nil
 }
 `, lowerName, lowerName, serviceName, serviceName, serviceName)
-	
+
 	return os.WriteFile(grpcFile, []byte(grpcContent), 0644)
 }
 
 func generateKafkaService(name string) error {
 	serviceName := utils.ToGoIdentifier(name)
 	filename := filepath.Join(strings.ToLower(name), "internal", "handlers", "kafka.go")
-	
+
 	content := fmt.Sprintf(`package handlers
 
 import (
@@ -902,18 +901,18 @@ func (h *KafkaHandler) Close() error {
 	return h.writer.Close()
 }
 `, strings.ToLower(name), serviceName, serviceName, strings.ToLower(name), strings.ToLower(name), strings.ToLower(name))
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
 func generateServiceMonitoring(name string) error {
 	filename := filepath.Join(strings.ToLower(name), "internal", "monitoring", "metrics.go")
-	
+
 	// Create monitoring directory
 	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
 		return err
 	}
-	
+
 	content := fmt.Sprintf(`package monitoring
 
 import (
@@ -957,13 +956,13 @@ func SetActiveConnections(count float64) {
 	activeConnections.Set(count)
 }
 `, strings.ToLower(name), strings.ToLower(name), strings.ToLower(name))
-	
+
 	return os.WriteFile(filename, []byte(content), 0644)
 }
 
 func generateServiceDeployment(name string, includeGRPC, includeHTTP, includeKafka, includeMonitoring bool) error {
 	serviceName := strings.ToLower(name)
-	
+
 	dockerFile := filepath.Join(serviceName, "Dockerfile")
 	dockerContent := fmt.Sprintf(`FROM golang:1.21-alpine AS builder
 
@@ -983,11 +982,11 @@ COPY --from=builder /app/config ./config
 
 CMD ["./%s"]
 `, serviceName, serviceName, serviceName)
-	
+
 	if err := os.WriteFile(dockerFile, []byte(dockerContent), 0644); err != nil {
 		return err
 	}
-	
+
 	composeFile := filepath.Join(serviceName, "docker-compose.yml")
 	composeContent := fmt.Sprintf(`version: '3.8'
 
@@ -996,22 +995,22 @@ services:
     build: .
     ports:
       - "8080:8080"`, serviceName)
-	
+
 	if includeGRPC {
 		composeContent += `
       - "9090:9090"`
 	}
-	
+
 	if includeMonitoring {
 		composeContent += `
       - "8081:8081"  # metrics port`
 	}
-	
+
 	composeContent += `
     environment:
       - ENV=development
     depends_on:`
-	
+
 	if includeKafka {
 		composeContent += `
       - kafka
@@ -1035,7 +1034,7 @@ services:
     ports:
       - "2181:2181"`
 	}
-	
+
 	if includeMonitoring {
 		composeContent += `
   
@@ -1046,7 +1045,7 @@ services:
     volumes:
       - ./deployments/prometheus.yml:/etc/prometheus/prometheus.yml`
 	}
-	
+
 	return os.WriteFile(composeFile, []byte(composeContent), 0644)
 }
 
@@ -1054,7 +1053,7 @@ func generateServiceMain(name string, includeGRPC, includeHTTP, includeKafka, in
 	serviceName := utils.ToGoIdentifier(name)
 	lowerName := strings.ToLower(name)
 	mainFile := filepath.Join(lowerName, "cmd", "server", "main.go")
-	
+
 	imports := []string{
 		`"context"`,
 		`"log"`,
@@ -1063,25 +1062,25 @@ func generateServiceMain(name string, includeGRPC, includeHTTP, includeKafka, in
 		`"syscall"`,
 		`"time"`,
 	}
-	
+
 	if includeHTTP {
 		imports = append(imports, `"github.com/arthurlch/goryu"`)
 		imports = append(imports, fmt.Sprintf(`"%s/internal/handlers"`, lowerName))
 	}
-	
+
 	if includeGRPC {
 		imports = append(imports, `"google.golang.org/grpc"`)
 		imports = append(imports, `"net"`)
 		imports = append(imports, fmt.Sprintf(`pb "%s/api/proto"`, lowerName))
 	}
-	
+
 	if includeMonitoring {
 		imports = append(imports, `"github.com/prometheus/client_golang/prometheus/promhttp"`)
 		imports = append(imports, `"net/http"`)
 	}
-	
+
 	imports = append(imports, fmt.Sprintf(`"%s/internal/service"`, lowerName))
-	
+
 	content := fmt.Sprintf(`package main
 
 import (
@@ -1100,7 +1099,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	
 `, strings.Join(imports, "\n\t"), serviceName)
-	
+
 	if includeHTTP {
 		content += `	// Start HTTP server
 	app := goryu.New()
@@ -1116,7 +1115,7 @@ func main() {
 	
 `
 	}
-	
+
 	if includeGRPC {
 		content += `	// Start gRPC server
 	go func() {
@@ -1137,7 +1136,7 @@ func main() {
 	
 `
 	}
-	
+
 	if includeKafka {
 		content += `	// Start Kafka consumer
 	go func() {
@@ -1152,7 +1151,7 @@ func main() {
 	
 `
 	}
-	
+
 	if includeMonitoring {
 		content += `	// Start metrics server
 	go func() {
@@ -1165,7 +1164,7 @@ func main() {
 	
 `
 	}
-	
+
 	content += `	// Wait for shutdown signal
 	<-sigChan
 	log.Println("Shutting down...")
@@ -1177,7 +1176,7 @@ func main() {
 	log.Println("Service stopped")
 }
 `
-	
+
 	goModFile := filepath.Join(lowerName, "go.mod")
 	goModContent := fmt.Sprintf(`module %s
 
@@ -1185,30 +1184,30 @@ go 1.21
 
 require (
 	github.com/arthurlch/goryu v1.0.0`, lowerName)
-	
+
 	if includeGRPC {
 		goModContent += `
 	google.golang.org/grpc v1.58.0
 	google.golang.org/protobuf v1.31.0`
 	}
-	
+
 	if includeKafka {
 		goModContent += `
 	github.com/segmentio/kafka-go v0.4.42`
 	}
-	
+
 	if includeMonitoring {
 		goModContent += `
 	github.com/prometheus/client_golang v1.17.0`
 	}
-	
+
 	goModContent += `
 )
 `
-	
+
 	if err := os.WriteFile(goModFile, []byte(goModContent), 0644); err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(mainFile, []byte(content), 0644)
 }

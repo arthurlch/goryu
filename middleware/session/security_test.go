@@ -9,6 +9,7 @@ import (
 	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/middleware/session"
 )
+
 func TestSecureStore(t *testing.T) {
 	store, err := session.NewSecureStore("test-encryption-key-must-be-at-least-32-chars",
 		session.WithMaxAge(1*time.Hour),
@@ -108,12 +109,12 @@ func TestSessionSecurity(t *testing.T) {
 		Store:      store,
 		CookieName: "test_session",
 		Expiration: 1 * time.Hour,
-		Secure:     func(b bool) *bool { return &b }(false), 
+		Secure:     func(b bool) *bool { return &b }(false),
 		SameSite:   http.SameSiteStrictMode,
 	}))
 	app.Use(session.SecureSessionMiddleware(session.SecurityConfig{
 		TrackActivity:   true,
-		IdleTimeout:     100 * time.Millisecond, 
+		IdleTimeout:     100 * time.Millisecond,
 		AbsoluteTimeout: 1 * time.Hour,
 		BindToUserAgent: true,
 	}))
@@ -240,8 +241,8 @@ func TestAnomalyDetection(t *testing.T) {
 		ip := "192.168.1.100"
 		for i := 1; i <= 3; i++ {
 			err := detector.CheckAnomaly(
-				"user"+string(rune(i)), 
-				"session"+string(rune(i)), 
+				"user"+string(rune(i)),
+				"session"+string(rune(i)),
 				ip,
 			)
 			if err != nil {

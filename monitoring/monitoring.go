@@ -62,18 +62,18 @@ type HealthResult struct {
 }
 
 type Metrics struct {
-	RequestCount      int64                    `json:"request_count"`
-	ErrorCount        int64                    `json:"error_count"`
-	AvgResponseTime   time.Duration            `json:"avg_response_time"`
-	Uptime            time.Duration            `json:"uptime"`
-	MemoryUsage       uint64                   `json:"memory_usage_bytes"`
-	GoRoutines        int                      `json:"goroutines"`
-	StartTime         time.Time                `json:"start_time"`
-	RouteMetrics      map[string]*RouteMetric  `json:"route_metrics"`
+	RequestCount      int64                        `json:"request_count"`
+	ErrorCount        int64                        `json:"error_count"`
+	AvgResponseTime   time.Duration                `json:"avg_response_time"`
+	Uptime            time.Duration                `json:"uptime"`
+	MemoryUsage       uint64                       `json:"memory_usage_bytes"`
+	GoRoutines        int                          `json:"goroutines"`
+	StartTime         time.Time                    `json:"start_time"`
+	RouteMetrics      map[string]*RouteMetric      `json:"route_metrics"`
 	MiddlewareMetrics map[string]*MiddlewareMetric `json:"middleware_metrics"`
-	StatusCodeCounts  map[int]int64            `json:"status_code_counts"`
-	ActiveRequests    int64                    `json:"active_requests"`
-	TotalResponseTime int64                    `json:"total_response_time_ms"`
+	StatusCodeCounts  map[int]int64                `json:"status_code_counts"`
+	ActiveRequests    int64                        `json:"active_requests"`
+	TotalResponseTime int64                        `json:"total_response_time_ms"`
 }
 
 type RouteMetric struct {
@@ -86,10 +86,10 @@ type RouteMetric struct {
 }
 
 type MiddlewareMetric struct {
-	Name            string        `json:"name"`
-	ExecutionCount  int64         `json:"execution_count"`
+	Name             string        `json:"name"`
+	ExecutionCount   int64         `json:"execution_count"`
 	AvgExecutionTime time.Duration `json:"avg_execution_time"`
-	ErrorCount      int64         `json:"error_count"`
+	ErrorCount       int64         `json:"error_count"`
 }
 
 type Monitor struct {
@@ -103,7 +103,8 @@ type Monitor struct {
 	eventHandlers []func(Event)
 	enabled       bool
 	safeExecute   bool
-	
+	closed        int32 // atomic flag to track if monitor is closed
+
 	// Optimization: Async event processing
 	eventsChan chan Event
 	done       chan struct{}
@@ -116,7 +117,7 @@ type Config struct {
 	MetricsEnabled bool          `json:"metrics_enabled"`
 	SafeExecute    bool          `json:"safe_execute"`
 	// Optimization: Buffer size for processing channel
-	EventBufferSize int           `json:"event_buffer_size"`
+	EventBufferSize int `json:"event_buffer_size"`
 }
 
 func New(config ...Config) *Monitor {
@@ -206,7 +207,9 @@ func (m *Monitor) processEventsWorker() {
 
 // Close gracefully shuts down the monitor
 func (m *Monitor) Close() {
-	close(m.eventsChan)
+	if atomic.CompareAndSwapInt32(&m.closed, 0, 1) {
+		close(m.eventsChan)
+	}
 	// Do not close done here, let worker close it
 }
 
@@ -220,11 +223,11 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 		handler(event)
 		return
 	}
-	
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Event handler panicked: %v", r)
-			
+
 			// Restore functionality: Emit error event
 			data := map[string]interface{}{
 				"panic_value":   fmt.Sprintf("%v", r),
@@ -233,7 +236,7 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 			m.EmitEvent(EventError, "Event handler panicked", data)
 		}
 	}()
-	
+
 	handler(event)
 }
 
@@ -242,11 +245,11 @@ func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
 		m.executeHealthCheck(name, check)
 		return
 	}
-	
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Health check '%s' panicked: %v", name, r)
-			
+
 			result := &HealthResult{
 				Name:      name,
 				Status:    StatusUnhealthy,
@@ -255,22 +258,22 @@ func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
 				Duration:  0,
 				Critical:  check.Critical,
 			}
-			
+
 			m.mu.Lock()
 			m.healthResults[name] = result
 			m.mu.Unlock()
-			
+
 			data := map[string]interface{}{
-				"check_name":    name,
-				"status":        string(StatusUnhealthy),
-				"critical":      check.Critical,
-				"panic_value":   fmt.Sprintf("%v", r),
-				"health_error":  true,
+				"check_name":   name,
+				"status":       string(StatusUnhealthy),
+				"critical":     check.Critical,
+				"panic_value":  fmt.Sprintf("%v", r),
+				"health_error": true,
 			}
 			m.EmitEvent(EventUnhealthy, fmt.Sprintf("Health check '%s' panicked: %v", name, r), data)
 		}
 	}()
-	
+
 	m.executeHealthCheck(name, check)
 }
 
@@ -328,21 +331,22 @@ func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string
 		Data:      data,
 	}
 
-	// Non-blocking send (optional: drop event if channel full to preserve performance)
-	// Non-blocking send (optional: drop event if channel full to preserve performance)
-	// Also protect against send on closed channel
+	// Use defer and recover to safely handle closed channel
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Failed to emit event (monitor closed): %s", message)
+			// Channel was closed, silently drop the event
 		}
 	}()
-	
+
 	select {
 	case m.eventsChan <- event:
 		// Sent
 	default:
 		// Channel full, drop event to prevent blocking application
-		log.Printf("Monitor event buffer full, dropping event: %s", message)
+		// Only log if monitor is not closed to avoid log spam during shutdown
+		if atomic.LoadInt32(&m.closed) == 0 {
+			log.Printf("Monitor event buffer full, dropping event: %s", message)
+		}
 	}
 }
 
@@ -443,13 +447,13 @@ func (m *Monitor) MiddlewareWrapper(name string, middleware context.Middleware) 
 				middleware(next)(c)
 				return
 			}
-			
+
 			start := time.Now()
-			
+
 			middleware(next)(c)
-			
+
 			duration := time.Since(start)
-			
+
 			m.mu.Lock()
 			if metric, exists := m.metrics.MiddlewareMetrics[name]; exists {
 				metric.ExecutionCount++
@@ -464,7 +468,7 @@ func (m *Monitor) MiddlewareWrapper(name string, middleware context.Middleware) 
 				}
 			}
 			m.mu.Unlock()
-			
+
 			if duration > 100*time.Millisecond {
 				data := map[string]interface{}{
 					"middleware_name": name,
@@ -529,10 +533,10 @@ func (m *Monitor) Middleware() context.Middleware {
 			duration := time.Since(start)
 			atomic.AddInt64(&m.metrics.ActiveRequests, -1)
 			atomic.AddInt64(&m.metrics.TotalResponseTime, duration.Milliseconds())
-			
+
 			m.mu.Lock()
 			m.metrics.StatusCodeCounts[wrapper.statusCode]++
-			
+
 			route, _ := c.Get("route.pattern")
 			if route != nil {
 				routeKey := fmt.Sprintf("%s:%s", c.Request.Method, route)
@@ -550,13 +554,18 @@ func (m *Monitor) Middleware() context.Middleware {
 						Pattern:      fmt.Sprintf("%v", route),
 						Method:       c.Request.Method,
 						RequestCount: 1,
-						ErrorCount:   func() int64 { if wrapper.statusCode >= 400 { return 1 }; return 0 }(),
-						StatusCodes:  map[int]int64{wrapper.statusCode: 1},
+						ErrorCount: func() int64 {
+							if wrapper.statusCode >= 400 {
+								return 1
+							}
+							return 0
+						}(),
+						StatusCodes: map[int]int64{wrapper.statusCode: 1},
 					}
 				}
 			}
 			m.mu.Unlock()
-			
+
 			data := map[string]interface{}{
 				"method":         c.Request.Method,
 				"path":           c.Request.URL.Path,
@@ -566,7 +575,7 @@ func (m *Monitor) Middleware() context.Middleware {
 				"remote_addr":    c.Request.RemoteAddr,
 				"correlation_id": correlationID,
 			}
-			
+
 			if route != nil {
 				data["route_pattern"] = route
 			}

@@ -73,24 +73,24 @@ type App struct {
 	middlewares []Middleware
 	Config      Config
 	mountPath   string
-	mountedApps map[string]*App // Track mounted apps for path updates
-	config      *builder.Config  // New configuration from builder
+	mountedApps map[string]*App     // Track mounted apps for path updates
+	config      *builder.Config     // New configuration from builder
 	Monitor     *monitoring.Monitor // Integrated monitoring system
 }
 
 func New(config ...Config) *App {
 	cfg := Config{
-		AppName:    "",
-		ServerHeader: "",
-		ServerPort: 3000,
-		ServerHost: "",
+		AppName:            "",
+		ServerHeader:       "",
+		ServerPort:         3000,
+		ServerHost:         "",
 		MaxMultipartMemory: 10 << 20, // 10 MB default
 	}
 
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	
+
 	// Configure JSON engine - default to sonic for JSONHeavy performance
 	if cfg.JSONEngine == "standard" {
 		json.UseStandardJSON()
@@ -100,17 +100,17 @@ func New(config ...Config) *App {
 	}
 
 	routerConfig := router.RouterConfig{
-		RedirectTrailingSlash:     true,  // default
-		EnableHEADFallback:        true,  // default
-		HandleMethodNotAllowed:    true,
-		HandleOPTIONS:             true,
-		RedirectFixedPath:         false,
-		ErrorMode:                 router.RouterErrorModePanic, // Backward compatible default
-		MaxRouteDepth:             32,    // SECURITY: Reasonable default limit
-		MaxTotalRoutes:            10000, // SECURITY: Prevent memory exhaustion
-		MaxParametersPerRoute:     32,    // SECURITY: Prevent complex route attacks
+		RedirectTrailingSlash:  true, // default
+		EnableHEADFallback:     true, // default
+		HandleMethodNotAllowed: true,
+		HandleOPTIONS:          true,
+		RedirectFixedPath:      false,
+		ErrorMode:              router.RouterErrorModePanic, // Backward compatible default
+		MaxRouteDepth:          32,                          // SECURITY: Reasonable default limit
+		MaxTotalRoutes:         10000,                       // SECURITY: Prevent memory exhaustion
+		MaxParametersPerRoute:  32,                          // SECURITY: Prevent complex route attacks
 	}
-	
+
 	if cfg.RedirectTrailingSlash != nil {
 		routerConfig.RedirectTrailingSlash = *cfg.RedirectTrailingSlash
 	}
@@ -169,7 +169,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if app.Config.ServerHeader != "" {
 		w.Header().Set("Server", app.Config.ServerHeader)
 	}
-	
+
 	// Optimization: Only parse multipart when needed.
 	// Skip content-type check for GET/HEAD/DELETE requests as they rarely have bodies
 	if req.Method != "GET" && req.Method != "HEAD" && req.Method != "DELETE" {
@@ -187,7 +187,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip form parsing for other content types - let Context handle it lazily
 	}
-	
+
 	app.Router.ServeHTTP(w, req)
 }
 
@@ -223,7 +223,6 @@ func (app *App) ALL(path string, handler Handler) *router.RouteCollection {
 	return app.Router.ALL(path, app.applyMiddleware(handler))
 }
 
-
 func (app *App) Group(prefix string, middlewares ...Middleware) *router.Group {
 	return app.Router.Group(prefix, middlewares...)
 }
@@ -231,7 +230,7 @@ func (app *App) Group(prefix string, middlewares ...Middleware) *router.Group {
 func (app *App) Mount(prefix string, subApp *App) {
 	subApp.mountPath = app.mountPath + prefix
 	app.mountedApps[prefix] = subApp
-	
+
 	app.updateSubAppMountPaths(subApp)
 
 	mountHandler := func(c *Ctx) {
@@ -241,7 +240,7 @@ func (app *App) Mount(prefix string, subApp *App) {
 
 		subRequest := c.Request.Clone(c.Request.Context())
 		subRequest.URL = c.Request.URL
-		
+
 		subURL := *c.Request.URL
 		subURL.Path = strings.TrimPrefix(c.Request.URL.Path, prefix)
 		if subURL.Path == "" {
@@ -250,7 +249,7 @@ func (app *App) Mount(prefix string, subApp *App) {
 		subRequest.URL = &subURL
 
 		subContext := goryu_context.NewContext(c.Writer, subRequest)
-		
+
 		for key, value := range c.Keys {
 			if !strings.HasPrefix(key, "goryu.mount.") {
 				subContext.Set(key, value)
@@ -339,7 +338,7 @@ func (app *App) serveStaticFile(c *Ctx, root, requestPath string, cfg StaticConf
 	}
 
 	fullPath := sanitizedPath
-	
+
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -401,7 +400,7 @@ func (app *App) serveDirListing(c *Ctx, fullPath, requestPath string, cfg Static
 
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
 	c.Status(200)
-	
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -430,17 +429,17 @@ func (app *App) serveDirListing(c *Ctx, fullPath, requestPath string, cfg Static
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		
+
 		escapedName := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(name, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
-		
+
 		if file.IsDir() {
 			html += fmt.Sprintf(`<li><a href="%s/" class="dir">📁 %s/</a></li>`, escapedName, escapedName)
 		} else {
 			if cfg.ShowFileSize {
-				html += fmt.Sprintf(`<li><a href="%s" class="file">📄 %s</a> <small>(%d bytes)</small></li>`, 
+				html += fmt.Sprintf(`<li><a href="%s" class="file">📄 %s</a> <small>(%d bytes)</small></li>`,
 					escapedName, escapedName, file.Size())
 			} else {
-				html += fmt.Sprintf(`<li><a href="%s" class="file">📄 %s</a></li>`, 
+				html += fmt.Sprintf(`<li><a href="%s" class="file">📄 %s</a></li>`,
 					escapedName, escapedName)
 			}
 		}
@@ -452,7 +451,7 @@ func (app *App) serveDirListing(c *Ctx, fullPath, requestPath string, cfg Static
 
 type StaticConfig struct {
 	Browse        bool          `json:"browse"`
-	ShowFileSize  bool          `json:"showFileSize"`  // SECURITY: Option to hide file sizes in listings
+	ShowFileSize  bool          `json:"showFileSize"` // SECURITY: Option to hide file sizes in listings
 	Index         string        `json:"index"`
 	CacheDuration time.Duration `json:"cache_duration"`
 	MaxAge        int           `json:"max_age"`
@@ -491,11 +490,11 @@ func sanitizeStaticPath(root, requestPath string) (string, error) {
 	}
 
 	suspiciousPatterns := []string{
-		"~",            // Home directory access
-		"\\",           // Windows path separators on Unix
-		"\x00",         // Null bytes
-		"<",            // Potential XSS in error messages
-		">",            // Potential XSS in error messages
+		"~",    // Home directory access
+		"\\",   // Windows path separators on Unix
+		"\x00", // Null bytes
+		"<",    // Potential XSS in error messages
+		">",    // Potential XSS in error messages
 	}
 
 	lowerPath := strings.ToLower(cleanPath)
@@ -510,15 +509,15 @@ func sanitizeStaticPath(root, requestPath string) (string, error) {
 
 func containsTraversalAttempt(originalPath, decodedPath string) bool {
 	traversalPatterns := []string{
-		"..",                    // Basic traversal
-		"%2e%2e",               // URL encoded dots
-		"%252e%252e",           // Double URL encoded dots
-		"..%2f",                // Mixed encoding
-		"%2e.",                 // Partial encoding
-		".%2e",                 // Partial encoding
-		"..\\",                 // Windows-style traversal
-		"..%5c",                // URL encoded backslash
-		"\u002e\u002e",         // Unicode dots
+		"..",           // Basic traversal
+		"%2e%2e",       // URL encoded dots
+		"%252e%252e",   // Double URL encoded dots
+		"..%2f",        // Mixed encoding
+		"%2e.",         // Partial encoding
+		".%2e",         // Partial encoding
+		"..\\",         // Windows-style traversal
+		"..%5c",        // URL encoded backslash
+		"\u002e\u002e", // Unicode dots
 	}
 
 	checkPaths := []string{originalPath, decodedPath}
@@ -530,7 +529,7 @@ func containsTraversalAttempt(originalPath, decodedPath string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -561,7 +560,7 @@ func (app *App) Listen(addr string) error {
 	app.server = &http.Server{Addr: addr, Handler: app}
 	server := app.server
 	app.serverMu.Unlock()
-	
+
 	return server.ListenAndServe()
 }
 
@@ -570,7 +569,7 @@ func (app *App) printStartupMessage(addr string) {
 	if app.Config.AppName != "" {
 		appName = app.Config.AppName
 	}
-	
+
 	fmt.Printf("\n🚀 %s is ready! Listening on %s\n", appName, addr)
 	fmt.Println("   Use Ctrl+C to stop")
 	fmt.Println()
@@ -581,13 +580,13 @@ func (app *App) printStartupMessage(addr string) {
 		fmt.Println("📍 Registered Routes:")
 		fmt.Printf("   %-8s %-30s %s\n", "METHOD", "PATH", "NAME")
 		fmt.Println("   " + strings.Repeat("-", 50))
-		
+
 		for _, r := range routes {
 			name := r.Name
 			if name == "" {
 				name = "-"
 			}
-			
+
 			// Colorize methods if possible (basic ANSI)
 			method := r.Method
 			switch method {
@@ -602,7 +601,7 @@ func (app *App) printStartupMessage(addr string) {
 			case "PATCH":
 				method = "\033[35mPATCH\033[0m" // Magenta
 			}
-			
+
 			fmt.Printf("   %-17s %-30s %s\n", method, r.Path, name)
 		}
 		fmt.Println()
@@ -620,7 +619,7 @@ func (app *App) ShutdownWithContext(ctx context.Context) error {
 	app.serverMu.RLock()
 	server := app.server
 	app.serverMu.RUnlock()
-	
+
 	if server == nil {
 		return fmt.Errorf("server is not running")
 	}
@@ -680,4 +679,3 @@ func UseStandardJSON() {
 func UseSonicJSON() {
 	json.UseSonicJSON()
 }
-

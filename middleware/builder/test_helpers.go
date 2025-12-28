@@ -1,13 +1,16 @@
 package builder
+
 import (
-	"net/http"
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/router"
+	"net/http"
 )
+
 type testApp struct {
 	router      *router.Router
 	middlewares []context.Middleware
 }
+
 func newTestApp() *testApp {
 	return &testApp{
 		router:      router.New(),

@@ -13,10 +13,10 @@ import (
 func TestRouterErrorHandling(t *testing.T) {
 	t.Run("RouterErrorModePanic", func(t *testing.T) {
 		router := New(RouterConfig{ErrorMode: RouterErrorModePanic})
-		
+
 		// First route should work fine
 		router.GET("/test", func(c *context.Context) {})
-		
+
 		// Duplicate route should panic
 		defer func() {
 			if r := recover(); r == nil {
@@ -28,24 +28,24 @@ func TestRouterErrorHandling(t *testing.T) {
 				}
 			}
 		}()
-		
+
 		router.GET("/test", func(c *context.Context) {})
 	})
-	
+
 	t.Run("RouterErrorModeLog", func(t *testing.T) {
 		// Capture log output
 		var buf bytes.Buffer
 		log.SetOutput(&buf)
 		defer log.SetOutput(os.Stderr)
-		
+
 		router := New(RouterConfig{ErrorMode: RouterErrorModeLog})
-		
+
 		// First route should work fine
 		router.GET("/test", func(c *context.Context) {})
-		
+
 		// Duplicate route should log but not panic
 		router.GET("/test", func(c *context.Context) {})
-		
+
 		// Check that error was logged
 		logOutput := buf.String()
 		if !strings.Contains(logOutput, "Router error") {
@@ -55,21 +55,21 @@ func TestRouterErrorHandling(t *testing.T) {
 			t.Errorf("Expected specific error message in log, got: %s", logOutput)
 		}
 	})
-	
+
 	t.Run("RouterErrorModeSilent", func(t *testing.T) {
 		// Capture log output
 		var buf bytes.Buffer
 		log.SetOutput(&buf)
 		defer log.SetOutput(os.Stderr)
-		
+
 		router := New(RouterConfig{ErrorMode: RouterErrorModeSilent})
-		
+
 		// First route should work fine
 		router.GET("/test", func(c *context.Context) {})
-		
+
 		// Duplicate route should be silently ignored
 		router.GET("/test", func(c *context.Context) {})
-		
+
 		// Check that nothing was logged
 		logOutput := buf.String()
 		if strings.Contains(logOutput, "Router error") {
@@ -81,10 +81,10 @@ func TestRouterErrorHandling(t *testing.T) {
 func TestRouterNamedRouteErrors(t *testing.T) {
 	t.Run("DuplicateNamedRoute_Panic", func(t *testing.T) {
 		router := New(RouterConfig{ErrorMode: RouterErrorModePanic})
-		
+
 		// First named route should work
 		router.GET("/test1", func(c *context.Context) {}).SetName("test")
-		
+
 		// Duplicate named route should panic
 		defer func() {
 			if r := recover(); r == nil {
@@ -96,24 +96,24 @@ func TestRouterNamedRouteErrors(t *testing.T) {
 				}
 			}
 		}()
-		
+
 		router.GET("/test2", func(c *context.Context) {}).SetName("test")
 	})
-	
+
 	t.Run("DuplicateNamedRoute_Log", func(t *testing.T) {
 		// Capture log output
 		var buf bytes.Buffer
 		log.SetOutput(&buf)
 		defer log.SetOutput(os.Stderr)
-		
+
 		router := New(RouterConfig{ErrorMode: RouterErrorModeLog})
-		
+
 		// First named route should work
 		router.GET("/test1", func(c *context.Context) {}).SetName("test")
-		
+
 		// Duplicate named route should log but not panic
 		router.GET("/test2", func(c *context.Context) {}).SetName("test")
-		
+
 		// Check that error was logged
 		logOutput := buf.String()
 		if !strings.Contains(logOutput, "Router error") {
@@ -128,7 +128,7 @@ func TestRouterNamedRouteErrors(t *testing.T) {
 func TestRouterInvalidPathErrors(t *testing.T) {
 	t.Run("InvalidPath_Panic", func(t *testing.T) {
 		router := New(RouterConfig{ErrorMode: RouterErrorModePanic})
-		
+
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("Expected panic for invalid path in panic mode")
@@ -139,26 +139,26 @@ func TestRouterInvalidPathErrors(t *testing.T) {
 				}
 			}
 		}()
-		
+
 		router.GET("invalid", func(c *context.Context) {})
 	})
-	
+
 	t.Run("InvalidPath_Log", func(t *testing.T) {
 		// Capture log output
 		var buf bytes.Buffer
 		log.SetOutput(&buf)
 		defer log.SetOutput(os.Stderr)
-		
+
 		router := New(RouterConfig{ErrorMode: RouterErrorModeLog})
-		
+
 		// Invalid path should log but not panic
 		route := router.GET("invalid", func(c *context.Context) {})
-		
+
 		// Should return a dummy route
 		if route == nil {
 			t.Error("Expected dummy route to be returned in log mode")
 		}
-		
+
 		// Check that error was logged
 		logOutput := buf.String()
 		if !strings.Contains(logOutput, "Router error") {
@@ -173,7 +173,7 @@ func TestRouterInvalidPathErrors(t *testing.T) {
 func TestRouterWildcardErrors(t *testing.T) {
 	t.Run("WildcardNotAtEnd_Panic", func(t *testing.T) {
 		router := New(RouterConfig{ErrorMode: RouterErrorModePanic})
-		
+
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("Expected panic for wildcard not at end in panic mode")
@@ -184,21 +184,21 @@ func TestRouterWildcardErrors(t *testing.T) {
 				}
 			}
 		}()
-		
+
 		router.GET("/files/*path/more", func(c *context.Context) {})
 	})
-	
+
 	t.Run("WildcardNotAtEnd_Log", func(t *testing.T) {
 		// Capture log output
 		var buf bytes.Buffer
 		log.SetOutput(&buf)
 		defer log.SetOutput(os.Stderr)
-		
+
 		router := New(RouterConfig{ErrorMode: RouterErrorModeLog})
-		
+
 		// Invalid wildcard should log but not panic
 		router.GET("/files/*path/more", func(c *context.Context) {})
-		
+
 		// Check that error was logged
 		logOutput := buf.String()
 		if !strings.Contains(logOutput, "Router error") {
@@ -212,24 +212,24 @@ func TestRouterWildcardErrors(t *testing.T) {
 
 func TestRouterErrorMethods(t *testing.T) {
 	router := New()
-	
+
 	// Test default error mode
 	if router.GetErrorHandlingMode() != RouterErrorModePanic {
 		t.Error("Expected default error mode to be RouterErrorModePanic")
 	}
-	
+
 	// Test setting error mode
 	router.SetErrorHandlingMode(RouterErrorModeLog)
 	if router.GetErrorHandlingMode() != RouterErrorModeLog {
 		t.Error("Expected error mode to be RouterErrorModeLog after setting")
 	}
-	
+
 	// Test RouterError type
 	err := &RouterError{
 		Operation: "TestOp",
 		Message:   "test message",
 	}
-	
+
 	expected := "router TestOp error: test message"
 	if err.Error() != expected {
 		t.Errorf("Expected error message '%s', got '%s'", expected, err.Error())

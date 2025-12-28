@@ -28,12 +28,12 @@ func BenchmarkGoryu_JSON(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Reset recorder for fairness (though overhead applies to both)
-		// w = httptest.NewRecorder() // allocating new recorder adds overhead to benchmark, 
+		// w = httptest.NewRecorder() // allocating new recorder adds overhead to benchmark,
 		// but reusing it might be unfair if frameworks accumulate data.
 		// Standard practice is to reuse or reset.
 		// For pure router/framework bench, we want to minimize external allocs.
 		// goryu.App.ServeHTTP wraps the whole cycle.
-		
+
 		// To be fair and realistic
 		w := httptest.NewRecorder()
 		app.ServeHTTP(w, req)
@@ -49,7 +49,7 @@ func BenchmarkGin_JSON(b *testing.B) {
 	})
 
 	req := httptest.NewRequest("GET", "/hello", nil)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -83,20 +83,20 @@ func getHeavyPayload() HeavyStruct {
 func BenchmarkGoryu_JSON_Heavy(b *testing.B) {
 	// Use Sonic for maximum performance on heavy payloads
 	goryu.UseSonicJSON()
-	
+
 	falsePtr := false
 	app := goryu.New(goryu.Config{
 		EnableMonitoring: &falsePtr,
 	})
-	
+
 	payload := getHeavyPayload()
-	
+
 	app.GET("/heavy", func(c *goryu.Context) {
 		c.JSON(http.StatusOK, payload)
 	})
 
 	req := httptest.NewRequest("GET", "/heavy", nil)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -110,15 +110,15 @@ func BenchmarkGoryu_JSON_Heavy(b *testing.B) {
 func BenchmarkGin_JSON_Heavy(b *testing.B) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	
+
 	payload := getHeavyPayload()
-	
+
 	r.GET("/heavy", func(c *gin.Context) {
 		c.JSON(http.StatusOK, payload)
 	})
 
 	req := httptest.NewRequest("GET", "/heavy", nil)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -140,7 +140,7 @@ func BenchmarkGoryu_Param(b *testing.B) {
 	})
 
 	req := httptest.NewRequest("GET", "/user/gordon", nil)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -160,7 +160,7 @@ func BenchmarkGin_Param(b *testing.B) {
 	})
 
 	req := httptest.NewRequest("GET", "/user/gordon", nil)
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
 

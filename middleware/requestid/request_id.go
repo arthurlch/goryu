@@ -8,13 +8,16 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 const DefaultRequestIDHeader = "X-Request-ID"
+
 type Config struct {
 	base.BaseConfig
-	Header string
-	Generator func() string
+	Header     string
+	Generator  func() string
 	ContextKey string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

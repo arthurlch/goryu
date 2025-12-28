@@ -19,9 +19,9 @@ func NewLoggerBuilder() *LoggerBuilder {
 	return &LoggerBuilder{
 		BaseBuilder: NewBaseBuilder("logger"),
 		config: logger.Config{
-			Format:     "[GORYU] ${time} | ${status} | ${latency} | ${ip} | ${method} ${path}\n",
-			TimeFormat: time.RFC3339,
-			Output:     os.Stdout,
+			Format:        "[GORYU] ${time} | ${status} | ${latency} | ${ip} | ${method} ${path}\n",
+			TimeFormat:    time.RFC3339,
+			Output:        os.Stdout,
 			DisableColors: false,
 		},
 	}
@@ -101,19 +101,19 @@ func (b *LoggerBuilder) Build() context.Middleware {
 
 func (b *LoggerBuilder) Validate() error {
 	b.ClearErrors()
-	
+
 	if b.config.Output == nil {
 		b.AddError(fmt.Errorf("output writer cannot be nil"))
 	}
-	
+
 	if b.config.Format == "" {
 		b.AddError(fmt.Errorf("format cannot be empty"))
 	}
-	
+
 	if b.config.TimeFormat == "" {
 		b.AddError(fmt.Errorf("time format cannot be empty"))
 	}
-	
+
 	return b.BaseBuilder.Validate()
 }
 

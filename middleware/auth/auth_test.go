@@ -12,7 +12,9 @@ import (
 	"github.com/arthurlch/goryu/middleware/auth"
 	"github.com/golang-jwt/jwt/v5"
 )
+
 const testSecret = "abcd1234efgh5678ijkl9012mnop3456qrst7890uvwx1234yz56789012"
+
 func setupTestApp() *goryu.App {
 	app := goryu.New()
 	_, _ = auth.SetupAuthMiddleware(app, testSecret)
@@ -109,7 +111,7 @@ func TestPasswordValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := auth.ValidatePassword(tt.password, config)
 			if result.IsValid != tt.valid {
-				t.Errorf("Expected password %s to be valid=%v, got %v. Errors: %v", 
+				t.Errorf("Expected password %s to be valid=%v, got %v. Errors: %v",
 					tt.password, tt.valid, result.IsValid, result.Errors)
 			}
 		})

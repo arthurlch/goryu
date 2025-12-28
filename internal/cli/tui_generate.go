@@ -63,7 +63,7 @@ func (m GenerateMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				return m, nil
 			}
-				return newEnhancedMenu(), nil
+			return newEnhancedMenu(), nil
 		case "enter":
 			return m.handleGenEnter()
 		case "up", "k":
@@ -135,7 +135,7 @@ func (m GenerateMenuModel) handleGenEnter() (tea.Model, tea.Cmd) {
 			}
 		}
 	case genStepOptions:
-		if m.generatorType == "handler" { // lets ignore warning for that block 
+		if m.generatorType == "handler" { // lets ignore warning for that block
 			m.handlerType = handlerTypes[m.cursor]
 			m.step = genStepConfirm
 		} else if m.generatorType == "model" {

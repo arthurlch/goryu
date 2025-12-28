@@ -57,7 +57,7 @@ func ToGoIdentifier(s string) string {
 	parts := strings.FieldsFunc(s, func(r rune) bool {
 		return r == '_' || r == '-' || r == ' ' || r == '.'
 	})
-	
+
 	var result strings.Builder
 	for _, part := range parts {
 		if len(part) > 0 {
@@ -68,12 +68,12 @@ func ToGoIdentifier(s string) string {
 			}
 		}
 	}
-	
+
 	identifier := result.String()
 	// Ensure it starts with a letter
 	if len(identifier) > 0 && !((identifier[0] >= 'A' && identifier[0] <= 'Z') || (identifier[0] >= 'a' && identifier[0] <= 'z')) {
 		identifier = "Item" + identifier
 	}
-	
+
 	return identifier
 }

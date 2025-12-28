@@ -12,20 +12,23 @@ import (
 	"github.com/arthurlch/goryu/middleware/base"
 	"github.com/google/uuid"
 )
+
 type Config struct {
 	base.BaseConfig
-	Logger *slog.Logger
-	Output io.Writer
-	Level slog.Level
-	TimeFormat string
+	Logger          *slog.Logger
+	Output          io.Writer
+	Level           slog.Level
+	TimeFormat      string
 	RequestIDHeader string
-	CustomFields func(c *context.Context) map[string]any
+	CustomFields    func(c *context.Context) map[string]any
 }
+
 const (
 	RequestIDKey = "request_id"
 	LoggerKey    = "logger"
 	StartTimeKey = "start_time"
 )
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

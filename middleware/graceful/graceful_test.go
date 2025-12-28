@@ -1,17 +1,19 @@
 package graceful_test
+
 import (
 	"bytes"
 	"context"
+	"github.com/arthurlch/goryu"
+	goryu_context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/graceful"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"syscall"
 	"testing"
 	"time"
-	"github.com/arthurlch/goryu"
-	goryu_context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/graceful"
 )
+
 func newTestApp() *goryu.App {
 	app := goryu.New()
 	app.GET("/", func(c *goryu.Ctx) {
@@ -31,7 +33,7 @@ func TestNewGracefulServer(t *testing.T) {
 }
 func TestGracefulServerTimeouts(t *testing.T) {
 	app := newTestApp()
-	server := graceful.NewGracefulServer(":0", app) 
+	server := graceful.NewGracefulServer(":0", app)
 	server.SetReadTimeout(5 * time.Second)
 	server.SetWriteTimeout(10 * time.Second)
 	server.SetIdleTimeout(15 * time.Second)
@@ -156,9 +158,11 @@ func TestRunWithGracefulShutdown(t *testing.T) {
 	}()
 	_ = graceful.RunWithGracefulShutdown
 }
+
 type testLogger struct {
 	buffer *bytes.Buffer
 }
+
 func (l *testLogger) Printf(format string, v ...any) {
 	l.buffer.WriteString(format)
 	l.buffer.WriteString("\n")
@@ -169,7 +173,7 @@ func TestShutdownProcess(t *testing.T) {
 	var cleanupCalled bool
 	logger := &testLogger{buffer: &logBuffer}
 	config := graceful.ShutdownConfig{
-		Timeout: 100 * time.Millisecond, 
+		Timeout: 100 * time.Millisecond,
 		Logger:  logger,
 		OnShutdownStart: func() {
 			shutdownStartCalled = true
@@ -187,7 +191,7 @@ func TestShutdownProcess(t *testing.T) {
 	app := newTestApp()
 	server := graceful.NewGracefulServer(":0", app, config)
 	go func() {
-		time.Sleep(50 * time.Millisecond) 
+		time.Sleep(50 * time.Millisecond)
 		ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
 		defer cancel()
 		server.Server().Shutdown(ctx)

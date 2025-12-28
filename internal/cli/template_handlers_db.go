@@ -93,12 +93,12 @@ func (h *%sHandler) Create%s(c *goryu.Context) {
 	c.JSON(http.StatusCreated, item)
 }
 `, handlerName, handlerName, handlerName, handlerName,
-	handlerName, lowerName, modelName, modelName, modelName, // RegisterRoutes args
-	modelName, lowerName, handlerName, modelName,
-	modelName, modelName,
-	modelName, lowerName, handlerName, modelName, modelName,
-	modelName, lowerName, handlerName, modelName, modelName,
-	modelName)
+		handlerName, lowerName, modelName, modelName, modelName, // RegisterRoutes args
+		modelName, lowerName, handlerName, modelName,
+		modelName, modelName,
+		modelName, lowerName, handlerName, modelName, modelName,
+		modelName, lowerName, handlerName, modelName, modelName,
+		modelName)
 }
 
 func generateEntHandlerContent(name string) string {
@@ -177,17 +177,17 @@ func (h *%sHandler) Get%s(c *goryu.Context) {
 	c.JSON(http.StatusOK, item)
 }
 `, lowerName, handlerName, handlerName, handlerName, handlerName,
-	handlerName, lowerName, cName, cName, // RegisterRoutes args
-	cName, lowerName, handlerName, cName, 
-	cName,
-	cName, lowerName, handlerName, cName,
-	cName)
+		handlerName, lowerName, cName, cName, // RegisterRoutes args
+		cName, lowerName, handlerName, cName,
+		cName,
+		cName, lowerName, handlerName, cName,
+		cName)
 }
 
 func generateGormHandlerContent(name string) string {
 	handlerName := utils.ToGoIdentifier(name)
 	lowerName := strings.ToLower(name)
-	
+
 	return fmt.Sprintf(`package handlers
 
 import (
@@ -239,7 +239,7 @@ func (h *%sHandler) Create%s(c *goryu.Context) {
 	c.JSON(http.StatusCreated, item)
 }
 `, handlerName, handlerName, handlerName, handlerName,
-	handlerName, lowerName, handlerName, handlerName, // RegisterRoutes args
-	handlerName, lowerName, handlerName, handlerName, handlerName,
-	handlerName, lowerName, handlerName, handlerName, handlerName)
+		handlerName, lowerName, handlerName, handlerName, // RegisterRoutes args
+		handlerName, lowerName, handlerName, handlerName, handlerName,
+		handlerName, lowerName, handlerName, handlerName, handlerName)
 }

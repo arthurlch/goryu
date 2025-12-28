@@ -17,6 +17,7 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 const (
 	colorRed    = "\033[31m"
 	colorGreen  = "\033[32m"
@@ -26,14 +27,16 @@ const (
 	colorCyan   = "\033[36m"
 	colorReset  = "\033[0m"
 )
+
 type Config struct {
 	base.BaseConfig
-	Output io.Writer
-	TimeFormat string
-	TimeZone string
+	Output        io.Writer
+	TimeFormat    string
+	TimeZone      string
 	DisableColors bool
-	Format string
+	Format        string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }

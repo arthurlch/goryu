@@ -15,26 +15,30 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type ShutdownConfig struct {
-	Timeout time.Duration
-	Signals []os.Signal
-	Logger Logger
-	OnShutdownStart func()
+	Timeout            time.Duration
+	Signals            []os.Signal
+	Logger             Logger
+	OnShutdownStart    func()
 	OnShutdownComplete func()
-	CleanupFuncs []func() error
+	CleanupFuncs       []func() error
 }
 type Logger interface {
 	Printf(format string, v ...any)
 }
 type defaultLogger struct{}
+
 func (d defaultLogger) Printf(format string, v ...any) {
 	log.Printf(format, v...)
 }
+
 type GracefulServer struct {
 	server *http.Server
 	config ShutdownConfig
 	logger Logger
 }
+
 func NewGracefulServer(addr string, handler http.Handler, config ...ShutdownConfig) *GracefulServer {
 	cfg := ShutdownConfig{
 		Timeout: 30 * time.Second,
@@ -118,10 +122,12 @@ func (gs *GracefulServer) SetIdleTimeout(timeout time.Duration) {
 func (gs *GracefulServer) Server() *http.Server {
 	return gs.server
 }
+
 type Config struct {
 	base.BaseConfig
 	ContextKey string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -172,9 +178,11 @@ func Middleware() goryu.Middleware {
 		}
 	}
 }
+
 type connectionCounter struct {
 	value int64
 }
+
 func (cc *connectionCounter) increment() {
 	atomic.AddInt64(&cc.value, 1)
 }

@@ -1,14 +1,16 @@
 package cache_test
+
 import (
 	"fmt"
+	"github.com/arthurlch/goryu"
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/cache"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-	"github.com/arthurlch/goryu"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/cache"
 )
+
 func newTestContext(req *http.Request) (*goryu.Ctx, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -78,8 +80,8 @@ func TestCacheSecurityLimits(t *testing.T) {
 	t.Run("Memory Exhaustion Prevention", func(t *testing.T) {
 		config := cache.Config{
 			Expiration: 10 * time.Minute,
-			MaxSize:    5,      
-			MaxMemory:  1024,   
+			MaxSize:    5,
+			MaxMemory:  1024,
 		}
 		middleware := cache.New(config)
 		for i := 0; i < 10; i++ {
@@ -96,7 +98,7 @@ func TestCacheSecurityLimits(t *testing.T) {
 	})
 	t.Run("Large Entry Rejection", func(t *testing.T) {
 		largeHandler := func(c *goryu.Ctx) {
-			largeData := make([]byte, 200) 
+			largeData := make([]byte, 200)
 			for i := range largeData {
 				largeData[i] = 'A'
 			}
@@ -104,7 +106,7 @@ func TestCacheSecurityLimits(t *testing.T) {
 		}
 		config := cache.Config{
 			Expiration: 10 * time.Minute,
-			MaxMemory:  1024, 
+			MaxMemory:  1024,
 		}
 		middleware := cache.New(config)
 		req := httptest.NewRequest("GET", "/large", nil)

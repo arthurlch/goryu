@@ -69,20 +69,20 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstFilename strin
 	if err != nil {
 		return fmt.Errorf("invalid filename: %w", err)
 	}
-	
+
 	safePath := filepath.Join(uploadDir, cleanFilename)
-	
+
 	// SECUCHECK: Double-check the resolved path is within upload directory
 	absUploadDir, err := filepath.Abs(uploadDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve upload directory: %w", err)
 	}
-	
+
 	absSafePath, err := filepath.Abs(safePath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve destination path: %w", err)
 	}
-	
+
 	// SECUCHECK: Comprehensive path traversal protection
 	if !strings.HasPrefix(absSafePath, absUploadDir+string(filepath.Separator)) && absSafePath != absUploadDir {
 		return errors.New("invalid destination: path traversal detected")
@@ -139,10 +139,10 @@ func validateUploadFilename(filename string) error {
 		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
 		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 	}
-	
+
 	filenameUpper := strings.ToUpper(filename)
 	baseNameUpper := strings.ToUpper(strings.Split(filename, ".")[0])
-	
+
 	for _, reserved := range reservedNames {
 		if filenameUpper == reserved || baseNameUpper == reserved {
 			return fmt.Errorf("invalid destination filename: '%s' is a reserved name", filename)
@@ -152,7 +152,7 @@ func validateUploadFilename(filename string) error {
 	// SECUCHECK: Check for excessively long extensions
 	if strings.Contains(filename, ".") {
 		parts := strings.Split(filename, ".")
-		if len(parts) > 2 { 
+		if len(parts) > 2 {
 			return errors.New("invalid destination filename: multiple extensions not allowed")
 		}
 		extension := parts[len(parts)-1]
@@ -169,105 +169,105 @@ func validateAndSanitizeUploadPath(filename string) (string, error) {
 	if filename == "" {
 		return "", errors.New("filename cannot be empty")
 	}
-	
+
 	// SECUCHECK: Check filename length to prevent long path attacks
 	if len(filename) > 255 {
 		return "", errors.New("filename too long")
 	}
-	
+
 	// SECUCHECK: Validate UTF-8 encoding
 	if !utf8.ValidString(filename) {
 		return "", errors.New("filename contains invalid UTF-8 characters")
 	}
-	
+
 	// SECUCHECK: Normalize Unicode to prevent normalization attacks
 	normalized := norm.NFC.String(filename)
-	
+
 	// SECUCHECK: Check for directory traversal patterns
 	traversalPatterns := []string{
-		"..",                    // Basic traversal
-		"%2e%2e",               // URL encoded dots
-		"%252e%252e",           // Double URL encoded dots
-		"..%2f",                // Mixed encoding
-		"%2e.",                 // Partial encoding
-		".%2e",                 // Partial encoding
-		"..\\",                 // Windows-style traversal
-		"..%5c",                // URL encoded backslash
-		"\\u002e\\u002e",       // Unicode dots
-		"\u002e\u002e",         // Unicode path separators
-		"\u2024",               // One dot leader (Unicode)
-		"\uFF0E",               // Fullwidth full stop
+		"..",             // Basic traversal
+		"%2e%2e",         // URL encoded dots
+		"%252e%252e",     // Double URL encoded dots
+		"..%2f",          // Mixed encoding
+		"%2e.",           // Partial encoding
+		".%2e",           // Partial encoding
+		"..\\",           // Windows-style traversal
+		"..%5c",          // URL encoded backslash
+		"\\u002e\\u002e", // Unicode dots
+		"\u002e\u002e",   // Unicode path separators
+		"\u2024",         // One dot leader (Unicode)
+		"\uFF0E",         // Fullwidth full stop
 	}
-	
+
 	lowerFilename := strings.ToLower(normalized)
 	for _, pattern := range traversalPatterns {
 		if strings.Contains(lowerFilename, strings.ToLower(pattern)) {
 			return "", errors.New("filename contains path traversal patterns")
 		}
 	}
-	
+
 	// SECURITY: Check for suspicious characters
 	suspiciousChars := []string{
-		"\x00",   // Null byte
-		"\r",     // Carriage return
-		"\n",     // Newline
-		"\t",     // Tab
-		"<",      // HTML/XML
-		">",      // HTML/XML
-		":",      // Drive separator (Windows)
-		"|",      // Pipe character
-		"?",      // Wildcard
-		"*",      // Wildcard
-		"\"",     // Quote
+		"\x00", // Null byte
+		"\r",   // Carriage return
+		"\n",   // Newline
+		"\t",   // Tab
+		"<",    // HTML/XML
+		">",    // HTML/XML
+		":",    // Drive separator (Windows)
+		"|",    // Pipe character
+		"?",    // Wildcard
+		"*",    // Wildcard
+		"\"",   // Quote
 	}
-	
+
 	for _, char := range suspiciousChars {
 		if strings.Contains(normalized, char) {
 			return "", fmt.Errorf("filename contains suspicious character: %s", char)
 		}
 	}
-	
+
 	// SECUCHECK: Check for reserved Windows filenames
 	reservedNames := []string{
 		"CON", "PRN", "AUX", "NUL",
 		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
 		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 	}
-	
+
 	baseFilename := strings.TrimSuffix(normalized, filepath.Ext(normalized))
 	for _, reserved := range reservedNames {
 		if strings.EqualFold(baseFilename, reserved) {
 			return "", fmt.Errorf("filename uses reserved name: %s", reserved)
 		}
 	}
-	
+
 	// SECUCHECK: Check for files starting with dot (hidden files)
 	if strings.HasPrefix(normalized, ".") {
 		return "", errors.New("hidden files (starting with '.') are not allowed")
 	}
-	
+
 	// SECUCHECK: Check for executable file extensions (configurable based on needs)
 	dangerousExtensions := []string{
 		".exe", ".bat", ".cmd", ".com", ".pif", ".scr", ".vbs", ".js",
 		".jar", ".sh", ".bin", ".app", ".deb", ".dmg", ".pkg", ".msi",
 		".php", ".asp", ".aspx", ".jsp", ".pl", ".py", ".rb",
 	}
-	
+
 	ext := strings.ToLower(filepath.Ext(normalized))
 	for _, dangerous := range dangerousExtensions {
 		if ext == dangerous {
 			return "", fmt.Errorf("file extension '%s' is not allowed for security reasons", ext)
 		}
 	}
-	
+
 	// SECUCHECK: Final cleanup - use filepath.Clean for normalization
 	cleaned := filepath.Clean(normalized)
-	
+
 	// SECUCHECK: Ensure cleaned path doesn't escape current directory
 	if cleaned == ".." || strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") {
 		return "", errors.New("path attempts to escape upload directory")
 	}
-	
+
 	return cleaned, nil
 }
 
@@ -283,7 +283,7 @@ func (c *Context) GetHeader(key string) string {
 // By default, only uses the direct connection IP to prevent spoofing attacks.
 func (c *Context) RemoteIP() string {
 	directIP, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
-	
+
 	if shouldTrustProxyHeaders(c, directIP) {
 		if ip := c.GetHeader("X-Forwarded-For"); ip != "" {
 			clientIP := strings.TrimSpace(strings.Split(ip, ",")[0])
@@ -297,7 +297,7 @@ func (c *Context) RemoteIP() string {
 			}
 		}
 	}
-	
+
 	return directIP
 }
 
@@ -358,7 +358,7 @@ func getCachedStructInfo(typ reflect.Type) []fieldInfo {
 			infos = append(infos, fieldInfo{Index: i, Tag: tag})
 		}
 	}
-	
+
 	// Store even if empty to avoid re-scanning
 	queryDecoderCache.Store(typ, infos)
 	return infos
@@ -444,14 +444,14 @@ func (c *Context) BindJSON(i interface{}) error {
 	// We read the body into a limit reader, but UnmarshalRead takes a reader directly.
 	// Note: UnmarshalRead in v2 consumes the whole reader by default logic or we might need to check.
 	// Actually, v2 UnmarshalRead reads until EOF or end of value.
-	
+
 	limitedReader := io.LimitReader(c.Request.Body, maxJSONSize)
 
 	// Optimization: standard library friendly
 	decoder := json.NewDecoder(limitedReader)
 	// Default validation behavior
 	decoder.DisallowUnknownFields()
-	
+
 	return decoder.Decode(i)
 }
 
@@ -501,4 +501,3 @@ func (c *Context) BodyParser(out interface{}) error {
 type Validator interface {
 	Validate() error
 }
-

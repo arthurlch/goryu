@@ -9,40 +9,41 @@ import (
 
 	"github.com/arthurlch/goryu"
 )
+
 func TestErrorTypes(t *testing.T) {
 	tests := []struct {
-		name         string
-		errorFunc    func() *AppError
-		expectedCode string
-		expectedMsg  string
+		name           string
+		errorFunc      func() *AppError
+		expectedCode   string
+		expectedMsg    string
 		expectedStatus int
 	}{
 		{
-			name:         "BadRequest",
-			errorFunc:    func() *AppError { return BadRequest("Invalid input") },
-			expectedCode: "BAD_REQUEST",
-			expectedMsg:  "Invalid input",
+			name:           "BadRequest",
+			errorFunc:      func() *AppError { return BadRequest("Invalid input") },
+			expectedCode:   "BAD_REQUEST",
+			expectedMsg:    "Invalid input",
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:         "Unauthorized",
-			errorFunc:    func() *AppError { return Unauthorized("Please login") },
-			expectedCode: "UNAUTHORIZED",
-			expectedMsg:  "Please login",
+			name:           "Unauthorized",
+			errorFunc:      func() *AppError { return Unauthorized("Please login") },
+			expectedCode:   "UNAUTHORIZED",
+			expectedMsg:    "Please login",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:         "NotFound",
-			errorFunc:    func() *AppError { return NotFound("user") },
-			expectedCode: "NOT_FOUND",
-			expectedMsg:  "user not found",
+			name:           "NotFound",
+			errorFunc:      func() *AppError { return NotFound("user") },
+			expectedCode:   "NOT_FOUND",
+			expectedMsg:    "user not found",
 			expectedStatus: http.StatusNotFound,
 		},
 		{
-			name:         "InternalError",
-			errorFunc:    func() *AppError { return InternalError(errors.New("db error")) },
-			expectedCode: "INTERNAL_ERROR",
-			expectedMsg:  "An internal error occurred",
+			name:           "InternalError",
+			errorFunc:      func() *AppError { return InternalError(errors.New("db error")) },
+			expectedCode:   "INTERNAL_ERROR",
+			expectedMsg:    "An internal error occurred",
 			expectedStatus: http.StatusInternalServerError,
 		},
 	}
@@ -96,7 +97,7 @@ func TestErrorMiddleware(t *testing.T) {
 	app.Use(New(Config{
 		ShowDetails:    true,
 		ShowStackTrace: false,
-		LogErrors:      false, 
+		LogErrors:      false,
 		DevMode:        false,
 	}))
 	app.GET("/error", Handle(func(c *goryu.Ctx) error {
@@ -309,7 +310,7 @@ func TestWrapFunctions(t *testing.T) {
 }
 func TestHelperFunctions(t *testing.T) {
 	t.Run("Must", func(t *testing.T) {
-		Must(nil) 
+		Must(nil)
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("Expected panic from Must with error")

@@ -1,12 +1,14 @@
 package healthcheck_test
+
 import (
 	"encoding/json"
+	goryuContext "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/healthcheck"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	goryuContext "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/healthcheck"
 )
+
 func newTestContext(req *http.Request) (*goryuContext.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return goryuContext.NewContext(rr, req), rr

@@ -11,33 +11,35 @@ import (
 
 	context "github.com/arthurlch/goryu/goryuctx"
 )
+
 type SecurityConfig struct {
-	RotateOnLogin          bool
+	RotateOnLogin           bool
 	RotateOnPrivilegeChange bool
-	RotationInterval       time.Duration
-	BindToIP              bool
-	BindToUserAgent       bool
-	AllowIPChange         bool
-	TrustedProxies        []string
-	TrackActivity         bool
-	IdleTimeout          time.Duration
-	AbsoluteTimeout      time.Duration
-	DetectAnomalies      bool
-	MaxSessionsPerUser   int
-	MaxSessionsPerIP     int
+	RotationInterval        time.Duration
+	BindToIP                bool
+	BindToUserAgent         bool
+	AllowIPChange           bool
+	TrustedProxies          []string
+	TrackActivity           bool
+	IdleTimeout             time.Duration
+	AbsoluteTimeout         time.Duration
+	DetectAnomalies         bool
+	MaxSessionsPerUser      int
+	MaxSessionsPerIP        int
 }
+
 func DefaultSecurityConfig() SecurityConfig {
 	return SecurityConfig{
-		RotateOnLogin:          true,
+		RotateOnLogin:           true,
 		RotateOnPrivilegeChange: true,
-		RotationInterval:       1 * time.Hour,
-		BindToIP:               true, // Bulletproof default
-		BindToUserAgent:        true, // Bulletproof default		TrackActivity:          true,
-		IdleTimeout:            30 * time.Minute,
-		AbsoluteTimeout:        24 * time.Hour,
-		DetectAnomalies:        true,
-		MaxSessionsPerUser:     5,
-		MaxSessionsPerIP:       20,
+		RotationInterval:        1 * time.Hour,
+		BindToIP:                true, // Bulletproof default
+		BindToUserAgent:         true, // Bulletproof default		TrackActivity:          true,
+		IdleTimeout:             30 * time.Minute,
+		AbsoluteTimeout:         24 * time.Hour,
+		DetectAnomalies:         true,
+		MaxSessionsPerUser:      5,
+		MaxSessionsPerIP:        20,
 	}
 }
 func SecureSessionMiddleware(config SecurityConfig) func(next context.HandlerFunc) context.HandlerFunc {
@@ -56,7 +58,7 @@ func SecureSessionMiddleware(config SecurityConfig) func(next context.HandlerFun
 					} else if t, ok := created.(float64); ok {
 						createdTime = int64(t)
 					}
-					
+
 					if createdTime > 0 {
 						// Using Milli for consistency with new implementation
 						// If legacy data was seconds, it will be huge timeout? No, small number.
@@ -122,26 +124,26 @@ func SecureSessionMiddleware(config SecurityConfig) func(next context.HandlerFun
 				}
 			}
 			if config.RotationInterval > 0 {
-			if config.RotationInterval > 0 {
-				if rotatedAt := session.Get("rotated_at"); rotatedAt != nil {
-					var rotatedTime int64
-					if t, ok := rotatedAt.(int64); ok {
-						rotatedTime = t
-					} else if t, ok := rotatedAt.(float64); ok {
-						rotatedTime = int64(t)
-					}
+				if config.RotationInterval > 0 {
+					if rotatedAt := session.Get("rotated_at"); rotatedAt != nil {
+						var rotatedTime int64
+						if t, ok := rotatedAt.(int64); ok {
+							rotatedTime = t
+						} else if t, ok := rotatedAt.(float64); ok {
+							rotatedTime = int64(t)
+						}
 
-					if rotatedTime > 0 {
-						if time.Since(time.UnixMilli(rotatedTime)) > config.RotationInterval {
-							if err := Regenerate(c); err == nil {
-								session.Set("rotated_at", time.Now().UnixMilli())
+						if rotatedTime > 0 {
+							if time.Since(time.UnixMilli(rotatedTime)) > config.RotationInterval {
+								if err := Regenerate(c); err == nil {
+									session.Set("rotated_at", time.Now().UnixMilli())
+								}
 							}
 						}
+					} else {
+						session.Set("rotated_at", time.Now().UnixMilli())
 					}
-				} else {
-					session.Set("rotated_at", time.Now().UnixMilli())
 				}
-			}
 			}
 			next(c)
 		}
@@ -183,11 +185,13 @@ func getIPChanges(session *Session) []map[string]interface{} {
 	}
 	return []map[string]interface{}{}
 }
+
 type SessionAnomalyDetector struct {
-	userSessions map[string][]string 
-	ipSessions   map[string][]string 
+	userSessions map[string][]string
+	ipSessions   map[string][]string
 	config       SecurityConfig
 }
+
 func NewSessionAnomalyDetector(config SecurityConfig) *SessionAnomalyDetector {
 	return &SessionAnomalyDetector{
 		userSessions: make(map[string][]string),

@@ -1,11 +1,13 @@
 package csrf_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/csrf"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/csrf"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -83,7 +85,7 @@ func TestCSRFMiddleware(t *testing.T) {
 		req.Header.Set(csrf.DefaultCSRFTokenHeader, "header-token")
 		req.AddCookie(&http.Cookie{
 			Name:  csrf.DefaultCSRFTokenCookie,
-			Value: "cookie-token", 
+			Value: "cookie-token",
 		})
 		ctx, rr := newTestContext(req)
 		middleware(handler)(ctx)

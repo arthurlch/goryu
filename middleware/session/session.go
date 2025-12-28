@@ -11,11 +11,13 @@ import (
 	"github.com/arthurlch/goryu/middleware/base"
 	"github.com/google/uuid"
 )
+
 type Session struct {
 	ID       string
 	Data     map[string]any
 	modified bool
 }
+
 func (s *Session) Set(key string, value any) {
 	s.Data[key] = value
 	s.modified = true
@@ -23,6 +25,7 @@ func (s *Session) Set(key string, value any) {
 func (s *Session) Get(key string) any {
 	return s.Data[key]
 }
+
 type Store interface {
 	Get(id string) (*Session, error)
 	Save(session *Session) error
@@ -30,14 +33,15 @@ type Store interface {
 }
 type Config struct {
 	base.BaseConfig
-	Store Store
+	Store      Store
 	CookieName string
 	Expiration time.Duration
-	Secure *bool
-	SameSite http.SameSite
-	Domain string
-	Path string
+	Secure     *bool
+	SameSite   http.SameSite
+	Domain     string
+	Path       string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -63,12 +67,14 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
+
 const (
 	sessionKey          = "goryu.session"
 	sessionIDKey        = "goryu.session.id"
 	sessionCfgKey       = "goryu.session.config"
 	sessionDestroyedKey = "goryu.session.destroyed"
 )
+
 // sessionResponseWriter wraps http.ResponseWriter to intercept writes
 type sessionResponseWriter struct {
 	http.ResponseWriter
@@ -141,21 +147,21 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 	// Post-handler logic extracted
 	saveSession := func(c *goryuctx.Context) {
 		if destroyed, _ := c.Get(sessionDestroyedKey); destroyed == true {
-			return 
+			return
 		}
 		finalSessionVal, exists := c.Get(sessionKey)
 		if !exists {
-			return 
+			return
 		}
 		finalSession, ok := finalSessionVal.(*Session)
 		if !ok {
 			// Should log error?
-			return 
+			return
 		}
 
 		// Only save/set cookie if the writer hasn't been written to OR if we are just about to write
 		// Ideally we do this exactly once.
-		
+
 		if finalSession.modified {
 			if err := cfg.Store.Save(finalSession); err != nil {
 				if cfg.Logger != nil {
@@ -165,16 +171,16 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 				// But we continue for now.
 			}
 		}
-		
+
 		cookie := &http.Cookie{
 			Name:     cfg.CookieName,
 			Value:    base64.StdEncoding.EncodeToString([]byte(finalSession.ID)),
 			Expires:  time.Now().Add(cfg.Expiration),
 			Path:     cfg.Path,
 			Domain:   cfg.Domain,
-			HttpOnly: true,           
-			Secure:   *cfg.Secure, 
-			SameSite: cfg.SameSite, 
+			HttpOnly: true,
+			Secure:   *cfg.Secure,
+			SameSite: cfg.SameSite,
 		}
 		c.SetCookie(cookie)
 	}
@@ -244,9 +250,9 @@ func Destroy(c *goryuctx.Context) error {
 		Path:     cfg.Path,
 		Domain:   cfg.Domain,
 		MaxAge:   -1,
-		HttpOnly: true,           
-		Secure:   *cfg.Secure,    
-		SameSite: cfg.SameSite,   
+		HttpOnly: true,
+		Secure:   *cfg.Secure,
+		SameSite: cfg.SameSite,
 	})
 	c.Set(sessionDestroyedKey, true)
 	return cfg.Store.Destroy(sessionID)
@@ -293,9 +299,9 @@ func Regenerate(c *goryuctx.Context) error {
 		Expires:  time.Now().Add(cfg.Expiration),
 		Path:     cfg.Path,
 		Domain:   cfg.Domain,
-		HttpOnly: true,           
-		Secure:   *cfg.Secure,    
-		SameSite: cfg.SameSite,   
+		HttpOnly: true,
+		Secure:   *cfg.Secure,
+		SameSite: cfg.SameSite,
 	}
 	err = c.SetCookie(cookie)
 	if err != nil {

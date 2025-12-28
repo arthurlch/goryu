@@ -1,13 +1,15 @@
 package auth
+
 import (
 	"fmt"
+	"github.com/arthurlch/goryu"
+	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-	"github.com/arthurlch/goryu"
-	"github.com/golang-jwt/jwt/v5"
 )
+
 type AuthService struct {
 	jwt         *JWTAuth
 	userStore   UserStore
@@ -18,21 +20,22 @@ type AuthService struct {
 	logger      Logger
 }
 type AuthServiceConfig struct {
-	AppName                string
+	AppName                  string
 	RequireEmailVerification bool
-	PasswordConfig         SecurePasswordConfig
-	SessionDuration        time.Duration
-	RefreshTokenDuration   time.Duration
-	EnableRateLimit        bool
-	MaxLoginAttempts       int
-	RateLimitWindow        time.Duration
-	RateLimitBlockDuration time.Duration
-	EnableAuditLog         bool
-	SecureCookies          bool
-	CookieDomain           string
-	CookiePath             string
-	CSRFProtection         bool
+	PasswordConfig           SecurePasswordConfig
+	SessionDuration          time.Duration
+	RefreshTokenDuration     time.Duration
+	EnableRateLimit          bool
+	MaxLoginAttempts         int
+	RateLimitWindow          time.Duration
+	RateLimitBlockDuration   time.Duration
+	EnableAuditLog           bool
+	SecureCookies            bool
+	CookieDomain             string
+	CookiePath               string
+	CSRFProtection           bool
 }
+
 func DefaultAuthServiceConfig() AuthServiceConfig {
 	return AuthServiceConfig{
 		AppName:                  "goryu-app",
@@ -50,6 +53,7 @@ func DefaultAuthServiceConfig() AuthServiceConfig {
 		CSRFProtection:           true,
 	}
 }
+
 type EmailSender interface {
 	SendVerificationEmail(email, token, verifyURL string) error
 	SendPasswordResetEmail(email, token, resetURL string) error
@@ -61,9 +65,9 @@ type Logger interface {
 	LogInfo(message string, details map[string]interface{})
 }
 type LoginRequest struct {
-	Email       string `json:"email" validate:"required,email"`
-	Password    string `json:"password" validate:"required"`
-	RememberMe  bool   `json:"remember_me,omitempty"`
+	Email         string `json:"email" validate:"required,email"`
+	Password      string `json:"password" validate:"required"`
+	RememberMe    bool   `json:"remember_me,omitempty"`
 	TwoFactorCode string `json:"two_factor_code,omitempty"`
 }
 type RegisterRequest struct {
@@ -96,6 +100,7 @@ type PublicUser struct {
 	Verified bool                   `json:"verified"`
 	Traits   map[string]interface{} `json:"traits,omitempty"`
 }
+
 func NewAuthService(jwtAuth *JWTAuth, userStore UserStore, tokenStore TokenStore, emailSender EmailSender, config AuthServiceConfig) *AuthService {
 	service := &AuthService{
 		jwt:         jwtAuth,
@@ -119,9 +124,9 @@ func (as *AuthService) SetLogger(logger Logger) {
 func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse {
 	if err := ValidateEmail(req.Email); err != nil {
 		as.logSecurityEvent("registration_failed", map[string]interface{}{
-			"email": req.Email,
+			"email":  req.Email,
 			"reason": "invalid_email",
-			"ip": as.getClientIP(c),
+			"ip":     as.getClientIP(c),
 		})
 		return AuthResponse{
 			Success: false,
@@ -133,9 +138,9 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 	passwordResult := ValidatePassword(req.Password, as.config.PasswordConfig, userInfo...)
 	if !passwordResult.IsValid {
 		as.logSecurityEvent("registration_failed", map[string]interface{}{
-			"email": req.Email,
+			"email":  req.Email,
 			"reason": "weak_password",
-			"ip": as.getClientIP(c),
+			"ip":     as.getClientIP(c),
 		})
 		return AuthResponse{
 			Success: false,
@@ -145,9 +150,9 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 	}
 	if _, exists := as.userStore.GetUserByEmail(req.Email); exists {
 		as.logSecurityEvent("registration_failed", map[string]interface{}{
-			"email": req.Email,
+			"email":  req.Email,
 			"reason": "email_exists",
-			"ip": as.getClientIP(c),
+			"ip":     as.getClientIP(c),
 		})
 		return AuthResponse{
 			Success: false,
@@ -179,9 +184,9 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 		}
 	}
 	as.logSecurityEvent("user_registered", map[string]interface{}{
-		"user_id": user.ID,
-		"email": req.Email,
-		"ip": as.getClientIP(c),
+		"user_id":               user.ID,
+		"email":                 req.Email,
+		"ip":                    as.getClientIP(c),
 		"requires_verification": as.config.RequireEmailVerification,
 	})
 	message := "Account created successfully"
@@ -199,8 +204,8 @@ func (as *AuthService) Login(c *goryu.Ctx, req LoginRequest) AuthResponse {
 	if as.config.EnableRateLimit {
 		if allowed, resetTime := as.rateLimiter.CheckIPLimit(clientIP); !allowed {
 			as.logSecurityEvent("login_rate_limited", map[string]interface{}{
-				"ip": clientIP,
-				"email": req.Email,
+				"ip":         clientIP,
+				"email":      req.Email,
 				"reset_time": resetTime,
 			})
 			return AuthResponse{
@@ -210,8 +215,8 @@ func (as *AuthService) Login(c *goryu.Ctx, req LoginRequest) AuthResponse {
 		}
 		if allowed, resetTime := as.rateLimiter.CheckEmailLimit(req.Email); !allowed {
 			as.logSecurityEvent("login_rate_limited", map[string]interface{}{
-				"ip": clientIP,
-				"email": req.Email,
+				"ip":         clientIP,
+				"email":      req.Email,
 				"reset_time": resetTime,
 			})
 			return AuthResponse{
@@ -236,9 +241,9 @@ func (as *AuthService) Login(c *goryu.Ctx, req LoginRequest) AuthResponse {
 			as.rateLimiter.RecordFailedAttempt(clientIP, req.Email)
 		}
 		as.logSecurityEvent("login_failed", map[string]interface{}{
-			"email": req.Email,
+			"email":  req.Email,
 			"reason": "user_not_found",
-			"ip": clientIP,
+			"ip":     clientIP,
 		})
 		return AuthResponse{
 			Success: false,
@@ -251,9 +256,9 @@ func (as *AuthService) Login(c *goryu.Ctx, req LoginRequest) AuthResponse {
 		}
 		as.logSecurityEvent("login_failed", map[string]interface{}{
 			"user_id": user.ID,
-			"email": req.Email,
-			"reason": "invalid_password",
-			"ip": clientIP,
+			"email":   req.Email,
+			"reason":  "invalid_password",
+			"ip":      clientIP,
 		})
 		return AuthResponse{
 			Success: false,
@@ -263,9 +268,9 @@ func (as *AuthService) Login(c *goryu.Ctx, req LoginRequest) AuthResponse {
 	if as.config.RequireEmailVerification && !user.Verified {
 		as.logSecurityEvent("login_failed", map[string]interface{}{
 			"user_id": user.ID,
-			"email": req.Email,
-			"reason": "email_not_verified",
-			"ip": clientIP,
+			"email":   req.Email,
+			"reason":  "email_not_verified",
+			"ip":      clientIP,
 		})
 		return AuthResponse{
 			Success: false,
@@ -294,9 +299,9 @@ func (as *AuthService) Login(c *goryu.Ctx, req LoginRequest) AuthResponse {
 	}
 	as.setSecureCookies(c, accessToken, refreshToken)
 	as.logSecurityEvent("login_success", map[string]interface{}{
-		"user_id": user.ID,
-		"email": req.Email,
-		"ip": clientIP,
+		"user_id":     user.ID,
+		"email":       req.Email,
+		"ip":          clientIP,
 		"remember_me": req.RememberMe,
 	})
 	return AuthResponse{
@@ -334,13 +339,13 @@ func (as *AuthService) RequestPasswordReset(c *goryu.Ctx, req PasswordResetReque
 		}
 		as.logSecurityEvent("password_reset_requested", map[string]interface{}{
 			"user_id": user.ID,
-			"email": req.Email,
-			"ip": clientIP,
+			"email":   req.Email,
+			"ip":      clientIP,
 		})
 	} else {
 		as.logSecurityEvent("password_reset_requested_invalid_email", map[string]interface{}{
 			"email": req.Email,
-			"ip": clientIP,
+			"ip":    clientIP,
 		})
 	}
 	return response
@@ -352,7 +357,7 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 	})
 	if err != nil || !token.Valid {
 		as.logSecurityEvent("password_reset_invalid_token", map[string]interface{}{
-			"ip": clientIP,
+			"ip":          clientIP,
 			"token_error": err.Error(),
 		})
 		return AuthResponse{
@@ -370,7 +375,7 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 	if !as.tokenStore.UseToken(claims.ID) {
 		as.logSecurityEvent("password_reset_token_reuse", map[string]interface{}{
 			"email": claims.Subject,
-			"ip": clientIP,
+			"ip":    clientIP,
 		})
 		return AuthResponse{
 			Success: false,
@@ -381,7 +386,7 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 	if !exists {
 		as.logSecurityEvent("password_reset_user_not_found", map[string]interface{}{
 			"email": claims.Subject,
-			"ip": clientIP,
+			"ip":    clientIP,
 		})
 		return AuthResponse{
 			Success: false,
@@ -409,8 +414,8 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 	}
 	as.logSecurityEvent("password_reset_success", map[string]interface{}{
 		"user_id": user.ID,
-		"email": user.Email,
-		"ip": clientIP,
+		"email":   user.Email,
+		"ip":      clientIP,
 	})
 	return AuthResponse{
 		Success: true,
@@ -443,7 +448,7 @@ func (as *AuthService) setSecureCookies(c *goryu.Ctx, accessToken, refreshToken 
 		SameSite: http.SameSiteStrictMode,
 	})
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     "refresh_token", 
+		Name:     "refresh_token",
 		Value:    refreshToken,
 		Path:     as.config.CookiePath,
 		Domain:   as.config.CookieDomain,

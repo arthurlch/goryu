@@ -11,19 +11,23 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type CompressionLevel int
+
 const (
-	LevelBestSpeed          CompressionLevel = flate.BestSpeed          
-	LevelBestCompression    CompressionLevel = flate.BestCompression    
-	LevelDefaultCompression CompressionLevel = flate.DefaultCompression 
-	LevelNoCompression      CompressionLevel = flate.NoCompression      
+	LevelBestSpeed          CompressionLevel = flate.BestSpeed
+	LevelBestCompression    CompressionLevel = flate.BestCompression
+	LevelDefaultCompression CompressionLevel = flate.DefaultCompression
+	LevelNoCompression      CompressionLevel = flate.NoCompression
 )
+
 type Config struct {
 	base.BaseConfig
-	Level CompressionLevel
-	MinLength int
+	Level             CompressionLevel
+	MinLength         int
 	CompressibleTypes []string
 }
+
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
@@ -124,6 +128,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 	return base.PostProcessMiddleware("Compress", cfg.BaseConfig, preHandler, postHandler)
 }
+
 type compressBuffer struct {
 	data         []byte
 	encoding     string
@@ -137,6 +142,7 @@ type compressResponseWriter struct {
 	buffer     *compressBuffer
 	statusCode int
 }
+
 func (w *compressResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 	if !w.buffer.headersSent {

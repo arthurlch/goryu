@@ -10,40 +10,42 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
 type cacheEntry struct {
 	statusCode int
 	headers    http.Header
 	body       []byte
 	createdAt  time.Time
-	lruElement *list.Element 
+	lruElement *list.Element
 }
 type lruItem struct {
 	key   string
 	entry *cacheEntry
 }
 type secureCache struct {
-	mu        sync.RWMutex
-	entries   map[string]*cacheEntry
-	lruList   *list.List 
-	maxSize   int
-	maxMemory int64 
+	mu            sync.RWMutex
+	entries       map[string]*cacheEntry
+	lruList       *list.List
+	maxSize       int
+	maxMemory     int64
 	currentMemory int64
-	expiration time.Duration
-	lastCleanup time.Time
+	expiration    time.Duration
+	lastCleanup   time.Time
 }
 type Config struct {
 	base.BaseConfig
-	Expiration time.Duration
-	MaxSize int
-	MaxMemory int64
+	Expiration      time.Duration
+	MaxSize         int
+	MaxMemory       int64
 	CleanupInterval time.Duration
-	KeyGenerator func(c *context.Context) string
+	KeyGenerator    func(c *context.Context) string
 }
 type cacheWriter struct {
 	http.ResponseWriter
 	statusCode int
 	body       *bytes.Buffer
 }
+
 func (cw *cacheWriter) WriteHeader(code int) {
 	cw.statusCode = code
 }
@@ -63,18 +65,18 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.MaxSize <= 0 {
-		c.MaxSize = 1000 
+		c.MaxSize = 1000
 	}
 	if c.MaxMemory <= 0 {
-		c.MaxMemory = 50 << 20 
+		c.MaxMemory = 50 << 20
 	}
 	if c.CleanupInterval <= 0 {
-		c.CleanupInterval = 5 * time.Minute 
+		c.CleanupInterval = 5 * time.Minute
 	}
 	if c.MaxSize > 10000 {
 		return base.NewConfigError("MaxSize", "cannot exceed 10,000 entries")
 	}
-	if c.MaxMemory > 500<<20 { 
+	if c.MaxMemory > 500<<20 {
 		return base.NewConfigError("MaxMemory", "cannot exceed 500MB")
 	}
 	return nil
@@ -114,9 +116,9 @@ func (sc *secureCache) put(key string, entry *cacheEntry) {
 			entrySize += int64(len(val))
 		}
 	}
-	entrySize += int64(len(key)) + 64 
+	entrySize += int64(len(key)) + 64
 	if entrySize > sc.maxMemory/10 {
-		return 
+		return
 	}
 	if existingEntry, found := sc.entries[key]; found {
 		oldSize := sc.calculateEntrySize(key, existingEntry)
@@ -153,7 +155,7 @@ func (sc *secureCache) evictLRU() {
 	}
 }
 func (sc *secureCache) calculateEntrySize(key string, entry *cacheEntry) int64 {
-	size := int64(len(entry.body) + len(key) + 64) 
+	size := int64(len(entry.body) + len(key) + 64)
 	for k, v := range entry.headers {
 		size += int64(len(k))
 		for _, val := range v {
@@ -167,7 +169,7 @@ func (sc *secureCache) cleanup() {
 	defer sc.mu.Unlock()
 	now := time.Now()
 	if now.Sub(sc.lastCleanup) < time.Minute {
-		return 
+		return
 	}
 	expiredKeys := make([]string, 0)
 	for key, entry := range sc.entries {
@@ -210,7 +212,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return
 			}
 			if time.Since(cacheStore.lastCleanup) > cfg.CleanupInterval {
-				go cacheStore.cleanup() 
+				go cacheStore.cleanup()
 			}
 			key := cfg.KeyGenerator(c)
 			entry, found := cacheStore.get(key)

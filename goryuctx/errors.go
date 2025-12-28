@@ -27,12 +27,12 @@ const (
 )
 
 type ResponseError struct {
-	Type      ErrorType 
-	Operation string    
-	Err       error     
-	Code      int       
-	Critical  bool      
-	Recovered bool      
+	Type      ErrorType
+	Operation string
+	Err       error
+	Code      int
+	Critical  bool
+	Recovered bool
 }
 
 func (e *ResponseError) Error() string {
@@ -40,7 +40,7 @@ func (e *ResponseError) Error() string {
 	if e.Recovered {
 		prefix = "recovered "
 	}
-	
+
 	typeStr := ""
 	switch e.Type {
 	case WriteError:
@@ -56,7 +56,7 @@ func (e *ResponseError) Error() string {
 	case InternalError:
 		typeStr = "internal error"
 	}
-	
+
 	if typeStr != "" {
 		return fmt.Sprintf("%s%s in %s: %v", prefix, typeStr, e.Operation, e.Err)
 	}
@@ -69,9 +69,9 @@ func (e *ResponseError) Unwrap() error {
 
 type ResponseConfig struct {
 	ChainOnError bool
-	
+
 	AutoRespond bool
-	
+
 	ErrorHandler func(c *Context, err error)
 }
 
@@ -107,7 +107,7 @@ func (c *Context) GetErrorHandlingMode() ErrorHandlingMode {
 	if c.errorModeSet {
 		return c.errorHandlingMode
 	}
-	
+
 	// Otherwise check Keys map
 	if c.Keys == nil {
 		c.errorHandlingMode = ErrorModeReturn
@@ -130,7 +130,7 @@ func (c *Context) handleResponseError(operation string, err error, errorType Err
 	if err == nil {
 		return nil
 	}
-	
+
 	responseErr, isResponseErr := err.(*ResponseError)
 	if !isResponseErr {
 		responseErr = &ResponseError{
@@ -140,36 +140,36 @@ func (c *Context) handleResponseError(operation string, err error, errorType Err
 			Critical:  errorType == WriteError || errorType == InternalError,
 		}
 	}
-	
+
 	config := c.GetResponseConfig()
-	
+
 	if config.ErrorHandler != nil {
 		config.ErrorHandler(c, responseErr)
 	}
-	
+
 	c.callResponseErrorHandler(responseErr)
-	
+
 	if config.AutoRespond && responseErr.Critical {
 		c.sendErrorResponse(responseErr)
 	}
-	
+
 	mode := c.GetErrorHandlingMode()
-	
+
 	switch mode {
 	case ErrorModeReturn:
 		log.Printf("%s: %v", responseErr.Error(), err)
 		return responseErr
-		
+
 	case ErrorModeLog:
 		log.Printf("%s: %v", responseErr.Error(), err)
 		return nil
-		
+
 	case ErrorModePanic:
 		panic(responseErr)
-		
+
 	case ErrorModeSilent:
 		return nil
-		
+
 	default:
 		log.Printf("%s: %v", responseErr.Error(), err)
 		return responseErr
@@ -178,7 +178,7 @@ func (c *Context) handleResponseError(operation string, err error, errorType Err
 
 func (c *Context) safeExecute(operation string, errorType ErrorType, fn func() error) error {
 	var err error
-	
+
 	if c.GetErrorHandlingMode() != ErrorModePanic {
 		defer func() {
 			if r := recover(); r != nil {
@@ -188,7 +188,7 @@ func (c *Context) safeExecute(operation string, errorType ErrorType, fn func() e
 				} else {
 					panicErr = fmt.Errorf("%v", r)
 				}
-				
+
 				responseErr := &ResponseError{
 					Type:      errorType,
 					Operation: operation,
@@ -196,13 +196,13 @@ func (c *Context) safeExecute(operation string, errorType ErrorType, fn func() e
 					Critical:  true, // panics are always critical
 					Recovered: true,
 				}
-				
+
 				log.Printf("Recovered panic in %s: %v", operation, panicErr)
 				err = responseErr
 			}
 		}()
 	}
-	
+
 	err = fn()
 	return c.handleResponseError(operation, err, errorType)
 }
@@ -211,12 +211,12 @@ func (c *Context) safeExecute(operation string, errorType ErrorType, fn func() e
 func (c *Context) sendErrorResponse(err *ResponseError) {
 	// SECUCHECK: Check if response already sent to prevent race conditions
 	if !c.markResponseSent() {
-		return 
+		return
 	}
-	
+
 	status := 500
 	message := "Internal Server Error"
-	
+
 	if err.Code > 0 {
 		status = err.Code
 	} else {
@@ -237,7 +237,7 @@ func (c *Context) sendErrorResponse(err *ResponseError) {
 			message = "Invalid Request Data"
 		}
 	}
-	
+
 	// SECUCHECK: Safe to write response as we have exclusive access
 	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
@@ -256,7 +256,7 @@ func (c *Context) callResponseErrorHandler(err error) {
 	if c.Keys == nil {
 		return
 	}
-	
+
 	if handler, exists := c.Keys["response_error_handler"]; exists {
 		if h, ok := handler.(func(error)); ok {
 			defer func() {

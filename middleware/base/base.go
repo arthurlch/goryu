@@ -7,13 +7,14 @@ import (
 
 	context "github.com/arthurlch/goryu/goryuctx"
 )
+
 type Logger interface {
 	Printf(format string, v ...interface{})
 	Println(v ...interface{})
 }
 type BaseConfig struct {
-	Skip func(c *context.Context) bool
-	Logger Logger
+	Skip         func(c *context.Context) bool
+	Logger       Logger
 	ErrorHandler func(c *context.Context, err error, middlewareName string)
 }
 type MiddlewareError struct {
@@ -21,6 +22,7 @@ type MiddlewareError struct {
 	Err        error
 	StatusCode int
 }
+
 func (e MiddlewareError) Error() string {
 	return e.Err.Error()
 }
@@ -39,10 +41,12 @@ func DefaultErrorHandler(c *context.Context, err error, middlewareName string) {
 func DefaultLogger(middlewareName string) Logger {
 	return log.New(os.Stderr, "[GORYU:"+middlewareName+"] ", log.LstdFlags)
 }
+
 type ConfigurableMiddleware interface {
 	Configure(base *BaseConfig)
 	Validate() error
 }
+
 func StandardMiddleware(middlewareName string, base BaseConfig, handler func(c *context.Context) error) func(next context.HandlerFunc) context.HandlerFunc {
 	if base.Logger == nil {
 		base.Logger = DefaultLogger(middlewareName)
@@ -64,7 +68,7 @@ func StandardMiddleware(middlewareName string, base BaseConfig, handler func(c *
 		}
 	}
 }
-func PostProcessMiddleware(middlewareName string, base BaseConfig, 
+func PostProcessMiddleware(middlewareName string, base BaseConfig,
 	preHandler func(c *context.Context) error,
 	postHandler func(c *context.Context) error) func(next context.HandlerFunc) context.HandlerFunc {
 	if base.Logger == nil {
@@ -100,10 +104,12 @@ func ValidationError(field string, message string) MiddlewareError {
 		StatusCode: http.StatusBadRequest,
 	}
 }
+
 type ConfigError struct {
 	Field   string
 	Message string
 }
+
 func (e ConfigError) Error() string {
 	return "config error for field '" + e.Field + "': " + e.Message
 }
@@ -113,6 +119,7 @@ func NewConfigError(field, message string) ConfigError {
 		Message: message,
 	}
 }
+
 type ResponseWriterWrapper interface {
 	http.ResponseWriter
 	Status() int
@@ -125,6 +132,7 @@ type StandardResponseWriter struct {
 	size       int
 	written    bool
 }
+
 func NewStandardResponseWriter(w http.ResponseWriter) *StandardResponseWriter {
 	return &StandardResponseWriter{
 		ResponseWriter: w,

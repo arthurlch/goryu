@@ -1,13 +1,15 @@
 package favicon_test
+
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/favicon"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
-	context "github.com/arthurlch/goryu/goryuctx"
-	"github.com/arthurlch/goryu/middleware/favicon"
 )
+
 func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
 	rr := httptest.NewRecorder()
 	return context.NewContext(rr, req), rr
@@ -48,7 +50,7 @@ func TestFaviconMiddleware(t *testing.T) {
 			t.Fatalf("Could not create test favicon file: %v", err)
 		}
 		middleware := favicon.New(favicon.Config{
-			File: faviconFile,
+			File:      faviconFile,
 			CacheFile: true,
 		})
 		handler := func(c *context.Context) {

@@ -80,7 +80,7 @@ func runConfigValidate(args []string) error {
 		fmt.Printf("   %v\n", err)
 		return err
 	}
-	
+
 	cfg.Validate()
 	if cfg.HasErrors() {
 		fmt.Printf("❌ Configuration validation failed:\n")
@@ -89,7 +89,7 @@ func runConfigValidate(args []string) error {
 		}
 		return fmt.Errorf("configuration validation failed")
 	}
-	
+
 	config, err := cfg.Build()
 	if err != nil {
 		return err

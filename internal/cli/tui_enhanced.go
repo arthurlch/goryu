@@ -58,7 +58,7 @@ func newEnhancedMenu() enhancedMenuModel {
 					{
 						title:       "Validate Project",
 						description: "Check project structure and configuration",
-						action:      "validate", 
+						action:      "validate",
 						params:      []string{},
 					},
 				},
@@ -255,7 +255,7 @@ func (m enhancedMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				// Execute the selected action
 				item := m.categories[m.currentCat].items[m.currentItem]
-				
+
 				switch item.action {
 				case "init":
 					return NewProjectInitModel(), nil
@@ -350,7 +350,7 @@ func (m enhancedMenuModel) View() string {
 		)
 	} else {
 		cat := m.categories[m.currentCat]
-		
+
 		categoryHeader := categoryStyle.Render(
 			fmt.Sprintf("%s %s", cat.emoji, cat.name),
 		)
@@ -403,36 +403,36 @@ func (m enhancedMenuModel) View() string {
 
 var (
 	borderStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(primaryColor).
-		Padding(2, 4)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryColor).
+			Padding(2, 4)
 
 	categoryStyle = lipgloss.NewStyle().
-		Foreground(primaryColor).
-		Bold(true).
-		MarginBottom(1)
+			Foreground(primaryColor).
+			Bold(true).
+			MarginBottom(1)
 
 	itemStyle = lipgloss.NewStyle().
-		Padding(1, 2).
-		MarginBottom(1)
+			Padding(1, 2).
+			MarginBottom(1)
 
 	selectedItemStyle = itemStyle.Copy().
-		Background(lipgloss.Color("#1F2937")).
-		Foreground(textColor)
+				Background(lipgloss.Color("#1F2937")).
+				Foreground(textColor)
 
 	itemTitleStyle = lipgloss.NewStyle().
-		Bold(true)
+			Bold(true)
 
 	itemDescStyle = lipgloss.NewStyle().
-		Foreground(mutedColor)
+			Foreground(mutedColor)
 
 	loadingStyle = lipgloss.NewStyle().
-		Foreground(mutedColor).
-		MarginTop(1)
+			Foreground(mutedColor).
+			MarginTop(1)
 
 	notificationStyle = lipgloss.NewStyle().
-		Foreground(accentColor).
-		Bold(true)
+				Foreground(accentColor).
+				Bold(true)
 )
 
 type notificationMsg struct{}

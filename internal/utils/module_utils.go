@@ -27,6 +27,6 @@ func GetModuleName() (string, error) {
 			return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
 		}
 	}
-	
+
 	return "", errors.New("module definition not found in go.mod")
 }
