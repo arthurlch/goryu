@@ -114,7 +114,7 @@ func TestHealthCheckPanicRecovery(t *testing.T) {
 	t.Run("HealthCheckPanic_SafeExecuteEnabled", func(t *testing.T) {
 		var buf bytes.Buffer
 		var bufMu sync.Mutex
-		
+
 		// Use a safe writer that protects concurrent access to the buffer
 		log.SetOutput(&safeWriter{buf: &buf, mu: &bufMu})
 		defer log.SetOutput(os.Stderr)
@@ -142,7 +142,7 @@ func TestHealthCheckPanicRecovery(t *testing.T) {
 		bufMu.Lock()
 		logOutput := buf.String()
 		bufMu.Unlock()
-		
+
 		if !strings.Contains(logOutput, "Health check 'panic_check' panicked") {
 			t.Errorf("Expected health check panic to be logged, got: %s", logOutput)
 		}
@@ -278,10 +278,10 @@ func TestConcurrentEventHandlers(t *testing.T) {
 
 	// Give some time for handlers to complete before closing
 	time.Sleep(200 * time.Millisecond)
-	
+
 	monitor.Close()
 	monitor.Wait()
-	
+
 	// Additional buffer for handlers to finish processing
 	time.Sleep(100 * time.Millisecond)
 
