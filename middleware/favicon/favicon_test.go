@@ -59,16 +59,32 @@ func TestFaviconMiddleware(t *testing.T) {
 		tempDir := t.TempDir()
 		faviconFile := filepath.Join(tempDir, "favicon.ico")
 		faviconData := []byte("fake favicon data")
-		if err := os.WriteFile(faviconFile, faviconData, 0644); err != nil {
+
+		// Write file with explicit close and sync
+		f, err := os.Create(faviconFile)
+		if err != nil {
 			t.Fatalf("Could not create test favicon file: %v", err)
+		}
+		if _, err := f.Write(faviconData); err != nil {
+			f.Close()
+			t.Fatalf("Could not write to test favicon file: %v", err)
+		}
+		if err := f.Sync(); err != nil {
+			f.Close()
+			t.Fatalf("Could not sync test favicon file: %v", err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatalf("Could not close test favicon file: %v", err)
 		}
 
 		// Verify file was created and is readable
-		if _, err := os.Stat(faviconFile); err != nil {
-			t.Fatalf("Favicon file not found after creation: %v", err)
+		if data, err := os.ReadFile(faviconFile); err != nil {
+			t.Fatalf("Cannot read favicon file after creation: %v", err)
+		} else if string(data) != string(faviconData) {
+			t.Fatalf("Favicon file content mismatch: expected %q, got %q", faviconData, data)
 		}
 
-		// Create middleware after file is confirmed to exist
+		// Create middleware after file is confirmed to exist and readable
 		middleware := favicon.New(favicon.Config{
 			File:      faviconFile,
 			CacheFile: true,
@@ -76,7 +92,15 @@ func TestFaviconMiddleware(t *testing.T) {
 
 		// Check if middleware creation failed
 		if isErrorMiddleware(middleware) {
-			t.Fatal("Middleware creation failed - file loading error")
+			// Try to understand why it failed
+			if _, err := os.Stat(faviconFile); err != nil {
+				t.Fatalf("File disappeared after middleware creation: %v", err)
+			}
+			if data, err := os.ReadFile(faviconFile); err != nil {
+				t.Fatalf("Cannot read file after middleware creation: %v", err)
+			} else {
+				t.Fatalf("Middleware creation failed despite file being readable. File content: %q", data)
+			}
 		}
 
 		handler := func(c *context.Context) {
@@ -87,17 +111,47 @@ func TestFaviconMiddleware(t *testing.T) {
 		middleware(handler)(ctx)
 
 		if rr.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d. Response body: %s", rr.Code, rr.Body.String())
+			t.Errorf("Expected status 200, got %d. Response body: %q, Headers: %v", rr.Code, rr.Body.String(), rr.Header())
 		}
 
 		body := rr.Body.Bytes()
 		if string(body) != string(faviconData) {
-			t.Errorf("Expected favicon data '%s', got '%s'", string(faviconData), string(body))
+			t.Errorf("Expected favicon data %q, got %q", faviconData, body)
 		}
 
 		contentType := rr.Header().Get("Content-Type")
 		if contentType != "image/x-icon" {
-			t.Errorf("Expected content-type 'image/x-icon', got '%s'", contentType)
+			t.Errorf("Expected content-type 'image/x-icon', got %q", contentType)
+		}
+	})
+	t.Run("WithFaviconFileNoCache", func(t *testing.T) {
+		tempDir := t.TempDir()
+		faviconFile := filepath.Join(tempDir, "favicon.ico")
+		faviconData := []byte("fake favicon data without cache")
+		if err := os.WriteFile(faviconFile, faviconData, 0644); err != nil {
+			t.Fatalf("Could not create test favicon file: %v", err)
+		}
+
+		// Create middleware without caching
+		middleware := favicon.New(favicon.Config{
+			File:      faviconFile,
+			CacheFile: false, // Don't cache, serve directly
+		})
+
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/favicon.ico", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d. Response body: %q", rr.Code, rr.Body.String())
+		}
+
+		body := rr.Body.Bytes()
+		if string(body) != string(faviconData) {
+			t.Errorf("Expected favicon data %q, got %q", faviconData, body)
 		}
 	})
 	t.Run("CustomURL", func(t *testing.T) {
