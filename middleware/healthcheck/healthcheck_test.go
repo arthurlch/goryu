@@ -1,103 +1,151 @@
-package middleware
+package healthcheck_test
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
+	goryuContext "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/healthcheck"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
-func probeThatSucceeds(ctx context.Context) error {
-	return nil
+func newTestContext(req *http.Request) (*goryuContext.Context, *httptest.ResponseRecorder) {
+	rr := httptest.NewRecorder()
+	return goryuContext.NewContext(rr, req), rr
 }
-
-func probeThatFails(ctx context.Context) error {
-	return errors.New("dependency failed")
-}
-
-func probeThatTimesOut(ctx context.Context) error {
-	time.Sleep(100 * time.Millisecond)
-	return nil
-}
-
-func TestHealthChecker(t *testing.T) {
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-	})
-
-	t.Run("liveness success", func(t *testing.T) {
-		t.Parallel()
-		health := NewHealthChecker()
-		health.AddLivenessCheck("passing-check", probeThatSucceeds)
-		handler := health.Middleware(nextHandler)
-
-		req := httptest.NewRequest("GET", "/live", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusOK {
-			t.Errorf("wrong status code: got %v want %v", status, http.StatusOK)
+func TestHealthCheckMiddleware(t *testing.T) {
+	t.Run("DefaultHealthEndpoint", func(t *testing.T) {
+		middleware := healthcheck.New(healthcheck.Config{})
+		handler := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/health", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		var response healthcheck.HealthStatus
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+		if response.Status != "UP" {
+			t.Errorf("Expected status UP, got %s", response.Status)
 		}
 	})
-
-	t.Run("readiness failure", func(t *testing.T) {
-		t.Parallel()
-		health := NewHealthChecker()
-		health.AddReadinessCheck("failing-check", probeThatFails)
-		handler := health.Middleware(nextHandler)
-
-		req := httptest.NewRequest("GET", "/ready", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusServiceUnavailable {
-			t.Errorf("wrong status code: got %v want %v", status, http.StatusServiceUnavailable)
+	t.Run("LivenessCheck", func(t *testing.T) {
+		config := healthcheck.Config{
+			LivenessProbes: map[string]healthcheck.Probe{
+				"always-up": healthcheck.AlwaysUpProbe(),
+			},
 		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
-			t.Fatalf("Failed to decode json: %v", err)
+		middleware := healthcheck.New(config)
+		handler := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
 		}
-
-		errorsMap, ok := body["errors"].(map[string]interface{})
-		if !ok {
-			t.Fatalf("Response 'errors' field is not a map")
+		req := httptest.NewRequest("GET", "/health/live", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
-		if errorsMap["failing-check"] != "dependency failed" {
-			t.Errorf("unexpected error message in json: got %v", errorsMap["failing-check"])
+		var response healthcheck.HealthStatus
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
 		}
-	})
-
-	t.Run("probe timeout", func(t *testing.T) {
-		t.Parallel()
-		health := NewHealthChecker()
-		health.timeout = 50 * time.Millisecond // Set a short timeout
-		health.AddLivenessCheck("slow-probe", probeThatTimesOut)
-		handler := health.Middleware(nextHandler)
-
-		req := httptest.NewRequest("GET", "/live", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusServiceUnavailable {
-			t.Errorf("wrong status code: got %v want %v", status, http.StatusServiceUnavailable)
+		if response.Status != "UP" {
+			t.Errorf("Expected status UP, got %s", response.Status)
+		}
+		if len(response.Checks) != 1 {
+			t.Errorf("Expected 1 check, got %d", len(response.Checks))
 		}
 	})
-
-	t.Run("passthrough non-health path", func(t *testing.T) {
-		t.Parallel()
-		health := NewHealthChecker()
-		handler := health.Middleware(nextHandler)
-
-		req := httptest.NewRequest("GET", "/api/v1/data", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusAccepted {
-			t.Errorf("handler did not pass through: got %v want %v", status, http.StatusAccepted)
+	t.Run("ReadinessCheckFails", func(t *testing.T) {
+		config := healthcheck.Config{
+			ReadinessProbes: map[string]healthcheck.Probe{
+				"always-down": healthcheck.AlwaysDownProbe("service not ready"),
+			},
+		}
+		middleware := healthcheck.New(config)
+		handler := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/health/ready", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Errorf("Expected status 503, got %d", rr.Code)
+		}
+		var response healthcheck.HealthStatus
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+		if response.Status != "DOWN" {
+			t.Errorf("Expected status DOWN, got %s", response.Status)
+		}
+		if len(response.Errors) != 1 {
+			t.Errorf("Expected 1 error, got %d", len(response.Errors))
+		}
+	})
+	t.Run("NonHealthRequest", func(t *testing.T) {
+		middleware := healthcheck.New(healthcheck.Config{})
+		handler := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Homepage")
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		if rr.Body.String() != "Homepage" {
+			t.Errorf("Expected 'Homepage', got %s", rr.Body.String())
+		}
+	})
+	t.Run("CustomPaths", func(t *testing.T) {
+		config := healthcheck.Config{
+			HealthPath:   "/status",
+			LivenessPath: "/alive",
+			HealthProbes: map[string]healthcheck.Probe{
+				"test": healthcheck.AlwaysUpProbe(),
+			},
+		}
+		middleware := healthcheck.New(config)
+		handler := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/status", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		req2 := httptest.NewRequest("GET", "/health", nil)
+		ctx2, rr2 := newTestContext(req2)
+		handler2 := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Default handler")
+		}
+		middleware(handler2)(ctx2)
+		if rr2.Body.String() != "Default handler" {
+			t.Error("Expected default handler to be called for /health")
+		}
+	})
+	t.Run("WithProbesHelper", func(t *testing.T) {
+		livenessProbes := map[string]healthcheck.Probe{
+			"liveness": healthcheck.AlwaysUpProbe(),
+		}
+		readinessProbes := map[string]healthcheck.Probe{
+			"readiness": healthcheck.AlwaysUpProbe(),
+		}
+		middleware := healthcheck.WithProbes(livenessProbes, readinessProbes)
+		handler := func(c *goryuContext.Context) {
+			c.Text(http.StatusOK, "Should not reach here")
+		}
+		req := httptest.NewRequest("GET", "/health/live", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 	})
 }

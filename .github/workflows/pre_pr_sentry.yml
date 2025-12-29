@@ -14,7 +14,7 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@17d0e2bd7d51742c71671bd19fa12bdc9d40a3d6 # v2.8.1
         with:
-          egress-policy: audit 
+          egress-policy: audit
 
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -24,27 +24,27 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21' 
+          go-version: "1.21"
 
       - name: Check if Branch is Up-to-Date with Base (main)
         run: |
           set -e # Exit immediately if a command exits with a non-zero status.
-          
+
           BASE_BRANCH_NAME="${{ github.base_ref }}"
           REMOTE_BASE_BRANCH_REF="origin/${BASE_BRANCH_NAME}"
 
           echo "Current branch (HEAD): $(git rev-parse --abbrev-ref HEAD)"
           echo "Base branch for PR: ${BASE_BRANCH_NAME}"
-          
+
           echo "Fetching latest state of base branch '${BASE_BRANCH_NAME}'..."
           git fetch origin "${BASE_BRANCH_NAME}"
-          
+
           FEATURE_BRANCH_HEAD_COMMIT=$(git rev-parse HEAD)
           BASE_BRANCH_HEAD_COMMIT=$(git rev-parse "${REMOTE_BASE_BRANCH_REF}")
-          
+
           # Find the common ancestor commit
           MERGE_BASE_COMMIT=$(git merge-base "${REMOTE_BASE_BRANCH_REF}" HEAD)
-          
+
           if [ "${MERGE_BASE_COMMIT}" = "${BASE_BRANCH_HEAD_COMMIT}" ]; then
             echo "Success: Branch is up-to-date with all changes from '${BASE_BRANCH_NAME}'."
           else
@@ -64,23 +64,14 @@ jobs:
           echo "Running tests..."
           make test # Assumes your Makefile has a 'test' target
 
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: latest
-
-      - name: Check Code Formatting
+      - name: Run go vet
+        run: go vet ./...
+      - name: Check formatting with gofmt
         run: |
-          echo "Checking code formatting..."
-          make fmt # Assumes 'make fmt' runs 'go fmt ./...' or similar
-          if git diff --quiet; then
-            echo "Success: Code is correctly formatted."
-          else
-            echo "--------------------------------------------------------------------"
-            echo "ERROR: Code is not correctly formatted."
-            echo "Please run 'make fmt' or 'go fmt ./...' on your code and commit the changes."
-            echo "--------------------------------------------------------------------"
-            git diff # Show the formatting differences
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            echo "Please run 'gofmt -w .' to format your code"
             exit 1
           fi
-

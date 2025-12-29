@@ -1,8 +1,6 @@
-// middleware/securecookie.go
-package middleware
+package securecookie
 
 import (
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -11,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
 )
 
 type contextKey string
@@ -26,153 +26,243 @@ var (
 	ErrInvalidValue  = errors.New("securecookie: invalid value")
 )
 
+type Config struct {
+	base.BaseConfig
+	HexKey     string
+	CookieName string
+	CookiePath string
+	CookieTTL  time.Duration
+	Secure     bool
+	SameSite   http.SameSite
+	HttpOnly   bool
+}
 type SecureCookie struct {
 	gcm        cipher.AEAD
 	cookieName string
 	cookiePath string
 	cookieTTL  time.Duration
+	secure     bool
+	sameSite   http.SameSite
+	httpOnly   bool
 }
 
-func NewSecureCookie(hexKey, cookieName string) (*SecureCookie, error) {
-	key, err := hex.DecodeString(hexKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode hex key: %w", err)
-	}
-	if len(key) != 32 {
-		return nil, errors.New("key must be 32 bytes (AES-256)")
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cipher block: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GCM: %w", err)
-	}
-
-	return &SecureCookie{
-		gcm:        gcm,
-		cookieName: cookieName,
-		cookiePath: "/",
-		cookieTTL:  12 * time.Hour,
-	}, nil
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
 }
+func (c *Config) Validate() error {
+	if c.HexKey == "" {
+		return base.NewConfigError("HexKey", "is required")
+	}
+	if c.CookieName == "" {
+		return base.NewConfigError("CookieName", "is required")
+	}
+	if c.CookiePath == "" {
+		c.CookiePath = "/"
+	}
+	if c.CookieTTL == 0 {
+		c.CookieTTL = 12 * time.Hour
+	}
+	if !c.Secure && c.HexKey != "" {
+		c.Secure = true
+	}
+	if c.SameSite == 0 {
+		c.SameSite = http.SameSiteLaxMode
+	}
+	if !c.HttpOnly && c.HexKey != "" {
+		c.HttpOnly = true
+	}
+	return nil
+}
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
+	if len(config) > 0 {
+		cfg = config[0]
+	}
 
-func (sc *SecureCookie) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(sc.cookieName)
-		var value map[string]string
-
-		if err == nil {
-			value, err = sc.decrypt(cookie.Value)
-			if err != nil {
-				log.Printf("WARN: Failed to decrypt cookie '%s': %v", sc.cookieName, err)
-				http.SetCookie(w, sc.createExpiredCookie())
+	if err := cfg.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, err, "SecureCookie")
 			}
 		}
-
-		ctx := context.WithValue(r.Context(), secureCookieContextKey, value)
-		ctx = context.WithValue(ctx, secureCookieInstanceKey, sc)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+	key, err := hex.DecodeString(cfg.HexKey)
+	if err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, base.MiddlewareError{
+					Middleware: "SecureCookie",
+					Err:        fmt.Errorf("failed to decode hex key: %w", err),
+					StatusCode: 500,
+				}, "SecureCookie")
+			}
+		}
+	}
+	if len(key) != 32 {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, base.MiddlewareError{
+					Middleware: "SecureCookie",
+					Err:        errors.New("key must be 32 bytes (AES-256)"),
+					StatusCode: 500,
+				}, "SecureCookie")
+			}
+		}
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, base.MiddlewareError{
+					Middleware: "SecureCookie",
+					Err:        fmt.Errorf("failed to create cipher block: %w", err),
+					StatusCode: 500,
+				}, "SecureCookie")
+			}
+		}
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, base.MiddlewareError{
+					Middleware: "SecureCookie",
+					Err:        fmt.Errorf("failed to create GCM: %w", err),
+					StatusCode: 500,
+				}, "SecureCookie")
+			}
+		}
+	}
+	sc := &SecureCookie{
+		gcm:        gcm,
+		cookieName: cfg.CookieName,
+		cookiePath: cfg.CookiePath,
+		cookieTTL:  cfg.CookieTTL,
+		secure:     cfg.Secure,
+		sameSite:   cfg.SameSite,
+		httpOnly:   cfg.HttpOnly,
+	}
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
+				next(c)
+				return
+			}
+			cookie, err := c.Request.Cookie(sc.cookieName)
+			var value map[string]string
+			if err == nil {
+				value, err = sc.decrypt(cookie.Value)
+				if err != nil {
+					logger := cfg.Logger
+					if logger == nil {
+						logger = base.DefaultLogger("SecureCookie")
+					}
+					logger.Printf("Failed to decrypt cookie '%s': %v", sc.cookieName, err)
+					http.SetCookie(c.Writer, sc.createExpiredCookie())
+				}
+			}
+			c.Set(string(secureCookieContextKey), value)
+			c.Set(string(secureCookieInstanceKey), sc)
+			next(c)
+		}
+	}
+}
+func Default(hexKey, cookieName string) func(next context.HandlerFunc) context.HandlerFunc {
+	return New(Config{
+		HexKey:     hexKey,
+		CookieName: cookieName,
 	})
 }
-
 func (sc *SecureCookie) encrypt(value map[string]string) (string, error) {
 	plaintext, err := json.Marshal(value)
 	if err != nil {
 		return "", err
 	}
-
 	nonce := make([]byte, sc.gcm.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return "", err
 	}
-
 	ciphertext := sc.gcm.Seal(nonce, nonce, plaintext, nil)
 	return base64.URLEncoding.EncodeToString(ciphertext), nil
 }
-
 func (sc *SecureCookie) decrypt(encodedValue string) (map[string]string, error) {
 	ciphertext, err := base64.URLEncoding.DecodeString(encodedValue)
 	if err != nil {
 		return nil, ErrInvalidValue
 	}
-
 	nonceSize := sc.gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
 		return nil, ErrInvalidValue
 	}
-
 	nonce, encryptedMessage := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := sc.gcm.Open(nil, nonce, encryptedMessage, nil)
 	if err != nil {
-		// the error indicates the cookie was tampered with or used a different key.
 		return nil, ErrInvalidValue
 	}
-
 	var value map[string]string
 	if err := json.Unmarshal(plaintext, &value); err != nil {
 		return nil, ErrInvalidValue
 	}
-
 	return value, nil
 }
-
 func (sc *SecureCookie) createCookie(encodedValue string) *http.Cookie {
 	return &http.Cookie{
 		Name:     sc.cookieName,
 		Value:    encodedValue,
 		Path:     sc.cookiePath,
 		Expires:  time.Now().Add(sc.cookieTTL),
-		HttpOnly: true,
-		Secure:   true, // Always true for secure cookies !!!
-		SameSite: http.SameSiteLaxMode,
+		HttpOnly: sc.httpOnly,
+		Secure:   sc.secure,
+		SameSite: sc.sameSite,
 	}
 }
-
 func (sc *SecureCookie) createExpiredCookie() *http.Cookie {
 	return &http.Cookie{
 		Name:     sc.cookieName,
 		Value:    "",
 		Path:     sc.cookiePath,
-		MaxAge:   -1, // We shgal intruct the browser to delete immediately !!!!!
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		HttpOnly: sc.httpOnly,
+		Secure:   sc.secure,
+		SameSite: sc.sameSite,
 	}
 }
-
-// Helpers
-func Set(r *http.Request, w http.ResponseWriter, value map[string]string) error {
-	sc, ok := r.Context().Value(secureCookieInstanceKey).(*SecureCookie)
-	if !ok {
+func Set(c *context.Context, value map[string]string) error {
+	sc, exists := c.Get(string(secureCookieInstanceKey))
+	if !exists {
 		return errors.New("securecookie: middleware not installed")
 	}
-
-	encoded, err := sc.encrypt(value)
+	secureCookie, ok := sc.(*SecureCookie)
+	if !ok {
+		return errors.New("securecookie: invalid instance in context")
+	}
+	encoded, err := secureCookie.encrypt(value)
 	if err != nil {
 		return err
 	}
-	http.SetCookie(w, sc.createCookie(encoded))
+	http.SetCookie(c.Writer, secureCookie.createCookie(encoded))
 	return nil
 }
-
-func Get(r *http.Request) (map[string]string, error) {
-	value, ok := r.Context().Value(secureCookieContextKey).(map[string]string)
-	if !ok || value == nil {
+func Get(c *context.Context) (map[string]string, error) {
+	value, exists := c.Get(string(secureCookieContextKey))
+	if !exists {
 		return nil, ErrValueNotFound
 	}
-	return value, nil
+	mapValue, ok := value.(map[string]string)
+	if !ok || mapValue == nil {
+		return nil, ErrValueNotFound
+	}
+	return mapValue, nil
 }
-
-func Clear(r *http.Request, w http.ResponseWriter) error {
-	sc, ok := r.Context().Value(secureCookieInstanceKey).(*SecureCookie)
-	if !ok {
+func Clear(c *context.Context) error {
+	sc, exists := c.Get(string(secureCookieInstanceKey))
+	if !exists {
 		return errors.New("securecookie: middleware not installed")
 	}
-	http.SetCookie(w, sc.createExpiredCookie())
+	secureCookie, ok := sc.(*SecureCookie)
+	if !ok {
+		return errors.New("securecookie: invalid instance in context")
+	}
+	http.SetCookie(c.Writer, secureCookie.createExpiredCookie())
 	return nil
 }

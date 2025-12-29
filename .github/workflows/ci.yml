@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  # pull-requests: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+      - name: Run go vet
+        run: go vet ./...
+      - name: Check formatting with gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not formatted:"
+            echo "$unformatted"
+            echo "Please run 'gofmt -w .' to format your code"
+            exit 1
+          fi
+      - name: Run go mod tidy check
+        run: |
+          go mod tidy
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "go mod tidy made changes. Please run 'go mod tidy' locally and commit the changes."
+            exit 1
+          fi
+
+  test:
+    name: Test (Go ${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ["1.24", "1.25"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Test with Race Detector
+        run: go test -v -race ./...
+
+      - name: Test CLI
+        run: |
+          chmod +x test_cli.sh
+          ./test_cli.sh
+
+      - name: Stress & Memory Tests
+        run: go test -v ./tests/stress/...
+
+      - name: Benchmarks
+        run: go test -bench=. ./tests/bench/...

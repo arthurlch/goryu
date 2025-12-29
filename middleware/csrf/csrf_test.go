@@ -1,84 +1,125 @@
-package middleware
+package csrf_test
 
 import (
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/csrf"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
+func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
+	rr := httptest.NewRecorder()
+	return context.NewContext(rr, req), rr
+}
 func TestCSRFMiddleware(t *testing.T) {
-	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	handler := CSRFMiddleware(dummyHandler)
-
-	t.Run("get request receives csrf token", func(t *testing.T) {
+	t.Run("SafeMethodGeneratesToken", func(t *testing.T) {
+		middleware := csrf.New(csrf.Config{})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "OK")
+		}
 		req := httptest.NewRequest("GET", "/", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
-
-		tokenHeader := rr.Header().Get(csrfTokenHeader)
-		if tokenHeader == "" {
-			t.Error("X-CSRF-Token header not set on GET request")
+		token := rr.Header().Get(csrf.DefaultCSRFTokenHeader)
+		if token == "" {
+			t.Error("Expected CSRF token header to be set")
 		}
-
-		cookie := rr.Result().Header.Get("Set-Cookie")
-		if !strings.Contains(cookie, csrfTokenCookie) {
-			t.Error("csrf-token cookie not set on GET request")
+		cookies := rr.Result().Cookies()
+		found := false
+		for _, cookie := range cookies {
+			if cookie.Name == csrf.DefaultCSRFTokenCookie && cookie.Value == token {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Expected CSRF token cookie to be set")
 		}
 	})
-
-	t.Run("post request with valid token succeeds", func(t *testing.T) {
+	t.Run("UnsafeMethodRequiresToken", func(t *testing.T) {
+		middleware := csrf.New(csrf.Config{})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "OK")
+		}
+		req := httptest.NewRequest("POST", "/", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("Expected status 403, got %d", rr.Code)
+		}
+	})
+	t.Run("UnsafeMethodWithValidToken", func(t *testing.T) {
+		middleware := csrf.New(csrf.Config{})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "OK")
+		}
 		getReq := httptest.NewRequest("GET", "/", nil)
-		getRR := httptest.NewRecorder()
-		handler.ServeHTTP(getRR, getReq)
-
-		token := getRR.Header().Get(csrfTokenHeader)
-		cookie := getRR.Result().Cookies()[0]
-
+		getCtx, getResp := newTestContext(getReq)
+		middleware(handler)(getCtx)
+		token := getResp.Header().Get(csrf.DefaultCSRFTokenHeader)
+		if token == "" {
+			t.Fatal("Failed to get CSRF token from GET request")
+		}
 		postReq := httptest.NewRequest("POST", "/", nil)
-		postReq.Header.Set(csrfTokenHeader, token)
-		postReq.AddCookie(cookie)
-		postRR := httptest.NewRecorder()
-		handler.ServeHTTP(postRR, postReq)
-
-		if status := postRR.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		postReq.Header.Set(csrf.DefaultCSRFTokenHeader, token)
+		postReq.AddCookie(&http.Cookie{
+			Name:  csrf.DefaultCSRFTokenCookie,
+			Value: token,
+		})
+		postCtx, postResp := newTestContext(postReq)
+		middleware(handler)(postCtx)
+		if postResp.Code != http.StatusOK {
+			t.Errorf("Expected status 200 with valid token, got %d", postResp.Code)
 		}
 	})
-
-	t.Run("post request with invalid token fails", func(t *testing.T) {
-		// Step 1: Get a valid cookie
-		getReq := httptest.NewRequest("GET", "/", nil)
-		getRR := httptest.NewRecorder()
-		handler.ServeHTTP(getRR, getReq)
-		cookie := getRR.Result().Cookies()[0]
-
-		postReq := httptest.NewRequest("POST", "/", nil)
-		postReq.Header.Set(csrfTokenHeader, "this-is-an-invalid-token")
-		postReq.AddCookie(cookie)
-		postRR := httptest.NewRecorder()
-		handler.ServeHTTP(postRR, postReq)
-
-		if status := postRR.Code; status != http.StatusForbidden {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusForbidden)
+	t.Run("TokenMismatchFails", func(t *testing.T) {
+		middleware := csrf.New(csrf.Config{})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "OK")
+		}
+		req := httptest.NewRequest("POST", "/", nil)
+		req.Header.Set(csrf.DefaultCSRFTokenHeader, "header-token")
+		req.AddCookie(&http.Cookie{
+			Name:  csrf.DefaultCSRFTokenCookie,
+			Value: "cookie-token",
+		})
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("Expected status 403 with token mismatch, got %d", rr.Code)
 		}
 	})
-
-	t.Run("post request with no token header fails", func(t *testing.T) {
-		postReq := httptest.NewRequest("POST", "/", nil)
-		postRR := httptest.NewRecorder()
-		handler.ServeHTTP(postRR, postReq)
-
-		if status := postRR.Code; status != http.StatusForbidden {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusForbidden)
+	t.Run("CustomConfiguration", func(t *testing.T) {
+		config := csrf.Config{
+			TokenHeader: "X-Custom-Token",
+			TokenCookie: "custom-token",
+			SafeMethods: []string{"GET", "HEAD"},
+		}
+		middleware := csrf.New(config)
+		handler := func(c *context.Context) {
+			c.Text(http.StatusOK, "OK")
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		token := rr.Header().Get("X-Custom-Token")
+		if token == "" {
+			t.Error("Expected custom CSRF token header to be set")
+		}
+		cookies := rr.Result().Cookies()
+		found := false
+		for _, cookie := range cookies {
+			if cookie.Name == "custom-token" && cookie.Value == token {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Expected custom CSRF token cookie to be set")
 		}
 	})
 }

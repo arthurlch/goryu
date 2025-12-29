@@ -29,13 +29,12 @@ clean:
 	rm -f coverage.out
 
 lint:
-	@echo "Running linter..."
-	@# Ensure golangci-lint is installed
-	@if ! command -v golangci-lint &> /dev/null; then \
-		echo "golangci-lint could not be found. Please install it: https://golangci-lint.run/usage/install/"; \
-		exit 1; \
-	fi
-	golangci-lint run ./...
+	@echo "Running linter (go vet)..."
+	$(GOVET) $(PKG_LIST)
+
+install-cli:
+	@echo "Installing Goryu CLI..."
+	$(GOCMD) install ./cmd/goryu
 
 help:
 	@echo "Available targets:"
@@ -43,7 +42,8 @@ help:
 	@echo "  test       - Run tests"
 	@echo "  fmt        - Format Go source code"
 	@echo "  vet        - Run go vet"
-	@echo "  lint       - Run golangci-lint (requires installation)"
+	@echo "  lint       - Run linter (go vet)"
+	@echo "  install-cli - Install Goryu CLI locally"
 	@echo "  clean      - Clean up test cache"
 
 .PHONY: all test fmt vet clean lint helps

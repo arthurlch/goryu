@@ -1,7 +1,9 @@
-package middleware
+package expvar_test
 
 import (
 	"expvar"
+	context "github.com/arthurlch/goryu/goryuctx"
+	expvarMW "github.com/arthurlch/goryu/middleware/expvar"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,49 +11,88 @@ import (
 	"testing"
 )
 
+func newTestContext(req *http.Request) (*context.Context, *httptest.ResponseRecorder) {
+	rr := httptest.NewRecorder()
+	return context.NewContext(rr, req), rr
+}
 func TestExpvarMiddleware(t *testing.T) {
-	requestCounter := expvar.NewInt("test_requests")
-	requestCounter.Set(42)
-
-	debugPath := "/debug/metrics"
-
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		if _, err := w.Write([]byte("Not a debug path")); err != nil {
-			t.Fatalf("Failed to write response in dummy handler: %v", err)
+	testCounter := expvar.NewInt("test_requests")
+	testCounter.Set(42)
+	t.Run("DefaultPath", func(t *testing.T) {
+		middleware := expvarMW.New(expvarMW.Config{})
+		handler := func(c *context.Context) {
+			c.Text(http.StatusNotFound, "Not found")
 		}
-	})
-
-	expvarWrapper := ExpvarMiddleware(debugPath)
-	handler := expvarWrapper(nextHandler)
-
-	t.Run("serves expvar on matching path", func(t *testing.T) {
-		req := httptest.NewRequest("GET", debugPath, nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		req := httptest.NewRequest("GET", "/debug/vars", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
-
 		body, _ := io.ReadAll(rr.Body)
 		if !strings.Contains(string(body), `"test_requests": 42`) {
-			t.Errorf("expvar body does not contain expected metric. Body: %s", string(body))
+			t.Errorf("Expvar body does not contain expected metric. Body: %s", string(body))
 		}
 	})
-
-	t.Run("passes through on non-matching path", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/some/other/path", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-
-		if status := rr.Code; status != http.StatusNotFound {
-			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNotFound)
+	t.Run("CustomPath", func(t *testing.T) {
+		config := expvarMW.Config{Path: "/debug/metrics"}
+		middleware := expvarMW.New(config)
+		handler := func(c *context.Context) {
+			c.Text(http.StatusNotFound, "Not found")
 		}
-
+		req := httptest.NewRequest("GET", "/debug/metrics", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
 		body, _ := io.ReadAll(rr.Body)
-		if string(body) != "Not a debug path" {
-			t.Errorf("handler did not call the next handler correctly. Body: %s", string(body))
+		if !strings.Contains(string(body), `"test_requests": 42`) {
+			t.Errorf("Expvar body does not contain expected metric. Body: %s", string(body))
+		}
+	})
+	t.Run("NonMatchingPath", func(t *testing.T) {
+		config := expvarMW.Config{Path: "/debug/vars"}
+		middleware := expvarMW.New(config)
+		handler := func(c *context.Context) {
+			c.Text(http.StatusNotFound, "Not found")
+		}
+		req := httptest.NewRequest("GET", "/some/other/path", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404, got %d", rr.Code)
+		}
+		if rr.Body.String() != "Not found" {
+			t.Errorf("Expected 'Not found', got %s", rr.Body.String())
+		}
+	})
+	t.Run("WithPathHelper", func(t *testing.T) {
+		middleware := expvarMW.WithPath("/custom-debug")
+		handler := func(c *context.Context) {
+			c.Text(http.StatusNotFound, "Not found")
+		}
+		req := httptest.NewRequest("GET", "/custom-debug", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
+		}
+		body, _ := io.ReadAll(rr.Body)
+		if !strings.HasPrefix(string(body), "{") {
+			t.Errorf("Expected JSON response, got: %s", string(body))
+		}
+	})
+	t.Run("DefaultHelper", func(t *testing.T) {
+		middleware := expvarMW.Default()
+		handler := func(c *context.Context) {
+			c.Text(http.StatusNotFound, "Not found")
+		}
+		req := httptest.NewRequest("GET", "/debug/vars", nil)
+		ctx, rr := newTestContext(req)
+		middleware(handler)(ctx)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 	})
 }

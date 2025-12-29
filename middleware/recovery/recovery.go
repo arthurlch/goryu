@@ -2,59 +2,78 @@ package recovery
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"runtime/debug"
 
-	"github.com/arthurlch/goryu"
+	context "github.com/arthurlch/goryu/goryuctx"
+	"github.com/arthurlch/goryu/middleware/base"
 )
 
 type Config struct {
-	Next func(c *goryu.Context) bool
-
-	EnableStackTrace bool
+	base.BaseConfig
+	EnableStackTrace      bool
+	CustomRecoveryHandler func(c *context.Context, err interface{})
 }
 
-func New(config ...Config) goryu.Middleware {
-	var cfg Config
+func (c *Config) Configure(baseConfig *base.BaseConfig) {
+	c.BaseConfig = *baseConfig
+}
+func (c *Config) Validate() error {
+	if !c.EnableStackTrace {
+		c.EnableStackTrace = true
+	}
+	return nil
+}
+func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
+	cfg := Config{}
 	if len(config) > 0 {
 		cfg = config[0]
 	}
 
-	if !cfg.EnableStackTrace {
-		cfg.EnableStackTrace = true
+	if err := cfg.Validate(); err != nil {
+		return func(next context.HandlerFunc) context.HandlerFunc {
+			return func(c *context.Context) {
+				base.DefaultErrorHandler(c, err, "Recovery")
+			}
+		}
 	}
-
-	return func(next goryu.HandlerFunc) goryu.HandlerFunc {
-		return func(c *goryu.Context) {
-			if cfg.Next != nil && cfg.Next(c) {
+	return func(next context.HandlerFunc) context.HandlerFunc {
+		return func(c *context.Context) {
+			if cfg.Skip != nil && cfg.Skip(c) {
 				next(c)
 				return
 			}
-
 			defer func() {
 				if r := recover(); r != nil {
-					err, ok := r.(error)
+					panicErr, ok := r.(error)
 					if !ok {
-						err = fmt.Errorf("%v", r)
+						panicErr = fmt.Errorf("%v", r)
 					}
-
-					log.Printf("Panic recovered: %v", err)
+					if cfg.CustomRecoveryHandler != nil {
+						cfg.CustomRecoveryHandler(c, r)
+						return
+					}
+					logger := cfg.Logger
+					if logger == nil {
+						logger = base.DefaultLogger("Recovery")
+					}
+					logger.Printf("Panic recovered: %v", panicErr)
 					if cfg.EnableStackTrace {
-						log.Printf("Stack trace:\n%s", debug.Stack())
+						logger.Printf("Stack trace:\n%s", debug.Stack())
 					}
-
 					if c.Writer.Header().Get("Content-Type") == "" {
 						if jsonErr := c.JSON(http.StatusInternalServerError, map[string]string{
 							"error": "Internal Server Error",
 						}); jsonErr != nil {
-							log.Printf("recovery middleware: could not send error response: %v", jsonErr)
+							logger.Printf("recovery middleware: could not send error response: %v", jsonErr)
 						}
 					}
 				}
 			}()
-
 			next(c)
 		}
 	}
+}
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New()
 }
