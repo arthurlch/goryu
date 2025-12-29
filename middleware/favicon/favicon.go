@@ -114,9 +114,14 @@ func loadFaviconFile(filePath string, cache *faviconCache) error {
 	if err != nil {
 		return err
 	}
-	contentType := mime.TypeByExtension(filepath.Ext(filePath))
-	if contentType == "" {
+	ext := filepath.Ext(filePath)
+	contentType := mime.TypeByExtension(ext)
+	
+	// Normalize .ico MIME type for consistency
+	if ext == ".ico" && (contentType == "image/vnd.microsoft.icon" || contentType == "image/x-icon" || contentType == "") {
 		contentType = "image/x-icon"
+	} else if contentType == "" {
+		contentType = "application/octet-stream"
 	}
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
