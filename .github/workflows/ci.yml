@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
           cache: false
       - name: Run go vet
         run: go vet ./...
@@ -45,26 +45,26 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24', '1.25']
+        go-version: ["1.24", "1.25"]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
 
-    - name: Test with Race Detector
-      run: go test -v -race ./...
+      - name: Test with Race Detector
+        run: go test -v -race ./...
 
-    - name: Test CLI
-      run: |
-        chmod +x test_cli.sh
-        ./test_cli.sh
+      - name: Test CLI
+        run: |
+          chmod +x test_cli.sh
+          ./test_cli.sh
 
-    - name: Stress & Memory Tests
-      run: go test -v ./tests/stress/...
+      - name: Stress & Memory Tests
+        run: go test -v ./tests/stress/...
 
-    - name: Benchmarks
-      run: go test -bench=. ./tests/bench/...
+      - name: Benchmarks
+        run: go test -bench=. ./tests/bench/...

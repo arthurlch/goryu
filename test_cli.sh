@@ -26,8 +26,8 @@ echo "🚀 Starting Goryu CLI Test Suite..."
 TEST_DIR=$(mktemp -d)
 echo "📂 Using temp directory: $TEST_DIR"
 
-GO_BIN="/opt/homebrew/bin/go"
-export PATH="/opt/homebrew/bin:$PATH"
+# Use go from PATH (works in CI and local environments)
+GO_BIN="go"
 
 echo "🔨 Building goryu binary..."
 if $GO_BIN build -o goryu ./cmd/goryu; then
