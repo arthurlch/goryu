@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	context "github.com/arthurlch/goryu/goryuctx"
+	goryuctx "github.com/arthurlch/goryu/goryuctx"
 )
 
 type EventType string
@@ -108,6 +109,13 @@ type Monitor struct {
 	// Optimization: Async event processing
 	eventsChan chan Event
 	done       chan struct{}
+
+	// Robust shutdown mechanism
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup // Tracks main goroutines
+	handlerWg    sync.WaitGroup // Tracks event handler goroutines
+	shutdownOnce sync.Once      // Ensures shutdown happens only once
 }
 
 type Config struct {
@@ -148,6 +156,8 @@ func New(config ...Config) *Monitor {
 		}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	m := &Monitor{
 		events:        make([]Event, 0, cfg.MaxEvents),
 		maxEvents:     cfg.MaxEvents,
@@ -165,17 +175,31 @@ func New(config ...Config) *Monitor {
 		// Initialize async channels
 		eventsChan: make(chan Event, cfg.EventBufferSize),
 		done:       make(chan struct{}),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
 	// Start processing worker
-	go m.processEventsWorker()
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.processEventsWorker()
+	}()
 
 	if cfg.MetricsEnabled {
-		go m.updateMetrics()
+		m.wg.Add(1)
+		go func() {
+			defer m.wg.Done()
+			m.updateMetrics()
+		}()
 	}
 
 	if cfg.HealthInterval > 0 {
-		go m.runHealthChecks(cfg.HealthInterval)
+		m.wg.Add(1)
+		go func() {
+			defer m.wg.Done()
+			m.runHealthChecks(cfg.HealthInterval)
+		}()
 	}
 
 	m.EmitEvent(EventStartup, "Monitoring system started", nil)
@@ -183,34 +207,113 @@ func New(config ...Config) *Monitor {
 }
 
 func (m *Monitor) processEventsWorker() {
-	defer close(m.done) // Signal completion when channel is closed and drained
-	for event := range m.eventsChan {
-		m.mu.Lock()
-		if len(m.events) >= m.maxEvents {
-			m.events = m.events[1:]
-		}
-		m.events = append(m.events, event)
-		m.mu.Unlock()
+	for {
+		select {
+		case <-m.ctx.Done():
+			// Context cancelled, drain remaining events before exiting
+			m.drainEvents()
+			return
+		case event, ok := <-m.eventsChan:
+			if !ok {
+				// Channel closed (shouldn't happen with new design)
+				return
+			}
 
-		m.mu.RLock()
-		handlers := make([]func(Event), len(m.eventHandlers))
-		copy(handlers, m.eventHandlers)
-		m.mu.RUnlock()
+			// Check for shutdown signal
+			if event.Type == "shutdown_signal" {
+				// Drain remaining events before exiting
+				m.drainEvents()
+				return
+			}
 
-		// Executing handlers is also moved off the request path
-		for _, handler := range handlers {
-			// Still launch goroutines for handlers to prevent one blocking the worker
-			go m.safeExecuteEventHandler(handler, event)
+			m.processEvent(event)
 		}
+	}
+}
+
+func (m *Monitor) drainEvents() {
+	// Process any remaining events in the channel
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		select {
+		case event, ok := <-m.eventsChan:
+			if !ok || event.Type == "shutdown_signal" {
+				return
+			}
+			m.processEvent(event)
+		default:
+			// No more events to process
+			return
+		}
+	}
+}
+
+func (m *Monitor) processEvent(event Event) {
+	m.mu.Lock()
+	if len(m.events) >= m.maxEvents {
+		m.events = m.events[1:]
+	}
+	m.events = append(m.events, event)
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	handlers := make([]func(Event), len(m.eventHandlers))
+	copy(handlers, m.eventHandlers)
+	m.mu.RUnlock()
+
+	// Executing handlers is also moved off the request path
+	for _, handler := range handlers {
+		// Still launch goroutines for handlers to prevent one blocking the worker
+		m.handlerWg.Add(1)
+		go func(h func(Event), e Event) {
+			defer m.handlerWg.Done()
+			m.safeExecuteEventHandler(h, e)
+		}(handler, event)
 	}
 }
 
 // Close gracefully shuts down the monitor
 func (m *Monitor) Close() {
-	if atomic.CompareAndSwapInt32(&m.closed, 0, 1) {
-		close(m.eventsChan)
-	}
-	// Do not close done here, let worker close it
+	m.shutdownOnce.Do(func() {
+		// Phase 1: Signal shutdown - stop accepting new events
+		atomic.StoreInt32(&m.closed, 1)
+
+		// Phase 2: Wait a moment for any in-flight EmitEvent calls
+		time.Sleep(10 * time.Millisecond)
+
+		// Phase 3: Signal processEventsWorker to drain and exit
+		// Send a special nil event to signal shutdown
+		select {
+		case m.eventsChan <- Event{Type: "shutdown_signal"}:
+			// Signal sent
+		case <-time.After(100 * time.Millisecond):
+			// Timeout - force shutdown
+		}
+
+		// Phase 4: Cancel context to signal all other goroutines
+		m.cancel()
+
+		// Phase 5: Wait for all main goroutines to finish
+		m.wg.Wait()
+
+		// Phase 6: Wait for all event handler goroutines to finish (with timeout)
+		handlersDone := make(chan struct{})
+		go func() {
+			m.handlerWg.Wait()
+			close(handlersDone)
+		}()
+
+		select {
+		case <-handlersDone:
+			// All handlers finished
+		case <-time.After(500 * time.Millisecond):
+			// Timeout waiting for handlers
+			log.Printf("Warning: Timeout waiting for event handlers to complete")
+		}
+
+		// Phase 7: Close done channel to signal completion
+		close(m.done)
+	})
 }
 
 // Wait blocks until the monitor worker has finished processing events
@@ -228,12 +331,15 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 		if r := recover(); r != nil {
 			log.Printf("Event handler panicked: %v", r)
 
-			// Emit error event (EmitEvent will check if monitor is closed)
-			data := map[string]interface{}{
-				"panic_value":   fmt.Sprintf("%v", r),
-				"handler_error": true,
+			// Only emit error event if monitor is not closed
+			// to avoid race condition during shutdown
+			if atomic.LoadInt32(&m.closed) == 0 {
+				data := map[string]interface{}{
+					"panic_value":   fmt.Sprintf("%v", r),
+					"handler_error": true,
+				}
+				m.EmitEvent(EventError, "Event handler panicked", data)
 			}
-			m.EmitEvent(EventError, "Event handler panicked", data)
 		}
 	}()
 
@@ -241,9 +347,14 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 }
 
 func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
-	// Don't execute if monitor is closed
-	if atomic.LoadInt32(&m.closed) != 0 {
+	// Don't execute if monitor is closed or context is done
+	select {
+	case <-m.ctx.Done():
 		return
+	default:
+		if atomic.LoadInt32(&m.closed) != 0 {
+			return
+		}
 	}
 
 	if !m.safeExecute {
@@ -268,14 +379,18 @@ func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
 			m.healthResults[name] = result
 			m.mu.Unlock()
 
-			data := map[string]interface{}{
-				"check_name":   name,
-				"status":       string(StatusUnhealthy),
-				"critical":     check.Critical,
-				"panic_value":  fmt.Sprintf("%v", r),
-				"health_error": true,
+			// Only emit error event if monitor is not closed
+			// to avoid race condition during shutdown
+			if atomic.LoadInt32(&m.closed) == 0 {
+				data := map[string]interface{}{
+					"check_name":   name,
+					"status":       string(StatusUnhealthy),
+					"critical":     check.Critical,
+					"panic_value":  fmt.Sprintf("%v", r),
+					"health_error": true,
+				}
+				m.EmitEvent(EventUnhealthy, fmt.Sprintf("Health check '%s' panicked: %v", name, r), data)
 			}
-			m.EmitEvent(EventUnhealthy, fmt.Sprintf("Health check '%s' panicked: %v", name, r), data)
 		}
 	}()
 
@@ -346,26 +461,30 @@ func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string
 		Data:      data,
 	}
 
-	// Use defer and recover to safely handle closed channel
-	defer func() {
-		if r := recover(); r != nil {
-			// Channel was closed, silently drop the event
-		}
-	}()
-
-	// Double-check closed state right before sending to minimize race window
-	if atomic.LoadInt32(&m.closed) != 0 {
-		return
-	}
+	// Try to send the event with a small timeout to balance between
+	// reliability and preventing indefinite blocking
+	timer := time.NewTimer(5 * time.Millisecond)
+	defer timer.Stop()
 
 	select {
+	case <-m.ctx.Done():
+		// Context cancelled, drop the event
+		return
 	case m.eventsChan <- event:
-		// Sent
-	default:
-		// Channel full, drop event to prevent blocking application
-		// Only log if monitor is not closed to avoid log spam during shutdown
-		if atomic.LoadInt32(&m.closed) == 0 {
-			log.Printf("Monitor event buffer full, dropping event: %s", message)
+		// Event sent successfully
+		return
+	case <-timer.C:
+		// Timeout reached, try once more with non-blocking send
+		select {
+		case m.eventsChan <- event:
+			// Event sent successfully on second try
+			return
+		default:
+			// Channel is still full, drop the event
+			// Only log if monitor is not closed to avoid log spam during shutdown
+			if atomic.LoadInt32(&m.closed) == 0 {
+				log.Printf("Monitor event buffer full, dropping event: %s", message)
+			}
 		}
 	}
 }
@@ -460,9 +579,9 @@ func (m *Monitor) AddEventHandler(handler func(Event)) {
 	m.eventHandlers = append(m.eventHandlers, handler)
 }
 
-func (m *Monitor) MiddlewareWrapper(name string, middleware context.Middleware) context.Middleware {
-	return func(next context.HandlerFunc) context.HandlerFunc {
-		return func(c *context.Context) {
+func (m *Monitor) MiddlewareWrapper(name string, middleware goryuctx.Middleware) goryuctx.Middleware {
+	return func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+		return func(c *goryuctx.Context) {
 			if !m.enabled {
 				middleware(next)(c)
 				return
@@ -523,9 +642,9 @@ func (rw *responseWrapper) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
-func (m *Monitor) Middleware() context.Middleware {
-	return func(next context.HandlerFunc) context.HandlerFunc {
-		return func(c *context.Context) {
+func (m *Monitor) Middleware() goryuctx.Middleware {
+	return func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+		return func(c *goryuctx.Context) {
 			if !m.enabled {
 				next(c)
 				return
@@ -614,8 +733,14 @@ func (m *Monitor) runHealthChecks(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		m.executeHealthChecks()
+	for {
+		select {
+		case <-m.ctx.Done():
+			// Context cancelled, exit
+			return
+		case <-ticker.C:
+			m.executeHealthChecks()
+		}
 	}
 }
 
@@ -637,7 +762,11 @@ func (m *Monitor) executeHealthChecks() {
 		if atomic.LoadInt32(&m.closed) != 0 {
 			return
 		}
-		go m.safeExecuteHealthCheck(name, check)
+		m.wg.Add(1)
+		go func(n string, c *HealthCheck) {
+			defer m.wg.Done()
+			m.safeExecuteHealthCheck(n, c)
+		}(name, check)
 	}
 }
 
@@ -645,19 +774,25 @@ func (m *Monitor) updateMetrics() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		var memStats runtime.MemStats
-		runtime.ReadMemStats(&memStats)
+	for {
+		select {
+		case <-m.ctx.Done():
+			// Context cancelled, exit
+			return
+		case <-ticker.C:
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
 
-		m.mu.Lock()
-		m.metrics.MemoryUsage = memStats.Alloc
-		m.metrics.GoRoutines = runtime.NumGoroutine()
-		m.mu.Unlock()
+			m.mu.Lock()
+			m.metrics.MemoryUsage = memStats.Alloc
+			m.metrics.GoRoutines = runtime.NumGoroutine()
+			m.mu.Unlock()
+		}
 	}
 }
 
-func (m *Monitor) HealthHandler() context.HandlerFunc {
-	return func(c *context.Context) {
+func (m *Monitor) HealthHandler() goryuctx.HandlerFunc {
+	return func(c *goryuctx.Context) {
 		status := m.GetHealthStatus()
 		results := m.GetHealthResults()
 
@@ -678,15 +813,15 @@ func (m *Monitor) HealthHandler() context.HandlerFunc {
 	}
 }
 
-func (m *Monitor) MetricsHandler() context.HandlerFunc {
-	return func(c *context.Context) {
+func (m *Monitor) MetricsHandler() goryuctx.HandlerFunc {
+	return func(c *goryuctx.Context) {
 		metrics := m.GetMetrics()
 		_ = c.JSON(http.StatusOK, metrics)
 	}
 }
 
-func (m *Monitor) EventsHandler() context.HandlerFunc {
-	return func(c *context.Context) {
+func (m *Monitor) EventsHandler() goryuctx.HandlerFunc {
+	return func(c *goryuctx.Context) {
 		limit := 100
 		if l := c.Query("limit"); l != "" {
 			if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
