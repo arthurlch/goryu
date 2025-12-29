@@ -19,6 +19,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/structlog"
 )
 
@@ -28,14 +29,14 @@ func main() {
     // Use default configuration (JSON output to stdout)
     app.Use(structlog.Default())
 
-    app.GET("/", func(c *goryu.Context) error {
+    app.GET("/", func(c *goryuctx.Context) {
         // Log with correlation ID
         structlog.LogInfo(c, "handling_request", "user_id", "123")
         
-        return c.JSON(200, map[string]string{"status": "ok"})
+        c.JSON(200, map[string]string{"status": "ok"})
     })
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 
@@ -50,7 +51,7 @@ logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 
 app.Use(structlog.New(structlog.Config{
     Logger: logger,
-    CustomFields: func(c *goryu.Context) map[string]any {
+    CustomFields: func(c *goryuctx.Context) map[string]any {
         return map[string]any{
             "tenant_id": c.GetHeader("X-Tenant-ID"),
         }

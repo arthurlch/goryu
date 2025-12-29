@@ -559,17 +559,17 @@ func main() {
     }
     
     // Configure security headers
-    app.Use(func(c *goryu.Context) error {
+    app.Use(func(c *goryu.Context) {
         if cfg.Security.ContentTypeNosniff {
-            c.Set("X-Content-Type-Options", "nosniff")
+            c.SetHeader("X-Content-Type-Options", "nosniff")
         }
         if cfg.Security.XFrameOptions != "" {
-            c.Set("X-Frame-Options", cfg.Security.XFrameOptions)
+            c.SetHeader("X-Frame-Options", cfg.Security.XFrameOptions)
         }
         if cfg.Security.XSSProtection != "" {
-            c.Set("X-XSS-Protection", cfg.Security.XSSProtection)
+            c.SetHeader("X-XSS-Protection", cfg.Security.XSSProtection)
         }
-        return c.Next()
+        c.Next()
     })
     
     // Start with TLS if configured

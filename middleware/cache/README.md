@@ -22,6 +22,7 @@ package main
 import (
     "time"
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/cache"
 )
 
@@ -31,12 +32,12 @@ func main() {
     // Default configuration (5 min TTL, 1000 entries, 50MB max)
     app.Use(cache.Default())
 
-    app.GET("/slow-data", func(c *goryu.Context) error {
+    app.GET("/slow-data", func(c *goryuctx.Context) {
         time.Sleep(2 * time.Second) // Simulate slow work
-        return c.JSON(200, map[string]string{"data": "cached"})
+        c.JSON(200, map[string]string{"data": "cached"})
     })
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 
@@ -50,7 +51,7 @@ app.Use(cache.New(cache.Config{
     MaxSize:         5000,       // Max 5000 entries
     MaxMemory:       100 << 20,  // Max 100MB
     CleanupInterval: 1 * time.Minute,
-    KeyGenerator: func(c *goryu.Context) string {
+    KeyGenerator: func(c *goryuctx.Context) string {
         // Cache by URL and a custom header
         return c.Request.URL.Path + "|" + c.GetHeader("X-Tenant-ID")
     },

@@ -38,16 +38,16 @@ func main() {
         Expiration: 24 * time.Hour,
     }))
 
-    app.GET("/login", func(c *goryu.Context) error {
+    app.GET("/login", func(c *goryuctx.Context) {
         sess, _ := session.Get(c)
         sess.Set("user_id", "123")
-        return c.String(200, "Logged in")
+        c.Status(200).String("Logged in")
     })
 
-    app.GET("/profile", func(c *goryu.Context) error {
+    app.GET("/profile", func(c *goryuctx.Context) {
         sess, _ := session.Get(c)
         userID := sess.Get("user_id")
-        return c.String(200, "User ID: " + userID.(string))
+        c.Status(200).String("User ID: " + userID.(string))
     })
 
     app.Run(":8080")
@@ -59,17 +59,18 @@ func main() {
 To prevent Session Fixation attacks, regenerate the session ID after privilege changes (e.g., login):
 
 ```go
-app.POST("/login", func(c *goryu.Context) error {
+app.POST("/login", func(c *goryuctx.Context) {
     // ... verify credentials ...
     
     // Regenerate session ID
     if err := session.Regenerate(c); err != nil {
-        return err
+        c.Status(500).String("Failed to regenerate session")
+        return
     }
     
     sess, _ := session.Get(c)
     sess.Set("user_id", user.ID)
-    return c.String(200, "Logged in securely")
+    c.Status(200).String("Logged in securely")
 })
 ```
 

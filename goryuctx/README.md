@@ -21,7 +21,7 @@ Unlike standard `context.Context` or other framework contexts, Goryu's Context o
 ## 🚀 Quick Start
 
 ```go
-func HandleLogin(c *context.Context) {
+func HandleLogin(c *goryuctx.Context) {
     // Fluent chaining example
     c.Status(200).
       Header("X-App-Version", "1.0").
@@ -105,10 +105,13 @@ clientIP := c.RemoteIP()
 Send responses in various formats.
 
 ```go
-c.JSON(200, data)
-c.Text(200, "Hello World")
-c.HTML(200, "<h1>Hello</h1>")
-c.XML(200, "<root>Hello</root>")
+// All methods return error for proper error handling
+err := c.JSON(200, data)
+err = c.Text(200, "Hello World")
+
+// HTML and XML are available via fluent API
+c.FluentHTML(200, "<h1>Hello</h1>")
+c.FluentXML(200, "<root>Hello</root>")
 ```
 
 ### 🌊 Fluent API

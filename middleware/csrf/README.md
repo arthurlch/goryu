@@ -28,8 +28,8 @@ func main() {
     // Apply globally
     app.Use(csrf.Default())
 
-    app.POST("/submit", func(c *goryu.Context) error {
-        return c.String(200, "CSRF check passed!")
+    app.POST("/submit", func(c *goryuctx.Context) {
+        c.Status(200).String("CSRF check passed!")
     })
 
     app.Run(":8080")

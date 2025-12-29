@@ -38,15 +38,15 @@ app.Use(errors.NewWithConfig(errors.Config{
 In your handlers, simply return an error:
 
 ```go
-app.GET("/users/:id", func(c *goryu.Context) error {
+app.GET("/users/:id", func(c *goryuctx.Context) {
     user, err := findUser(c.Param("id"))
     if err != nil {
         // Return a 404 error
-        return errors.NewError("USER_NOT_FOUND", "User not found").
-            Status(http.StatusNotFound).
-            Build()
+        c.Status(http.StatusNotFound).JSON(errors.NewError("USER_NOT_FOUND", "User not found").
+            Build())
+        return
     }
-    return c.JSON(200, user)
+    c.JSON(200, user)
 })
 ```
 

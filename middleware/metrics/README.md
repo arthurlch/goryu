@@ -25,6 +25,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/metrics"
     "github.com/prometheus/client_golang/prometheus"
 )
@@ -45,11 +46,11 @@ func main() {
         Prefix:  "myapp", // Metric name prefix
     }))
 
-    app.GET("/", func(c *goryu.Context) error {
-        return c.String(200, "Hello Metrics")
+    app.GET("/", func(c *goryuctx.Context) {
+        c.Status(200).String("Hello Metrics")
     })
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 
@@ -61,7 +62,7 @@ app.Use(metrics.New(metrics.Config{
     Prefix:          "api",
     RecordBody:      true,  // Track request/response sizes
     GroupStatusCode: true,  // Use "2xx", "5xx" instead of "200", "500"
-    CustomTags: func(c *goryu.Context) map[string]string {
+    CustomTags: func(c *goryuctx.Context) map[string]string {
         return map[string]string{
             "region": os.Getenv("REGION"),
         }

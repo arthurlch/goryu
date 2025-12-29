@@ -18,8 +18,8 @@ A Go web framework that gives you the productivity of Rails/Phoenix with the spe
 ```go
 app := goryu.New()
 
-app.GET("/", func(c *goryu.Ctx) {
-    c.JSON(goryu.Map{"message": "Hello, World!"})
+app.GET("/", func(c *goryuctx.Context) {
+    c.JSON(goryuctx.Map{"message": "Hello, World!"})
 })
 
 app.Listen(":3000")
@@ -39,7 +39,7 @@ Because setting up a production Go service takes too long. You need:
 - Graceful shutdown ✓
 - Good project structure ✓
 - A powerful CLI  ✓
-- Scallfoldind 
+- Scaffolding 
 
 Goryu gives you all of this. No setup needed.
 
@@ -60,7 +60,7 @@ As fast as Gin. With 10x more features built-in.
 
 ```go
 // One context object. No request/response split.
-app.POST("/users", func(c *goryu.Ctx) {
+app.POST("/users", func(c *goryuctx.Context) {
     var user CreateUserRequest
     c.BodyParser(&user)  // Parses + validates
     
@@ -171,10 +171,10 @@ func main() {
     app.Listen(":8080")
 }
 
-func createProduct(c *goryu.Ctx) {
+func createProduct(c *goryuctx.Context) {
     var product Product
     if err := c.BodyParser(&product); err != nil {
-        c.Status(400).JSON(goryu.Map{"error": err.Error()})
+        c.Status(400).JSON(goryuctx.Map{"error": err.Error()})
         return
     }
     

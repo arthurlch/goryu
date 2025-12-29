@@ -18,6 +18,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/requestid"
 )
 
@@ -26,12 +27,16 @@ func main() {
 
     app.Use(requestid.Default())
 
-    app.GET("/", func(c *goryu.Context) error {
-        id := c.Get("requestid")
-        return c.String(200, "Request ID: "+id.(string))
+    app.GET("/", func(c *goryuctx.Context) {
+        id, exists := c.Get("requestid")
+        if exists {
+            c.Status(200).String("Request ID: "+id.(string))
+        } else {
+            c.Status(200).String("No request ID found")
+        }
     })
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 

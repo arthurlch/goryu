@@ -34,8 +34,8 @@ func main() {
         "admin": hash,
     }))
 
-    app.GET("/", func(c *goryu.Context) error {
-        return c.String(200, "Welcome Admin!")
+    app.GET("/", func(c *goryuctx.Context) {
+        c.Status(200).String("Welcome Admin!")
     })
 
     app.Run(":8080")

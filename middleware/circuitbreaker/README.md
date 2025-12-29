@@ -21,7 +21,9 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/circuitbreaker"
+    "time"
 )
 
 func main() {
@@ -34,12 +36,11 @@ func main() {
     })
 
     // Apply to a specific route
-    app.GET("/unreliable-service", middleware(func(c *goryu.Context) error {
+    app.GET("/unreliable-service", middleware(func(c *goryuctx.Context) {
         // ... call external service ...
-        return nil
     }))
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 

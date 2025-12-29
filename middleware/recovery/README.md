@@ -26,12 +26,12 @@ Customize the response or perform side effects (like reporting to Sentry):
 ```go
 app.Use(recovery.New(recovery.Config{
     EnableStackTrace: true,
-    CustomRecoveryHandler: func(c *goryu.Context, err interface{}) {
+    CustomRecoveryHandler: func(c *goryuctx.Context, err interface{}) {
         // Log to external service
         reportToSentry(err)
         
         // Send custom response
-        c.JSON(http.StatusInternalServerError, map[string]string{
+        c.Status(http.StatusInternalServerError).JSON(map[string]string{
             "error": "Unexpected error occurred. We have been notified.",
         })
     },

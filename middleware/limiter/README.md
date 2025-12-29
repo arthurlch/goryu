@@ -39,11 +39,11 @@ Rate limit by API key with a custom error response:
 app.Use(limiter.New(limiter.Config{
     Max:        1000,
     Expiration: 1 * time.Hour,
-    KeyGenerator: func(c *goryu.Context) string {
+    KeyGenerator: func(c *goryuctx.Context) string {
         return c.GetHeader("X-API-Key")
     },
-    LimitReached: func(c *goryu.Context) {
-        c.JSON(http.StatusTooManyRequests, map[string]string{
+    LimitReached: func(c *goryuctx.Context) {
+        c.Status(http.StatusTooManyRequests).JSON(map[string]string{
             "error": "Rate limit exceeded. Try again later.",
         })
     },

@@ -20,6 +20,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/tracing"
 )
 
@@ -37,17 +38,17 @@ func main() {
         SampleRate: 1.0, // Sample 100% of requests
     }))
 
-    app.GET("/", func(c *goryu.Context) error {
+    app.GET("/", func(c *goryuctx.Context) {
         // Get current span
         if span, ok := tracing.GetSpan(c); ok {
             span.AddEvent("processing_logic", map[string]interface{}{
                 "user_id": "123",
             })
         }
-        return c.String(200, "Hello Tracing")
+        c.Status(200).String("Hello Tracing")
     })
 
-    app.Run(":8080")
+    app.Listen(":8080")
 }
 ```
 

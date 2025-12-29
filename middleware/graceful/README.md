@@ -21,16 +21,18 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/graceful"
+    "time"
 )
 
 func main() {
     app := goryu.New()
 
-    app.GET("/", func(c *goryu.Context) error {
+    app.GET("/", func(c *goryuctx.Context) {
         // Simulate work
         time.Sleep(2 * time.Second)
-        return c.String(200, "Done")
+        c.Status(200).String("Done")
     })
 
     // Starts the server and handles shutdown signals
@@ -67,9 +69,9 @@ app.Use(graceful.New(graceful.Config{
     ContextKey: "active_conns",
 }))
 
-app.GET("/status", func(c *goryu.Context) error {
-    count := c.Get("active_conns")
-    return c.JSON(200, map[string]interface{}{
+app.GET("/status", func(c *goryuctx.Context) {
+    count, _ := c.Get("active_conns")
+    c.JSON(200, map[string]interface{}{
         "active_connections": count,
     })
 })
