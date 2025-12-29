@@ -228,15 +228,12 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 		if r := recover(); r != nil {
 			log.Printf("Event handler panicked: %v", r)
 
-			// Only emit error event if monitor is not closed
-			if atomic.LoadInt32(&m.closed) == 0 {
-				// Restore functionality: Emit error event
-				data := map[string]interface{}{
-					"panic_value":   fmt.Sprintf("%v", r),
-					"handler_error": true,
-				}
-				m.EmitEvent(EventError, "Event handler panicked", data)
+			// Emit error event (EmitEvent will check if monitor is closed)
+			data := map[string]interface{}{
+				"panic_value":   fmt.Sprintf("%v", r),
+				"handler_error": true,
 			}
+			m.EmitEvent(EventError, "Event handler panicked", data)
 		}
 	}()
 
@@ -322,6 +319,11 @@ func (m *Monitor) executeHealthCheck(name string, check *HealthCheck) {
 
 func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string]interface{}) {
 	if !m.enabled {
+		return
+	}
+
+	// Check if monitor is closed before attempting to send
+	if atomic.LoadInt32(&m.closed) != 0 {
 		return
 	}
 
