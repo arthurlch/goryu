@@ -241,6 +241,11 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 }
 
 func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
+	// Don't execute if monitor is closed
+	if atomic.LoadInt32(&m.closed) != 0 {
+		return
+	}
+
 	if !m.safeExecute {
 		m.executeHealthCheck(name, check)
 		return
@@ -278,6 +283,11 @@ func (m *Monitor) safeExecuteHealthCheck(name string, check *HealthCheck) {
 }
 
 func (m *Monitor) executeHealthCheck(name string, check *HealthCheck) {
+	// Don't execute if monitor is closed
+	if atomic.LoadInt32(&m.closed) != 0 {
+		return
+	}
+
 	start := time.Now()
 	status, err := check.Check()
 	duration := time.Since(start)
@@ -342,6 +352,11 @@ func (m *Monitor) EmitEvent(eventType EventType, message string, data map[string
 			// Channel was closed, silently drop the event
 		}
 	}()
+
+	// Double-check closed state right before sending to minimize race window
+	if atomic.LoadInt32(&m.closed) != 0 {
+		return
+	}
 
 	select {
 	case m.eventsChan <- event:
@@ -605,6 +620,11 @@ func (m *Monitor) runHealthChecks(interval time.Duration) {
 }
 
 func (m *Monitor) executeHealthChecks() {
+	// Don't execute health checks if monitor is closed
+	if atomic.LoadInt32(&m.closed) != 0 {
+		return
+	}
+
 	m.mu.RLock()
 	checks := make(map[string]*HealthCheck)
 	for k, v := range m.healthChecks {
@@ -613,6 +633,10 @@ func (m *Monitor) executeHealthChecks() {
 	m.mu.RUnlock()
 
 	for name, check := range checks {
+		// Check again before launching each goroutine
+		if atomic.LoadInt32(&m.closed) != 0 {
+			return
+		}
 		go m.safeExecuteHealthCheck(name, check)
 	}
 }
