@@ -228,12 +228,15 @@ func (m *Monitor) safeExecuteEventHandler(handler func(Event), event Event) {
 		if r := recover(); r != nil {
 			log.Printf("Event handler panicked: %v", r)
 
-			// Restore functionality: Emit error event
-			data := map[string]interface{}{
-				"panic_value":   fmt.Sprintf("%v", r),
-				"handler_error": true,
+			// Only emit error event if monitor is not closed
+			if atomic.LoadInt32(&m.closed) == 0 {
+				// Restore functionality: Emit error event
+				data := map[string]interface{}{
+					"panic_value":   fmt.Sprintf("%v", r),
+					"handler_error": true,
+				}
+				m.EmitEvent(EventError, "Event handler panicked", data)
 			}
-			m.EmitEvent(EventError, "Event handler panicked", data)
 		}
 	}()
 

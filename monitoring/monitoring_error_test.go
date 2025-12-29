@@ -285,8 +285,8 @@ func TestConcurrentEventHandlers(t *testing.T) {
 	// Additional buffer for handlers to finish processing
 	time.Sleep(100 * time.Millisecond)
 
-	for i, count := range handlerCallCount {
-		actualCount := atomic.LoadInt32(&count)
+	for i := range handlerCallCount {
+		actualCount := atomic.LoadInt32(&handlerCallCount[i])
 		if actualCount != numEvents {
 			t.Errorf("Handler %d was called %d times, expected %d", i, actualCount, numEvents)
 		}
