@@ -19,6 +19,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/csrf"
 )
 

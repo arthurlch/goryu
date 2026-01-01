@@ -20,6 +20,7 @@ package main
 import (
     "expvar"
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/expvar"
 )
 
@@ -31,7 +32,7 @@ func main() {
     
     app.Use(expvar.Default())
 
-    app.GET("/", func(c *goryu.Context) error {
+    app.GET("/", func(c *goryuctx.Context) error {
         requests.Add(1)
         return c.String(200, "Hello Expvar")
     })
@@ -62,8 +63,8 @@ The `expvar` endpoint exposes internal application details. In a production envi
 
 ```go
 // Example: Protect expvar with Basic Auth
-app.Use(func(next goryu.HandlerFunc) goryu.HandlerFunc {
-    return func(c *goryu.Context) {
+app.Use(func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+    return func(c *goryuctx.Context) {
         if c.Request.URL.Path == "/debug/vars" {
             // Apply auth check here
         }

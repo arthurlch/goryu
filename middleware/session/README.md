@@ -19,7 +19,9 @@ You need to provide a `Store` implementation. Here is a conceptual example:
 package main
 
 import (
+    "time"
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/session"
 )
 

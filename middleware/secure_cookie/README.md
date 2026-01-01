@@ -19,7 +19,8 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
-    "github.com/arthurlch/goryu/middleware/securecookie"
+    "github.com/arthurlch/goryu/goryuctx"
+    "github.com/arthurlch/goryu/middleware/secure_cookie"
 )
 
 func main() {
@@ -29,29 +30,29 @@ func main() {
     // Generate one using: openssl rand -hex 32
     secretKey := "a1b2c3d4e5f6..." 
 
-    app.Use(securecookie.Default(secretKey, "my-secure-session"))
+    app.Use(secure_cookie.Default(secretKey, "my-secure-session"))
 
-    app.GET("/login", func(c *goryu.Context) error {
+    app.GET("/login", func(c *goryuctx.Context) error {
         // Store sensitive data
-        err := securecookie.Set(c, map[string]string{
+        err := secure_cookie.Set(c, map[string]string{
             "user_id": "12345",
             "role":    "admin",
         })
         return c.String(200, "Logged in")
     })
 
-    app.GET("/profile", func(c *goryu.Context) error {
+    app.GET("/profile", func(c *goryuctx.Context) error {
         // Retrieve data
-        data, err := securecookie.Get(c)
+        data, err := secure_cookie.Get(c)
         if err != nil {
             return c.String(401, "Not logged in")
         }
         return c.JSON(200, data)
     })
 
-    app.GET("/logout", func(c *goryu.Context) error {
+    app.GET("/logout", func(c *goryuctx.Context) error {
         // Clear cookie
-        securecookie.Clear(c)
+        secure_cookie.Clear(c)
         return c.String(200, "Logged out")
     })
 
@@ -62,7 +63,7 @@ func main() {
 ### Advanced Configuration
 
 ```go
-app.Use(securecookie.New(securecookie.Config{
+app.Use(secure_cookie.New(secure_cookie.Config{
     HexKey:     "your-64-char-hex-key",
     CookieName: "session_id",
     CookiePath: "/",

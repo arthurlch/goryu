@@ -3,7 +3,7 @@
 Build a production-ready Todo API in 5 minutes using Goryu.
 
 ## Prerequisites
-- Go 1.24+
+- Go 1.21+
 - The Goryu CLI installed:
   ```bash
   go install github.com/arthurlch/goryu/cmd/goryu@latest
@@ -70,14 +70,16 @@ func (t *Todo) Validate() error {
 ## 4. The Handler
 Let's add a route to create a Todo. We'll use:
 - `BodyParser` for smart binding & validation.
-- `goryu.Map` for clean JSON responses.
+- `goryuctx.Map` for clean JSON responses.
 
 ```go
 // cmd/server/main.go
 
 import (
     "net/http"
+    "time"
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "todo-app/internal/models"
 )
 
@@ -87,13 +89,13 @@ func main() {
     // Simulated DB
     todos := []models.Todo{}
 
-    app.POST("/todos", func(c *goryu.Ctx) {
+    app.POST("/todos", func(c *goryuctx.Context) {
         var todo models.Todo
 
         // 🧠 Smart Binding + Auto-Validation
         if err := c.BodyParser(&todo); err != nil {
             // Returns 400 if JSON is invalid OR Validate() fails
-            c.Status(400).JSON(goryu.Map{"error": err.Error()})
+            c.Status(400).JSON(goryuctx.Map{"error": err.Error()})
             return
         }
 
@@ -101,8 +103,8 @@ func main() {
         todo.CreatedAt = time.Now()
         todos = append(todos, todo)
 
-        // ✨ Clean JSON with goryu.Map
-        c.Status(201).JSON(goryu.Map{
+        // ✨ Clean JSON with goryuctx.Map
+        c.Status(201).JSON(goryuctx.Map{
             "status": "created",
             "data":   todo,
         })
@@ -144,5 +146,5 @@ You'll see:
 ---
 
 ## Next Steps
-- [Middleware Guide](./middleware/README.md)
+- [Middleware Examples](./middleware/)
 - [CLI References](./CLI.md)

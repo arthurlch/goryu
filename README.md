@@ -39,17 +39,17 @@ Because setting up a production Go service takes too long. You need:
 - Graceful shutdown ✓
 - Good project structure ✓
 - A powerful CLI  ✓
-- Scaffolding 
+- Scaffolding ✓
 
 Goryu gives you all of this. No setup needed.
 
 ## Performance
 
 ```
-BenchmarkGoryu_JSON-8         1,245,364 ns/op    967.2 ns/op
-BenchmarkGin_JSON-8           1,232,113 ns/op    977.2 ns/op
-BenchmarkGoryu_Param-8        2,036,600 ns/op    593.3 ns/op
-BenchmarkGin_Param-8          2,015,674 ns/op    590.9 ns/op
+BenchmarkGoryu_JSON-8         1,245,364 ops/sec    967.2 ns/op
+BenchmarkGin_JSON-8           1,232,113 ops/sec    977.2 ns/op
+BenchmarkGoryu_Param-8        2,036,600 ops/sec    593.3 ns/op
+BenchmarkGin_Param-8          2,015,674 ops/sec    590.9 ns/op
 ```
 
 As fast as Gin. With 10x more features built-in.
@@ -103,8 +103,10 @@ http_requests_total{method="GET",path="/users",status="200"} 1543
 ### 4. Phoenix-style Resources
 
 ```go
-// One line for full CRUD
-app.Resource("/products", &ProductController{})
+// One line for full CRUD using the builder pattern
+app.Route().Group("/api", func(api *builder.SimpleGroupBuilder) {
+    api.Resource("/products", &ProductController{})
+})
 
 // GET    /products
 // GET    /products/:id
@@ -119,8 +121,8 @@ app.Resource("/products", &ProductController{})
 app.Use(
     logger.New(),           // Structured logging
     cors.Default(),         // CORS with sane defaults
-    recover.WithStack(),    // Panic recovery
-    rateLimit.PerIP(100),   // Rate limiting
+    recovery.New(),         // Panic recovery
+    limiter.New(),          // Rate limiting
 )
 ```
 
@@ -133,10 +135,12 @@ go get github.com/arthurlch/goryu
 # CLI (Highly recommended)
 go install github.com/arthurlch/goryu/cmd/goryu@latest
 
-# New project
-goryu new myapp
+# Initialize a new project
+goryu init myapp
+
+# Start development server
 cd myapp
-goryu run
+goryu dev
 ```
 
 ## Real Example
@@ -146,6 +150,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/logger"
     "github.com/arthurlch/goryu/middleware/cors"
 )
@@ -202,7 +207,7 @@ func createProduct(c *goryuctx.Context) {
 
 ### Developer Tools
 - **CLI generators** - Generate handlers, models, full features
-- **Hot reload** - `goryu run` watches your code
+- **Hot reload** - `goryu dev` watches your code
 - **Project structure** - Scalable layout from day one
 - **Testing helpers** - Test your HTTP handlers easily
 
@@ -221,18 +226,19 @@ func createProduct(c *goryuctx.Context) {
 
 1. **Batteries included** - Everything you need to ship
 2. **No magic** - You can read the source
-3. **Performance matters** - Because Blazingly fast ..
+3. **Performance matters** - Because blazingly fast performance is essential
 4. **Developer happiness** - Great DX is a feature
 
 ## Documentation
 
-- [Getting Started](./docs/getting-started.md)
+- [Tutorial](./TUTORIAL.md)
+- [CLI Reference](./CLI.md)
 - [API Reference](https://pkg.go.dev/github.com/arthurlch/goryu)
 - [Examples](./examples)
 
 ## Contributing
 
-PRs welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md).
+PRs welcome! Please follow the project's coding standards and include tests.
 
 ## License
 

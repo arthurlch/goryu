@@ -61,7 +61,7 @@ type User struct {
 var user User
 // Automatically checks Content-Type, limits body size (1MB default),
 // and disallows unknown fields for security.
-if err := c.BindJSON(&user); err != nil {
+if err := c.BodyParser(&user); err != nil {
     c.BadRequest("Invalid JSON")
     return
 }
@@ -148,7 +148,7 @@ You can configure how the context handles errors during fluent chaining or stand
 // - ErrorModePanic: Panics (useful for development)
 // - ErrorModeSilent: Ignores errors
 
-c.SetErrorHandlingMode(context.ErrorModeLog)
+c.SetErrorHandlingMode(goryuctx.ErrorModeLog)
 ```
 
 ### Checking Errors
@@ -185,6 +185,6 @@ go func() {
 The `Context` is created via `NewContext`. It is designed to be pooled (future optimization), so avoid storing references to it after the request completes.
 
 ```go
-ctx := context.NewContext(w, r)
+ctx := goryuctx.NewContext(w, r)
 // ... handle request ...
 ```

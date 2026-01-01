@@ -22,7 +22,7 @@ The Goryu client provides an intuitive way to make HTTP requests with method cha
 ## Quick Start
 
 ```go
-import "github.com/yourusername/goryu/client"
+import "github.com/arthurlch/goryu/client"
 
 // Simple GET request
 code, body, errs := client.Get("https://api.example.com/users").String()

@@ -19,7 +19,7 @@ Here is how you can use the `base` package to create a custom middleware:
 package mymiddleware
 
 import (
-    "github.com/arthurlch/goryu/context"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/base"
 )
 
@@ -43,18 +43,18 @@ func (c *Config) Validate() error {
 }
 
 // 4. Create the constructor
-func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
+func New(config Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
     // Validate config
     if err := config.Validate(); err != nil {
-        return func(next context.HandlerFunc) context.HandlerFunc {
-            return func(c *context.Context) {
+        return func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+            return func(c *goryuctx.Context) {
                 base.DefaultErrorHandler(c, err, "MyMiddleware")
             }
         }
     }
 
     // Define the handler logic
-    handler := func(c *context.Context) error {
+    handler := func(c *goryuctx.Context) error {
         // Your middleware logic here
         config.Logger.Printf("Executing MyMiddleware with option: %s", config.MyOption)
         return nil
@@ -70,13 +70,13 @@ func New(config Config) func(next context.HandlerFunc) context.HandlerFunc {
 If your middleware needs to run logic *after* the next handler returns (e.g., logging response time), use `PostProcessMiddleware`:
 
 ```go
-func NewTimer(config Config) func(next context.HandlerFunc) context.HandlerFunc {
-    preHandler := func(c *context.Context) error {
+func NewTimer(config Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {
+    preHandler := func(c *goryuctx.Context) error {
         c.Set("start_time", time.Now())
         return nil
     }
 
-    postHandler := func(c *context.Context) error {
+    postHandler := func(c *goryuctx.Context) error {
         start := c.Get("start_time").(time.Time)
         duration := time.Since(start)
         config.Logger.Printf("Request took %v", duration)

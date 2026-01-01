@@ -31,7 +31,9 @@ type Route struct {
 While you typically interact with routes via the `goryu` or `router` packages, you might encounter the `Route` struct when inspecting the current route from the context:
 
 ```go
-func MyHandler(c *goryu.Context) error {
+import "github.com/arthurlch/goryu/goryuctx"
+
+func MyHandler(c *goryuctx.Context) error {
     // Access the current route
     currentRoute := c.Route
     
