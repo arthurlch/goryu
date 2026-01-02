@@ -1,9 +1,5 @@
-# 🐉 Goryu
-
 <div align="center">
   <img src="https://i.ibb.co/YBfgFnG0/goryu-v3.png" alt="Goryu Logo" width="300"/>
-  
-  **Rails/Phoenix-like developer experience. Gin-like performance.**
   
 ---
 *WARNING: This project is in alpha stage. Use at your own risk.*
