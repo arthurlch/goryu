@@ -3,10 +3,12 @@
 <div align="center">
   <img src="https://i.imgur.com/9yTfwke.png" alt="Goryu Logo" width="200"/>
   
-  **Phoenix-like developer experience. Gin-like performance.**
+  **Rails/Phoenix-like developer experience. Gin-like performance.**
   
-  [![Go Report Card](https://goreportcard.com/badge/github.com/arthurlch/goryu)](https://goreportcard.com/report/github.com/arthurlch/goryu)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+---
+*WARNING: This project is in alpha stage. Use at your own risk.*
+---
+
 </div>
 
 ## What is Goryu?
