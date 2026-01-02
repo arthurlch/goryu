@@ -1,7 +1,7 @@
 # 🐉 Goryu
 
 <div align="center">
-  <img src="https://i.imgur.com/9yTfwke.png" alt="Goryu Logo" width="200"/>
+  <img src="https://i.ibb.co/YBfgFnG0/goryu-v3.png" alt="Goryu Logo" width="300"/>
   
   **Rails/Phoenix-like developer experience. Gin-like performance.**
   
