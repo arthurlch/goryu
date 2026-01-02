@@ -689,7 +689,7 @@ func UseStandardJSON() {
 
 // UseSonicJSON configures Goryu to use "github.com/bytedance/sonic" for JSON operations.
 // This provides significantly faster performance for complex JSON but may have larger binary size.
-// We have to mind about Golang 1.24 
+// We have to mind about Golang 1.24
 func UseSonicJSON() {
 	json.UseSonicJSON()
 }

@@ -68,7 +68,7 @@ func (b *Builder) WithFile(path string) *Builder {
 
 	ext := filepath.Ext(path)
 	var tempCfg Config
-	
+
 	switch ext {
 	case ".json":
 		if err := json.Unmarshal(data, &tempCfg); err != nil {
