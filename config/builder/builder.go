@@ -49,70 +49,111 @@ func FromFile(path string) (*Builder, error) {
 }
 
 func FromEnvironment() *Builder {
-	b := New()
+	return New().WithEnvironment("GORYU")
+}
 
-	// load from environment variables with GORYU_ prefix
-	// Example: GORYU_SERVER_PORT=8080
+func (b *Builder) WithDefaults() *Builder {
+	// Defaults are already loaded by New(), but this allows explicit intent
+	return b
+}
 
-	if port := os.Getenv("GORYU_SERVER_PORT"); port != "" {
+func (b *Builder) WithFile(path string) *Builder {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			b.errors = append(b.errors, ValidationError{Field: "config_file", Message: fmt.Sprintf("failed to read config file: %v", err)})
+		}
+		return b
+	}
+
+	ext := filepath.Ext(path)
+	var tempCfg Config
+	
+	switch ext {
+	case ".json":
+		if err := json.Unmarshal(data, &tempCfg); err != nil {
+			b.errors = append(b.errors, ValidationError{Field: "config_file", Message: fmt.Sprintf("failed to parse JSON config: %v", err)})
+			return b
+		}
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(data, &tempCfg); err != nil {
+			b.errors = append(b.errors, ValidationError{Field: "config_file", Message: fmt.Sprintf("failed to parse YAML config: %v", err)})
+			return b
+		}
+	default:
+		b.errors = append(b.errors, ValidationError{Field: "config_file", Message: fmt.Sprintf("unsupported config file format: %s", ext)})
+		return b
+	}
+
+	b.config.Merge(&tempCfg)
+	return b
+}
+
+func (b *Builder) WithEnvironment(prefix string) *Builder {
+	if prefix == "" {
+		prefix = "GORYU"
+	}
+	prefix += "_"
+
+	if port := os.Getenv(prefix + "SERVER_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
 			b.config.Server.Port = p
 		}
 	}
 
-	if host := os.Getenv("GORYU_SERVER_HOST"); host != "" {
+	if host := os.Getenv(prefix + "SERVER_HOST"); host != "" {
 		b.config.Server.Host = host
 	}
 
-	if name := os.Getenv("GORYU_APP_NAME"); name != "" {
+	if name := os.Getenv(prefix + "APP_NAME"); name != "" {
 		b.config.App.Name = name
 	}
 
-	if env := os.Getenv("GORYU_APP_ENVIRONMENT"); env != "" {
+	if env := os.Getenv(prefix + "APP_ENVIRONMENT"); env != "" {
 		b.config.App.Environment = env
 	}
 
-	if header := os.Getenv("GORYU_APP_SERVER_HEADER"); header != "" {
+	if header := os.Getenv(prefix + "APP_SERVER_HEADER"); header != "" {
 		b.config.App.ServerHeader = header
 	}
 
-	if disable := os.Getenv("GORYU_APP_DISABLE_STARTUP_MESSAGE"); disable == "true" {
+	if disable := os.Getenv(prefix + "APP_DISABLE_STARTUP_MESSAGE"); disable == "true" {
 		b.config.App.DisableStartupMessage = true
 	}
 
-	if certFile := os.Getenv("GORYU_TLS_CERT_FILE"); certFile != "" {
+	if certFile := os.Getenv(prefix + "TLS_CERT_FILE"); certFile != "" {
 		b.config.Server.TLS.CertFile = certFile
-		if keyFile := os.Getenv("GORYU_TLS_KEY_FILE"); keyFile != "" {
+		if keyFile := os.Getenv(prefix + "TLS_KEY_FILE"); keyFile != "" {
 			b.config.Server.TLS.KeyFile = keyFile
 			b.config.Server.TLS.Enabled = true
 		}
 	}
 
-	if minVersion := os.Getenv("GORYU_TLS_MIN_VERSION"); minVersion != "" {
+	if minVersion := os.Getenv(prefix + "TLS_MIN_VERSION"); minVersion != "" {
 		b.config.Server.TLS.MinVersion = minVersion
 	}
 
-	if strict := os.Getenv("GORYU_ROUTER_STRICT"); strict == "true" {
+	if strict := os.Getenv(prefix + "ROUTER_STRICT"); strict == "true" {
 		b.config.Router.StrictRouting = true
 	}
 
-	if caseSensitive := os.Getenv("GORYU_ROUTER_CASE_SENSITIVE"); caseSensitive == "true" {
+	if caseSensitive := os.Getenv(prefix + "ROUTER_CASE_SENSITIVE"); caseSensitive == "true" {
 		b.config.Router.CaseSensitive = true
 	}
 
-	if csrf := os.Getenv("GORYU_SECURITY_CSRF"); csrf == "false" {
+	if csrf := os.Getenv(prefix + "SECURITY_CSRF"); csrf == "false" {
 		b.config.Security.CSRFProtection = false
 	}
 
-	if hsts := os.Getenv("GORYU_SECURITY_HSTS"); hsts == "true" {
+	if hsts := os.Getenv(prefix + "SECURITY_HSTS"); hsts == "true" {
 		b.config.Security.HSTS.Enabled = true
 	}
 
-	if staticRoot := os.Getenv("GORYU_STATIC_ROOT"); staticRoot != "" {
+	if staticRoot := os.Getenv(prefix + "STATIC_ROOT"); staticRoot != "" {
 		b.config.Static.Root = staticRoot
 	}
 
-	if staticIndex := os.Getenv("GORYU_STATIC_INDEX"); staticIndex != "" {
+	if staticIndex := os.Getenv(prefix + "STATIC_INDEX"); staticIndex != "" {
 		b.config.Static.Index = staticIndex
 	}
 

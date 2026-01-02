@@ -564,6 +564,19 @@ func (app *App) Listen(addr string) error {
 	return server.ListenAndServe()
 }
 
+func (app *App) ListenTLS(addr, certFile, keyFile string) error {
+	if !app.Config.DisableStartupMessage {
+		app.printStartupMessage(addr)
+	}
+
+	app.serverMu.Lock()
+	app.server = &http.Server{Addr: addr, Handler: app}
+	server := app.server
+	app.serverMu.Unlock()
+
+	return server.ListenAndServeTLS(certFile, keyFile)
+}
+
 func (app *App) printStartupMessage(addr string) {
 	appName := "Goryu"
 	if app.Config.AppName != "" {
@@ -676,6 +689,7 @@ func UseStandardJSON() {
 
 // UseSonicJSON configures Goryu to use "github.com/bytedance/sonic" for JSON operations.
 // This provides significantly faster performance for complex JSON but may have larger binary size.
+// We have to mind about Golang 1.24 
 func UseSonicJSON() {
 	json.UseSonicJSON()
 }

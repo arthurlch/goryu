@@ -216,3 +216,10 @@ func (c *Config) String() string {
 		c.App, c.Server, c.Router, c.Static, c.Security, c.Limits,
 	)
 }
+
+func (c *Config) GetServerAddress() string {
+	if c.Server.Host == "" {
+		return fmt.Sprintf(":%d", c.Server.Port)
+	}
+	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+}
