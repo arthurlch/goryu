@@ -17,6 +17,11 @@ A rate limiting middleware for Goryu. It protects your application from abuse by
 Limit to 60 requests per minute per IP:
 
 ```go
+import (
+    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/middleware/limiter"
+)
+
 app.Use(limiter.Default())
 ```
 
@@ -50,14 +55,26 @@ app.Use(limiter.New(limiter.Config{
 }))
 ```
 
+## Configuration Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| Max | `int` | Maximum requests allowed | `60` |
+| Expiration | `time.Duration` | Time window duration | `1 * time.Minute` |
+| KeyGenerator | `func(*goryuctx.Context) string` | Function to extract client key | IP-based |
+| LimitReached | `func(*goryuctx.Context)` | Custom response when limit is reached | JSON error response |
+
 ## How It Works
 
-1.  **Identification**: The middleware identifies the client using the `KeyGenerator` (default: Remote IP).
-2.  **Tracking**: It maintains a counter for each client in memory.
-3.  **Windowing**: If the time since the last access exceeds `Expiration`, the counter is reset.
-4.  **Enforcement**: If the counter exceeds `Max`, the `LimitReached` handler is called.
-5.  **Cleanup**: Periodically removes inactive clients to prevent memory leaks.
+The middleware tracks requests using an in-memory map where:
+1. **Client Identification**: Uses `KeyGenerator` function (default: client IP)
+2. **Fixed Window**: Counts requests within specified time intervals
+3. **Automatic Cleanup**: Removes expired client entries to manage memory
+4. **Thread-Safe**: Uses mutexes for concurrent request handling
 
-## Limitations
+## Security Note
 
-- **Single Node**: This is a local, in-memory limiter. It does not synchronize limits across multiple instances of your application. For distributed rate limiting, use an external store like Redis.
+When using IP-based limiting (default), be aware of:
+- Users behind NAT may share IP addresses
+- Consider using API keys or authenticated user IDs for more accurate limiting
+- Set appropriate limits to balance security and user experience

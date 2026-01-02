@@ -15,7 +15,11 @@ This package provides an expressive, fluent API for route registration in the Go
 ```go
 package main
 
-import "github.com/arthurlch/goryu"
+import (
+    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
+    "github.com/arthurlch/goryu/router/builder"
+)
 
 func main() {
     app := goryu.New()
@@ -62,11 +66,11 @@ app.Route().
 ```go
 type UserController struct{}
 
-func (uc *UserController) Index(c *goryu.Ctx) { /* GET /users */ }
-func (uc *UserController) Create(c *goryu.Ctx) { /* POST /users */ }
-func (uc *UserController) Show(c *goryu.Ctx) { /* GET /users/:id */ }
-func (uc *UserController) Update(c *goryu.Ctx) { /* PUT /users/:id */ }
-func (uc *UserController) Destroy(c *goryu.Ctx) { /* DELETE /users/:id */ }
+func (uc *UserController) Index(c *goryuctx.Context) { /* GET /users */ }
+func (uc *UserController) Create(c *goryuctx.Context) { /* POST /users */ }
+func (uc *UserController) Show(c *goryuctx.Context) { /* GET /users/:id */ }
+func (uc *UserController) Update(c *goryuctx.Context) { /* PUT /users/:id */ }
+func (uc *UserController) Destroy(c *goryuctx.Context) { /* DELETE /users/:id */ }
 
 // Automatic RESTful routes
 app.Route().
@@ -158,13 +162,13 @@ type ArticleController struct {
 }
 
 // GET /articles
-func (ac *ArticleController) Index(c *goryu.Ctx) {
+func (ac *ArticleController) Index(c *goryuctx.Context) {
     articles := ac.db.GetAllArticles()
     c.OK(articles)
 }
 
 // POST /articles
-func (ac *ArticleController) Create(c *goryu.Ctx) {
+func (ac *ArticleController) Create(c *goryuctx.Context) {
     var article Article
     if err := c.BindJSON(&article); err != nil {
         c.BadRequest("Invalid article data")
@@ -175,7 +179,7 @@ func (ac *ArticleController) Create(c *goryu.Ctx) {
 }
 
 // GET /articles/:id
-func (ac *ArticleController) Show(c *goryu.Ctx) {
+func (ac *ArticleController) Show(c *goryuctx.Context) {
     id := c.Param("id")
     article := ac.db.GetArticle(id)
     if article == nil {
@@ -186,7 +190,7 @@ func (ac *ArticleController) Show(c *goryu.Ctx) {
 }
 
 // PUT /articles/:id
-func (ac *ArticleController) Update(c *goryu.Ctx) {
+func (ac *ArticleController) Update(c *goryuctx.Context) {
     id := c.Param("id")
     var updates Article
     if err := c.BindJSON(&updates); err != nil {
@@ -198,7 +202,7 @@ func (ac *ArticleController) Update(c *goryu.Ctx) {
 }
 
 // DELETE /articles/:id
-func (ac *ArticleController) Destroy(c *goryu.Ctx) {
+func (ac *ArticleController) Destroy(c *goryuctx.Context) {
     id := c.Param("id")
     ac.db.DeleteArticle(id)
     c.Status(204)
@@ -211,8 +215,8 @@ func (ac *ArticleController) Destroy(c *goryu.Ctx) {
 type ReadOnlyController struct{}
 
 // Only implement the actions you need
-func (roc *ReadOnlyController) Index(c *goryu.Ctx) { /* ... */ }
-func (roc *ReadOnlyController) Show(c *goryu.Ctx) { /* ... */ }
+func (roc *ReadOnlyController) Index(c *goryuctx.Context) { /* ... */ }
+func (roc *ReadOnlyController) Show(c *goryuctx.Context) { /* ... */ }
 
 // Use .Only() to specify which actions to register
 app.Route().

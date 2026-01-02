@@ -16,6 +16,12 @@ A middleware that adds a timeout to the request context. If the request processi
 Enforce a 30-second timeout (default):
 
 ```go
+import (
+    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
+    "github.com/arthurlch/goryu/middleware/timeout"
+)
+
 app.Use(timeout.Default())
 ```
 
@@ -36,7 +42,7 @@ Customize the response sent to the client upon timeout:
 ```go
 app.Use(timeout.New(timeout.Config{
     Timeout: 2 * time.Second,
-    TimeoutHandler: func(c *goryu.Context) {
+    TimeoutHandler: func(c *goryuctx.Context) {
         c.JSON(http.StatusGatewayTimeout, map[string]string{
             "error": "Processing took too long",
         })
@@ -53,4 +59,4 @@ app.Use(timeout.New(timeout.Config{
 
 ## Important Note
 
-Because the handler runs in a separate goroutine, you must ensure that any data accessed from the `Context` is thread-safe or not modified concurrently. Standard `goryu.Context` usage is generally safe, but be careful with shared mutable state.
+Because the handler runs in a separate goroutine, you must ensure that any data accessed from the `Context` is thread-safe or not modified concurrently. Standard `goryuctx.Context` usage is generally safe, but be careful with shared mutable state.

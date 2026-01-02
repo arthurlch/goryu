@@ -467,7 +467,7 @@ package main
 import (
     "log"
     
-    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu"\n    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/config"
 )
 
@@ -494,8 +494,8 @@ func main() {
     }
     
     // Routes
-    app.GET("/", func(c *goryu.Context) {
-        c.JSON(200, goryu.Map{
+    app.GET("/", func(c *goryuctx.Context) {
+        c.JSON(200, goryuctx.Map{
             "app":         cfg.App.Name,
             "version":     cfg.App.Version,
             "environment": cfg.App.Environment,
@@ -516,7 +516,7 @@ package main
 import (
     "log"
     
-    "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu"\n    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/config/builder"
     "github.com/arthurlch/goryu/middleware/compress"
     "github.com/arthurlch/goryu/middleware/cors"
@@ -559,7 +559,7 @@ func main() {
     }
     
     // Configure security headers
-    app.Use(func(c *goryu.Context) {
+    app.Use(func(c *goryuctx.Context) {
         if cfg.Security.ContentTypeNosniff {
             c.SetHeader("X-Content-Type-Options", "nosniff")
         }

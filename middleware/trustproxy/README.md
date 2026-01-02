@@ -20,6 +20,7 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
+    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/trustproxy"
 )
 
@@ -29,7 +30,7 @@ func main() {
     // Trust loopback addresses
     app.Use(trustproxy.WithProxies([]string{"127.0.0.1", "::1"}))
 
-    app.GET("/", func(c *goryu.Context) error {
+    app.GET("/", func(c *goryuctx.Context) error {
         clientIP := trustproxy.GetTrustedIPFromContext(c)
         return c.String(200, "Your IP is: "+clientIP)
     })

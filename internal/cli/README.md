@@ -1,6 +1,6 @@
 # Goryu CLI
 
-The powerful goryu-cl that provides code generation, project scaffolding, and development tools etc
+The powerful goryu-cli that provides code generation, project scaffolding, and development tools etc
 
 ## Installation
 

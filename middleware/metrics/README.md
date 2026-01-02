@@ -27,6 +27,9 @@ import (
     "github.com/arthurlch/goryu"
     "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/metrics"
+    
+    // Note: This example uses the official Prometheus client
+    // go get github.com/prometheus/client_golang/prometheus
     "github.com/prometheus/client_golang/prometheus"
 )
 

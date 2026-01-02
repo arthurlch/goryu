@@ -17,13 +17,18 @@ The `router` package implements a high-performance, radix tree-based HTTP router
 ### Basic Routing
 
 ```go
+import (
+    "github.com/arthurlch/goryu/router"
+    "github.com/arthurlch/goryu/goryuctx"
+)
+
 r := router.New()
 
-r.GET("/", func(c *goryu.Context) error {
+r.GET("/", func(c *goryuctx.Context) error {
     return c.String(200, "Welcome!")
 })
 
-r.POST("/users", func(c *goryu.Context) error {
+r.POST("/users", func(c *goryuctx.Context) error {
     return c.String(201, "User created")
 })
 ```
@@ -32,13 +37,13 @@ r.POST("/users", func(c *goryu.Context) error {
 
 ```go
 // Named parameter
-r.GET("/users/:id", func(c *goryu.Context) error {
+r.GET("/users/:id", func(c *goryuctx.Context) error {
     id := c.Param("id")
     return c.String(200, "User ID: "+id)
 })
 
 // Wildcard
-r.GET("/files/*path", func(c *goryu.Context) error {
+r.GET("/files/*path", func(c *goryuctx.Context) error {
     path := c.Param("path")
     return c.String(200, "File path: "+path)
 })
