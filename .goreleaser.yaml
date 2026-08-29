@@ -1,11 +1,9 @@
-# .goreleaser.yaml
 version: 2
 
 project_name: goryu
 
 before:
   hooks:
-    # ensuring go mod tidy is run before build
     - go mod tidy
 
 builds:
@@ -14,6 +12,13 @@ builds:
     binary: goryu
     env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/arthurlch/goryu/internal/cli.version={{ .Version }}
+      - -X github.com/arthurlch/goryu/internal/cli.commit={{ .Commit }}
+      - -X github.com/arthurlch/goryu/internal/cli.date={{ .Date }}
     goos:
       - linux
       - windows
@@ -22,28 +27,81 @@ builds:
       - amd64
       - arm64
 
+# Ship a single universal binary for macOS instead of two arch-specific ones.
+universal_binaries:
+  - replace: true
+
 archives:
-  - format: tar.gz
+  - id: goryu
+    formats: [tar.gz]
     name_template: >-
-      {{ .ProjectName }}_
-      {{- .Version }}_
-      {{- .Os }}_
-      {{- .Arch }}
-    builds:
-      - goryu
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: checksums.txt
 
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+sboms:
+  - artifacts: archive
+
+dockers:
+  - image_templates:
+      - "ghcr.io/arthurlch/goryu:{{ .Version }}-amd64"
+      - "ghcr.io/arthurlch/goryu:latest-amd64"
+    use: buildx
+    dockerfile: Dockerfile.release
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/arthurlch/goryu"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+  - image_templates:
+      - "ghcr.io/arthurlch/goryu:{{ .Version }}-arm64"
+      - "ghcr.io/arthurlch/goryu:latest-arm64"
+    use: buildx
+    dockerfile: Dockerfile.release
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/arthurlch/goryu"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+
+docker_manifests:
+  - name_template: "ghcr.io/arthurlch/goryu:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/arthurlch/goryu:{{ .Version }}-amd64"
+      - "ghcr.io/arthurlch/goryu:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/arthurlch/goryu:latest"
+    image_templates:
+      - "ghcr.io/arthurlch/goryu:latest-amd64"
+      - "ghcr.io/arthurlch/goryu:latest-arm64"
 
 changelog:
   sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other changes
+      order: 999
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  footer: |
+    ## Docker
+
+    ```
+    docker pull ghcr.io/arthurlch/goryu:{{ .Version }}
+    ```

@@ -1,0 +1,22 @@
+# Keep the build context small: only source needed to compile the CLI.
+.git
+.github
+dist/
+graphify-out/
+examples/
+tests/
+*_test.go
+
+# Local binaries and build artifacts
+goryu
+goryu-*
+*.out
+coverage.*
+
+# Docs and tooling that never belong in the image
+*.md
+.goreleaser.yaml
+test_cli.sh
+.idea/
+.vscode/
+.DS_Store

@@ -8,8 +8,11 @@ on:
 
 permissions:
   contents: read
-  # Optional: allow read access to pull request. Use with `only-new-issues` option.
-  # pull-requests: read
+
+# Only the latest run per branch matters; cancel the rest.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -20,51 +23,77 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-          cache: false
-      - name: Run go vet
-        run: go vet ./...
-      - name: Check formatting with gofmt
+      - name: gofmt
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
-            echo "The following files are not formatted:"
+            echo "These files need gofmt:"
             echo "$unformatted"
-            echo "Please run 'gofmt -w .' to format your code"
             exit 1
           fi
-      - name: Run go mod tidy check
+      - name: go mod tidy is clean
         run: |
           go mod tidy
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "go mod tidy made changes. Please run 'go mod tidy' locally and commit the changes."
-            exit 1
-          fi
+          git diff --exit-code -- go.mod go.sum
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          # Grandfather the existing backlog; block only issues in new code.
+          only-new-issues: true
 
   test:
     name: Test (Go ${{ matrix.go-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         go-version: ["1.24", "1.25"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Test with Race Detector
-        run: go test -v -race ./...
-
-      - name: Test CLI
-        run: |
-          chmod +x test_cli.sh
-          ./test_cli.sh
-
-      - name: Stress & Memory Tests
-        run: go test -v ./tests/stress/...
-
+      - name: Unit tests with race detector and coverage
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: CLI end-to-end tests
+        run: ./test_cli.sh
+      - name: Stress and memory tests
+        run: go test ./tests/stress/...
       - name: Benchmarks
-        run: go test -bench=. ./tests/bench/...
+        run: go test -bench=. -benchmem -run=^$ ./tests/bench/...
+      - name: Upload coverage
+        if: matrix.go-version == '1.25'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+        continue-on-error: true
+
+  vuln:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: goryu:ci
+      - name: Smoke test the image
+        run: docker run --rm goryu:ci version
