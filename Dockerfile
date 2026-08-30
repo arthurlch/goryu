@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Build the CLI as a fully static binary so it can run on a minimal base image.
-FROM golang:1.25-alpine AS build
+FROM golang:1.27-alpine AS build
 
 ARG VERSION=dev
 ARG COMMIT=none
