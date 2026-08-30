@@ -5,10 +5,17 @@ import (
 	"os"
 )
 
-const VERSION = "0.1.0"
+// Build metadata, overridden at release time via -ldflags.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func Run() {
-	cli := NewCLI(VERSION)
+	cli := NewCLI(version)
+	cli.commit = commit
+	cli.date = date
 	InitializeCommands(cli)
 
 	args := os.Args[1:]

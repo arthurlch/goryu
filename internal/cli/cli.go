@@ -11,6 +11,8 @@ import (
 type CLI struct {
 	commands map[string]*Command
 	version  string
+	commit   string
+	date     string
 }
 
 type Command struct {
@@ -241,5 +243,11 @@ func (c *CLI) showCommandHelp(cmd *Command) {
 
 func (c *CLI) showVersion() {
 	fmt.Printf("Goryu CLI v%s\n", c.version)
+	if c.commit != "" && c.commit != "none" {
+		fmt.Printf("commit: %s\n", c.commit)
+	}
+	if c.date != "" && c.date != "unknown" {
+		fmt.Printf("built:  %s\n", c.date)
+	}
 	fmt.Println("A GOated web framework")
 }

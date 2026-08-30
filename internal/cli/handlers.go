@@ -739,7 +739,13 @@ func generateConfigCode(name string, useBuilder bool, configType, format string)
 }
 
 func showVersion() {
-	fmt.Printf("Goryu CLI v%s\n", VERSION)
+	fmt.Printf("Goryu CLI v%s\n", version)
+	if commit != "" && commit != "none" {
+		fmt.Printf("commit: %s\n", commit)
+	}
+	if date != "" && date != "unknown" {
+		fmt.Printf("built:  %s\n", date)
+	}
 	fmt.Println("A GOated web framework") // goated play on words
 }
 

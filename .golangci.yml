@@ -1,0 +1,39 @@
+version: "2"
+
+# CI runs this with only-new-issues, so the existing backlog is grandfathered
+# and new code has to come in clean. Run `make lint` locally to see the full set.
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Print
+        - fmt.Printf
+        - fmt.Println
+        - (net/http.ResponseWriter).Write
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - bodyclose
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

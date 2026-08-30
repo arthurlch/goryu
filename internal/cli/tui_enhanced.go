@@ -328,7 +328,7 @@ func (m enhancedMenuModel) View() string {
 
 	header := lipgloss.JoinVertical(
 		lipgloss.Center,
-		titleStyle.Render("🎯 Goryu CLI v"+VERSION),
+		titleStyle.Render("🎯 Goryu CLI v"+version),
 		subtitleStyle.Render("A GOated Web Framework for Go"),
 	)
 

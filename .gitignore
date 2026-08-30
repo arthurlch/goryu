@@ -1,0 +1,28 @@
+# Compiled binaries
+/goryu
+/goryu-*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test and coverage output
+*.test
+*.out
+coverage.*
+profile.*
+
+# GoReleaser build output
+/dist/
+
+# Go workspace and module cache
+go.work
+go.work.sum
+
+# Editor and OS noise
+.idea/
+.vscode/
+.DS_Store
+
+# Knowledge graph output (graphify)
+/graphify-out/

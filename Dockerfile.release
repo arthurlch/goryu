@@ -1,0 +1,8 @@
+# Used by GoReleaser: the binary is already built, so we only package it.
+# See Dockerfile for the standalone multi-stage build.
+FROM gcr.io/distroless/static:nonroot
+
+COPY goryu /usr/local/bin/goryu
+
+USER nonroot:nonroot
+ENTRYPOINT ["goryu"]
