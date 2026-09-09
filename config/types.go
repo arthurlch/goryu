@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -51,6 +52,16 @@ type DatabaseConfig struct {
 
 	ParseTime bool   `json:"parse_time" env:"PARSE_TIME" default:"true"`
 	Charset   string `json:"charset" env:"CHARSET" default:"utf8mb4"`
+}
+
+// MarshalJSON redacts the password so config dumps never leak the credential.
+func (d DatabaseConfig) MarshalJSON() ([]byte, error) {
+	type alias DatabaseConfig
+	redacted := alias(d)
+	if redacted.Password != "" {
+		redacted.Password = "***"
+	}
+	return json.Marshal(redacted)
 }
 
 type FrameworkConfig struct {

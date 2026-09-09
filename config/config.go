@@ -32,6 +32,29 @@ type LegacyConfig struct {
 	Custom map[string]interface{} `json:"custom" env:"CUSTOM" yaml:"custom"`
 }
 
+// MarshalJSON redacts a database password stored in the untyped Custom map so
+// dumping a legacy config never leaks the credential.
+func (c LegacyConfig) MarshalJSON() ([]byte, error) {
+	type alias LegacyConfig
+	red := alias(c)
+	if db, ok := red.Custom["database"].(map[string]interface{}); ok {
+		if _, has := db["password"]; has {
+			dbCopy := make(map[string]interface{}, len(db))
+			for k, v := range db {
+				dbCopy[k] = v
+			}
+			dbCopy["password"] = "***"
+			custom := make(map[string]interface{}, len(red.Custom))
+			for k, v := range red.Custom {
+				custom[k] = v
+			}
+			custom["database"] = dbCopy
+			red.Custom = custom
+		}
+	}
+	return json.Marshal(red)
+}
+
 type LegacyAppConfig struct {
 	Name              string `json:"name" env:"NAME" default:"goryu-app"`
 	Version           string `json:"version" env:"VERSION" default:"1.0.0"`
