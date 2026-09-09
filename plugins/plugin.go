@@ -1,6 +1,10 @@
 package plugins
 
-import context "github.com/arthurlch/goryu/goryuctx"
+import (
+	"sync"
+
+	context "github.com/arthurlch/goryu/goryuctx"
+)
 
 type Plugin interface {
 	// Name returns the plugin name
@@ -16,6 +20,7 @@ type Builder interface {
 }
 
 type Registry struct {
+	mu      sync.RWMutex
 	plugins map[string]func() Builder
 }
 
@@ -28,11 +33,15 @@ func NewRegistry() *Registry {
 }
 
 func (r *Registry) Register(name string, factory func() Builder) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.plugins[name] = factory
 }
 
 func (r *Registry) Get(name string) (Builder, bool) {
+	r.mu.RLock()
 	factory, exists := r.plugins[name]
+	r.mu.RUnlock()
 	if !exists {
 		return nil, false
 	}
@@ -40,6 +49,8 @@ func (r *Registry) Get(name string) (Builder, bool) {
 }
 
 func (r *Registry) List() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	names := make([]string, 0, len(r.plugins))
 	for name := range r.plugins {
 		names = append(names, name)

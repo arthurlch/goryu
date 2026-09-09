@@ -112,12 +112,6 @@ walk:
 				// Continue with wildcard child
 				n = n.children[len(n.children)-1]
 				n.priority++
-
-				// Update parent node's max priority
-				if n.priority > n.children[0].priority {
-					n.children[0] = n
-				}
-
 				continue walk
 			}
 
@@ -190,16 +184,20 @@ func (n *node) insertChild(path, fullPath string, handler goryuctx.HandlerFunc, 
 				if len(wildcard) < len(path) {
 					path = path[len(wildcard):]
 
-					// Add static child if doesn't exist
+					// Reuse an existing static child if one already matches.
 					c := path[0]
+					found := false
 					for i, max := 0, len(n.indices); i < max; i++ {
 						if c == n.indices[i] {
 							n = n.children[i]
-							continue
+							found = true
+							break
 						}
 					}
+					if found {
+						continue
+					}
 
-					// Need to create a new static child
 					n.indices += string([]byte{c})
 					child := &node{}
 					n.children = append(n.children, child)
@@ -221,6 +219,7 @@ func (n *node) insertChild(path, fullPath string, handler goryuctx.HandlerFunc, 
 				if len(wildcard) < len(path) {
 					path = path[len(wildcard):]
 
+					n.indices = string([]byte{path[0]})
 					child := &node{
 						priority: 1,
 					}

@@ -1,11 +1,13 @@
 package monitoring
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -565,12 +567,37 @@ func (m *Monitor) GetMetrics() *Metrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	metrics := *m.metrics
-	metrics.Uptime = time.Since(m.startTime)
-	if m.metrics.RequestCount > 0 {
-		metrics.AvgResponseTime = time.Duration(m.metrics.TotalResponseTime/m.metrics.RequestCount) * time.Millisecond
+	snapshot := *m.metrics
+	// Counters are written with atomics off the lock, so load them atomically.
+	snapshot.RequestCount = atomic.LoadInt64(&m.metrics.RequestCount)
+	snapshot.ErrorCount = atomic.LoadInt64(&m.metrics.ErrorCount)
+	snapshot.ActiveRequests = atomic.LoadInt64(&m.metrics.ActiveRequests)
+	snapshot.TotalResponseTime = atomic.LoadInt64(&m.metrics.TotalResponseTime)
+	snapshot.Uptime = time.Since(m.startTime)
+	if snapshot.RequestCount > 0 {
+		snapshot.AvgResponseTime = time.Duration(snapshot.TotalResponseTime/snapshot.RequestCount) * time.Millisecond
 	}
-	return &metrics
+
+	// Deep-copy the maps so callers never touch the live ones the writers mutate.
+	snapshot.RouteMetrics = make(map[string]*RouteMetric, len(m.metrics.RouteMetrics))
+	for k, v := range m.metrics.RouteMetrics {
+		cp := *v
+		cp.StatusCodes = make(map[int]int64, len(v.StatusCodes))
+		for code, n := range v.StatusCodes {
+			cp.StatusCodes[code] = n
+		}
+		snapshot.RouteMetrics[k] = &cp
+	}
+	snapshot.MiddlewareMetrics = make(map[string]*MiddlewareMetric, len(m.metrics.MiddlewareMetrics))
+	for k, v := range m.metrics.MiddlewareMetrics {
+		cp := *v
+		snapshot.MiddlewareMetrics[k] = &cp
+	}
+	snapshot.StatusCodeCounts = make(map[int]int64, len(m.metrics.StatusCodeCounts))
+	for k, v := range m.metrics.StatusCodeCounts {
+		snapshot.StatusCodeCounts[k] = v
+	}
+	return &snapshot
 }
 
 func (m *Monitor) AddEventHandler(handler func(Event)) {
@@ -627,10 +654,11 @@ type responseWrapper struct {
 }
 
 func (rw *responseWrapper) WriteHeader(code int) {
-	if !rw.written {
-		rw.statusCode = code
-		rw.written = true
+	if rw.written {
+		return
 	}
+	rw.statusCode = code
+	rw.written = true
 	rw.ResponseWriter.WriteHeader(code)
 }
 
@@ -640,6 +668,21 @@ func (rw *responseWrapper) Write(b []byte) (int, error) {
 		rw.written = true
 	}
 	return rw.ResponseWriter.Write(b)
+}
+
+// Forward streaming and hijacking so SSE and WebSocket upgrades keep working
+// through the monitoring wrapper.
+func (rw *responseWrapper) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (rw *responseWrapper) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, http.ErrNotSupported
 }
 
 func (m *Monitor) Middleware() goryuctx.Middleware {
@@ -832,7 +875,7 @@ func (m *Monitor) EventsHandler() goryuctx.HandlerFunc {
 		events := m.GetEvents(limit)
 		_ = c.JSON(http.StatusOK, map[string]interface{}{
 			"events": events,
-			"total":  len(m.events),
+			"total":  len(events),
 		})
 	}
 }
