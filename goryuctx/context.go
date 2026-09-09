@@ -87,11 +87,24 @@ func (c *Context) Reset(writer http.ResponseWriter, request *http.Request) {
 	c.errorHandlingMode = ErrorModeReturn
 }
 
-// Release puts the context back into the pool.
+// Release puts the context back into the pool. It clears request-scoped state
+// so a pooled context never retains the previous request's data.
 func (c *Context) Release() {
 	c.Writer = nil
 	c.Request = nil
 	c.Route = nil
+	if c.Keys != nil {
+		clear(c.Keys)
+	}
+	if c.Params != nil {
+		clear(c.Params)
+	}
+	c.PathBuffer = c.PathBuffer[:0]
+	c.ParamValues = c.ParamValues[:0]
+	c.mu.Lock()
+	c.errors = c.errors[:0]
+	c.errorHandler = nil
+	c.mu.Unlock()
 	contextPool.Put(c)
 }
 

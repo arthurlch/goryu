@@ -244,12 +244,15 @@ func (c *Context) sendErrorResponse(err *ResponseError) {
 			status = 400
 			message = "Bad Request"
 		case FileError:
-			if err.Err != nil && strings.Contains(err.Err.Error(), "not found") {
-				status = 404
-				message = "Not Found"
-			} else if strings.Contains(err.Err.Error(), "permission") {
-				status = 403
-				message = "Forbidden"
+			if err.Err != nil {
+				msg := err.Err.Error()
+				if strings.Contains(msg, "not found") {
+					status = 404
+					message = "Not Found"
+				} else if strings.Contains(msg, "permission") {
+					status = 403
+					message = "Forbidden"
+				}
 			}
 		case SerializationError:
 			status = 400

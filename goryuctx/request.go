@@ -282,7 +282,10 @@ func (c *Context) GetHeader(key string) string {
 // SECUCHECK: Only trusts proxy headers if explicitly configured with trusted proxies.
 // By default, only uses the direct connection IP to prevent spoofing attacks.
 func (c *Context) RemoteIP() string {
-	directIP, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+	directIP, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+	if err != nil {
+		directIP = c.Request.RemoteAddr
+	}
 
 	if shouldTrustProxyHeaders(c, directIP) {
 		if ip := c.GetHeader("X-Forwarded-For"); ip != "" {
@@ -333,8 +336,10 @@ func (c *Context) BaseURL() string {
 	return scheme + "://" + c.Request.Host
 }
 
+const maxBodySize = 10 << 20 // 10MB
+
 func (c *Context) BodyRaw() ([]byte, error) {
-	return io.ReadAll(c.Request.Body)
+	return io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize))
 }
 
 // Optimization: Cache struct field metadata to avoid repeated reflection overhead
@@ -365,6 +370,9 @@ func getCachedStructInfo(typ reflect.Type) []fieldInfo {
 }
 
 func (c *Context) QueryParser(out interface{}) error {
+	if c.Request.Body != nil {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize)
+	}
 	if err := c.Request.ParseForm(); err != nil {
 		return err
 	}
@@ -387,19 +395,26 @@ func (c *Context) QueryParser(out interface{}) error {
 		}
 
 		fieldValue := elem.Field(info.Index)
-		if fieldValue.CanSet() {
-			switch fieldValue.Kind() {
-			case reflect.String:
-				fieldValue.SetString(paramValue)
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				if intVal, err := strconv.ParseInt(paramValue, 10, 64); err == nil {
-					fieldValue.SetInt(intVal)
-				}
-			case reflect.Bool:
-				if boolVal, err := strconv.ParseBool(paramValue); err == nil {
-					fieldValue.SetBool(boolVal)
-				}
+		if !fieldValue.CanSet() {
+			continue
+		}
+		switch fieldValue.Kind() {
+		case reflect.String:
+			fieldValue.SetString(paramValue)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			// Parse at the field's real width so an out-of-range value is
+			// rejected instead of silently wrapping.
+			intVal, err := strconv.ParseInt(paramValue, 10, fieldValue.Type().Bits())
+			if err != nil {
+				return fmt.Errorf("invalid value for %q: %w", info.Tag, err)
 			}
+			fieldValue.SetInt(intVal)
+		case reflect.Bool:
+			boolVal, err := strconv.ParseBool(paramValue)
+			if err != nil {
+				return fmt.Errorf("invalid value for %q: %w", info.Tag, err)
+			}
+			fieldValue.SetBool(boolVal)
 		}
 	}
 	return nil
@@ -464,36 +479,28 @@ func (c *Context) BindJSON(i interface{}) error {
 func (c *Context) BodyParser(out interface{}) error {
 	ctype := c.GetHeader("Content-Type")
 
-	// JSON
-	if strings.HasPrefix(ctype, "application/json") {
-		return c.BindJSON(out)
-	}
-
-	// Form Data
-	if strings.HasPrefix(ctype, "application/x-www-form-urlencoded") || strings.HasPrefix(ctype, "multipart/form-data") {
-		// Use QueryParser logic but for form data (which QueryParser internally handles via ParseForm)
-		return c.QueryParser(out)
-	}
-
-	// Fallback/Default behavior
-	// If it's a GET/DELETE request without specific content type, try parsing query params
-	if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodDelete {
+	switch {
+	case strings.HasPrefix(ctype, "application/json"):
+		if err := c.BindJSON(out); err != nil {
+			return err
+		}
+	case strings.HasPrefix(ctype, "application/x-www-form-urlencoded"),
+		strings.HasPrefix(ctype, "multipart/form-data"):
 		if err := c.QueryParser(out); err != nil {
 			return err
 		}
-	} else if strings.HasPrefix(ctype, "application/json") {
-		// Already handled above, but for flow completeness
-	} else if strings.HasPrefix(ctype, "application/x-www-form-urlencoded") || strings.HasPrefix(ctype, "multipart/form-data") {
-		// Already handled
-	} else {
+	case c.Request.Method == http.MethodGet || c.Request.Method == http.MethodDelete:
+		if err := c.QueryParser(out); err != nil {
+			return err
+		}
+	default:
 		return fmt.Errorf("BodyParser: unsupported content-type: %s", ctype)
 	}
 
-	// Validation hook
+	// Validation runs for every content type, not just the query-string path.
 	if validator, ok := out.(Validator); ok {
 		return validator.Validate()
 	}
-
 	return nil
 }
 
