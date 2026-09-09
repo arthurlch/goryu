@@ -38,8 +38,8 @@ func TestEnvvarMiddleware(t *testing.T) {
 		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
 			t.Fatalf("Failed to decode json response: %v", err)
 		}
-		if _, exists := body["TEST_APP_VERSION"]; !exists {
-			t.Error("TEST_APP_VERSION should be present in response")
+		if len(body) != 0 {
+			t.Errorf("no env vars should be exposed without an Expose allowlist, got %d", len(body))
 		}
 	})
 	t.Run("ExposeOnlySpecified", func(t *testing.T) {
@@ -74,6 +74,7 @@ func TestEnvvarMiddleware(t *testing.T) {
 	t.Run("ExcludeSpecified", func(t *testing.T) {
 		config := envvar.Config{
 			Path:    "/config",
+			Expose:  []string{"TEST_LOG_LEVEL", "TEST_DATABASE_URL"},
 			Exclude: []string{"TEST_DATABASE_URL"},
 		}
 		middleware := envvar.New(config)

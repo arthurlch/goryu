@@ -1,7 +1,9 @@
 package base
 
 import (
+	"bufio"
 	"log"
+	"net"
 	"net/http"
 	"os"
 
@@ -153,6 +155,17 @@ func (w *StandardResponseWriter) Write(data []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(data)
 	w.size += n
 	return n, err
+}
+func (w *StandardResponseWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+func (w *StandardResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, http.ErrNotSupported
 }
 func (w *StandardResponseWriter) Status() int {
 	return w.statusCode

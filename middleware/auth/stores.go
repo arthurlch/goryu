@@ -31,13 +31,14 @@ func (s *InMemoryUserStore) AddUser(email, password string, traits map[string]in
 		return nil, fmt.Errorf("failed to hash password: %v", err)
 	}
 	user := &User{
-		ID:        uuid.New().String(),
-		Email:     email,
-		Password:  hashedPassword,
-		Verified:  false,
-		Traits:    traits,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:                uuid.New().String(),
+		Email:             email,
+		Password:          hashedPassword,
+		Verified:          false,
+		Traits:            traits,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+		PasswordChangedAt: time.Now().Truncate(time.Second),
 	}
 	s.users[user.ID] = user
 	s.byEmail[email] = user
@@ -76,6 +77,9 @@ func (s *InMemoryUserStore) UpdatePassword(email, newPassword string) error {
 	}
 	user.Password = hashedPassword
 	user.UpdatedAt = time.Now()
+	// Truncated to the second so a token minted in this same second (JWT iat is
+	// whole seconds) isn't wrongly rejected.
+	user.PasswordChangedAt = time.Now().Truncate(time.Second)
 	return nil
 }
 func (s *InMemoryUserStore) VerifyUserEmail(email string) error {
@@ -131,11 +135,12 @@ func (s *InMemoryUserStore) ListUsers(offset, limit int) ([]*User, error) {
 }
 
 type InMemoryTokenStore struct {
-	mu      sync.RWMutex
-	tokens  map[string]time.Time
-	used    map[string]bool
-	cleanup *time.Ticker
-	stop    chan bool
+	mu       sync.RWMutex
+	tokens   map[string]time.Time
+	used     map[string]bool
+	cleanup  *time.Ticker
+	stop     chan bool
+	stopOnce sync.Once
 }
 
 func NewInMemoryTokenStore() *InMemoryTokenStore {
@@ -146,6 +151,7 @@ func NewInMemoryTokenStore() *InMemoryTokenStore {
 	}
 	store.cleanup = time.NewTicker(1 * time.Hour)
 	go func() {
+		defer func() { _ = recover() }()
 		for {
 			select {
 			case <-store.cleanup.C:
@@ -199,7 +205,7 @@ func (s *InMemoryTokenStore) cleanupExpiredTokens() error {
 	return nil
 }
 func (s *InMemoryTokenStore) Stop() {
-	close(s.stop)
+	s.stopOnce.Do(func() { close(s.stop) })
 }
 func (s *InMemoryTokenStore) Stats() map[string]interface{} {
 	s.mu.RLock()

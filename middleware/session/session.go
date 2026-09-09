@@ -1,7 +1,7 @@
 package session
 
 import (
-	"encoding/base64"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
@@ -40,6 +40,7 @@ type Config struct {
 	SameSite   http.SameSite
 	Domain     string
 	Path       string
+	SignKey    []byte
 }
 
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
@@ -64,6 +65,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Path == "" {
 		c.Path = "/"
+	}
+	// Cookies must be signed. When no key is provided we generate a per-process
+	// one; set SignKey explicitly to keep sessions valid across restarts/instances.
+	if len(c.SignKey) < 32 {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return base.NewConfigError("SignKey", "failed to generate signing key")
+		}
+		c.SignKey = key
 	}
 	return nil
 }
@@ -122,9 +132,9 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 		cookie, err := c.Cookie(cfg.CookieName)
 		var session *Session
 		if err == nil {
-			sessionID, decodeErr := base64.StdEncoding.DecodeString(cookie.Value)
-			if decodeErr == nil {
-				s, storeErr := cfg.Store.Get(string(sessionID))
+			sessionID, validErr := ValidateSessionToken(cookie.Value, cfg.SignKey)
+			if validErr == nil {
+				s, storeErr := cfg.Store.Get(sessionID)
 				if storeErr == nil && s != nil {
 					session = s
 					c.Set(sessionIDKey, s.ID)
@@ -174,7 +184,7 @@ func New(config ...Config) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc 
 
 		cookie := &http.Cookie{
 			Name:     cfg.CookieName,
-			Value:    base64.StdEncoding.EncodeToString([]byte(finalSession.ID)),
+			Value:    GenerateSessionToken(finalSession.ID, cfg.SignKey),
 			Expires:  time.Now().Add(cfg.Expiration),
 			Path:     cfg.Path,
 			Domain:   cfg.Domain,
@@ -295,7 +305,7 @@ func Regenerate(c *goryuctx.Context) error {
 	c.Set(sessionIDKey, newSessionID)
 	cookie := &http.Cookie{
 		Name:     cfg.CookieName,
-		Value:    base64.StdEncoding.EncodeToString([]byte(newSessionID)),
+		Value:    GenerateSessionToken(newSessionID, cfg.SignKey),
 		Expires:  time.Now().Add(cfg.Expiration),
 		Path:     cfg.Path,
 		Domain:   cfg.Domain,
@@ -309,13 +319,13 @@ func Regenerate(c *goryuctx.Context) error {
 			cfg.Logger.Printf("Warning: failed to set cookie during session regeneration: %v", err)
 		}
 	}
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+	// Destroy the old session synchronously so the previous ID can't be replayed.
+	{
 		err := cfg.Store.Destroy(oldSessionID)
 		if err != nil && cfg.Logger != nil {
 			cfg.Logger.Printf("Warning: failed to destroy old session during regeneration: %v", err)
 		}
-	}()
+	}
 	return nil
 }
 func Default(store Store) func(next goryuctx.HandlerFunc) goryuctx.HandlerFunc {

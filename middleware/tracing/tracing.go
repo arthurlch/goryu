@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	context "github.com/arthurlch/goryu/goryuctx"
@@ -173,6 +174,7 @@ func GetSpan(c *context.Context) (Span, bool) {
 }
 
 type SimpleTracer struct {
+	mu    sync.Mutex
 	spans []*SimpleSpan
 }
 
@@ -195,7 +197,9 @@ func (t *SimpleTracer) StartSpan(ctx stdContext.Context, name string) (Span, std
 		span.TraceID = parentCtx.TraceID()
 		span.ParentSpanID = parentCtx.SpanID()
 	}
+	t.mu.Lock()
 	t.spans = append(t.spans, span)
+	t.mu.Unlock()
 	newCtx := stdContext.WithValue(ctx, traceContextKey, span)
 	return span, newCtx
 }
@@ -223,10 +227,15 @@ func (t *SimpleTracer) Inject(spanContext SpanContext, headers http.Header) erro
 	return nil
 }
 func (t *SimpleTracer) GetSpans() []*SimpleSpan {
-	return t.spans
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]*SimpleSpan, len(t.spans))
+	copy(out, t.spans)
+	return out
 }
 
 type SimpleSpan struct {
+	mu           sync.Mutex
 	Name         string
 	TraceID      string
 	SpanID       string
@@ -249,15 +258,21 @@ type SpanStatus struct {
 }
 
 func (s *SimpleSpan) SetTag(key string, value interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Tags[key] = value
 }
 func (s *SimpleSpan) SetStatus(code StatusCode, message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Status = SpanStatus{
 		Code:    code,
 		Message: message,
 	}
 }
 func (s *SimpleSpan) AddEvent(name string, attributes map[string]interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Events = append(s.Events, SpanEvent{
 		Name:       name,
 		Attributes: attributes,
@@ -265,6 +280,8 @@ func (s *SimpleSpan) AddEvent(name string, attributes map[string]interface{}) {
 	})
 }
 func (s *SimpleSpan) End() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.EndTime = time.Now()
 }
 func (s *SimpleSpan) Context() SpanContext {

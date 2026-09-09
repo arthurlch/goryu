@@ -4,10 +4,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"io"
+	"regexp"
 
 	context "github.com/arthurlch/goryu/goryuctx"
 	"github.com/arthurlch/goryu/middleware/base"
 )
+
+var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 
 const DefaultRequestIDHeader = "X-Request-ID"
 
@@ -48,7 +51,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 	handler := func(c *context.Context) error {
 		rid := c.Request.Header.Get(cfg.Header)
-		if rid == "" {
+		if !validRequestID.MatchString(rid) {
 			rid = cfg.Generator()
 		}
 		c.Set(cfg.ContextKey, rid)

@@ -2,13 +2,13 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
+	stderrors "errors"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/arthurlch/goryu"
 	"github.com/arthurlch/goryu/middleware/errors"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type AuthHandlers struct {
@@ -119,29 +119,22 @@ func (ah *AuthHandlers) VerifyEmail(c *goryu.Ctx) {
 		errors.Error(c).BadRequest("Verification token is required")
 		return
 	}
-	parsedToken, err := jwt.ParseWithClaims(token, &VerificationClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return ah.service.jwt.secretKey, nil
-	})
-	if err != nil || !parsedToken.Valid {
+	email, jti, err := ah.service.jwt.ValidateVerificationToken(token)
+	if err != nil {
 		errors.Error(c).BadRequest("Invalid or expired verification token")
 		return
 	}
-	claims, ok := parsedToken.Claims.(*VerificationClaims)
-	if !ok {
-		errors.Error(c).BadRequest("Invalid token format")
-		return
-	}
-	if !ah.service.tokenStore.UseToken(claims.ID) {
+	if !ah.service.tokenStore.UseToken(jti) {
 		errors.Error(c).BadRequest("Verification token has already been used")
 		return
 	}
-	if err := ah.service.userStore.VerifyUserEmail(claims.Subject); err != nil {
+	if err := ah.service.userStore.VerifyUserEmail(email); err != nil {
 		ah.service.logError("Failed to verify user email", err)
 		errors.Error(c).Internal(err)
 		return
 	}
 	ah.service.logSecurityEvent("email_verified", map[string]interface{}{
-		"email": claims.Subject,
+		"email": email,
 		"ip":    ah.service.getClientIP(c),
 	})
 	c.JSON(http.StatusOK, map[string]interface{}{
@@ -172,13 +165,13 @@ func (ah *AuthHandlers) ResendVerification(c *goryu.Ctx) {
 		})
 		return
 	}
-	verificationToken, _, err := ah.service.jwt.CreateVerificationToken(req.Email)
+	verificationToken, jti, err := ah.service.jwt.CreateVerificationToken(req.Email)
 	if err != nil {
 		ah.service.logError("Failed to create verification token", err)
 		errors.Error(c).Internal(err)
 		return
 	}
-	ah.service.tokenStore.AddToken(verificationToken)
+	ah.service.tokenStore.AddToken(jti)
 	verifyURL := "/auth/verify-email?token=" + verificationToken
 	if err := ah.service.emailSender.SendVerificationEmail(req.Email, verificationToken, verifyURL); err != nil {
 		ah.service.logError("Failed to send verification email", err)
@@ -193,12 +186,8 @@ func (ah *AuthHandlers) ResendVerification(c *goryu.Ctx) {
 func (ah *AuthHandlers) Logout(c *goryu.Ctx) {
 	refreshToken := ah.extractRefreshToken(c)
 	if refreshToken != "" {
-		if parsedToken, err := jwt.ParseWithClaims(refreshToken, &RefreshClaims{}, func(token *jwt.Token) (interface{}, error) {
-			return ah.service.jwt.secretKey, nil
-		}); err == nil {
-			if claims, ok := parsedToken.Claims.(*RefreshClaims); ok {
-				ah.service.tokenStore.UseToken(claims.ID)
-			}
+		if _, jti, _, err := ah.service.jwt.ValidateRefreshToken(refreshToken); err == nil {
+			ah.service.tokenStore.UseToken(jti)
 		}
 	}
 	ah.clearAuthCookies(c)
@@ -218,29 +207,26 @@ func (ah *AuthHandlers) RefreshToken(c *goryu.Ctx) {
 		errors.Error(c).Unauthorized("Refresh token required")
 		return
 	}
-	parsedToken, err := jwt.ParseWithClaims(refreshToken, &RefreshClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return ah.service.jwt.secretKey, nil
-	})
-	if err != nil || !parsedToken.Valid {
+	userID, jti, issued, err := ah.service.jwt.ValidateRefreshToken(refreshToken)
+	if err != nil {
 		errors.Error(c).Unauthorized("Invalid or expired refresh token")
 		return
 	}
-	claims, ok := parsedToken.Claims.(*RefreshClaims)
-	if !ok {
-		errors.Error(c).Unauthorized("Invalid refresh token format")
+	if user, ok := ah.service.userStore.GetUserByID(userID); ok && issued.Before(user.PasswordChangedAt) {
+		errors.Error(c).Unauthorized("Refresh token has been revoked")
 		return
 	}
-	if !ah.service.tokenStore.UseToken(claims.ID) {
+	if !ah.service.tokenStore.UseToken(jti) {
 		errors.Error(c).Unauthorized("Refresh token has already been used")
 		return
 	}
-	newAccessToken, err := ah.service.jwt.CreateAuthToken(claims.Subject)
+	newAccessToken, err := ah.service.jwt.CreateAuthToken(userID)
 	if err != nil {
 		ah.service.logError("Failed to create new access token", err)
 		errors.Error(c).Internal(err)
 		return
 	}
-	newRefreshToken, newRefreshJTI, err := ah.service.jwt.CreateRefreshToken(claims.Subject)
+	newRefreshToken, newRefreshJTI, err := ah.service.jwt.CreateRefreshToken(userID)
 	if err != nil {
 		ah.service.logError("Failed to create new refresh token", err)
 		errors.Error(c).Internal(err)
@@ -265,7 +251,11 @@ func (ah *AuthHandlers) ChangePassword(c *goryu.Ctx) {
 		return
 	}
 	userIDValue, _ := c.Get(UserIDKey)
-	userID := userIDValue.(string)
+	userID, ok := userIDValue.(string)
+	if !ok {
+		errors.Error(c).Unauthorized("Authentication required")
+		return
+	}
 	user, exists := ah.service.userStore.GetUserByID(userID)
 	if !exists {
 		errors.Error(c).NotFound("user")
@@ -304,7 +294,11 @@ func (ah *AuthHandlers) ChangePassword(c *goryu.Ctx) {
 }
 func (ah *AuthHandlers) GetProfile(c *goryu.Ctx) {
 	userIDValue, _ := c.Get(UserIDKey)
-	userID := userIDValue.(string)
+	userID, ok := userIDValue.(string)
+	if !ok {
+		errors.Error(c).Unauthorized("Authentication required")
+		return
+	}
 	user, exists := ah.service.userStore.GetUserByID(userID)
 	if !exists {
 		errors.Error(c).NotFound("user")
@@ -324,10 +318,19 @@ func (ah *AuthHandlers) UpdateProfile(c *goryu.Ctx) {
 		return
 	}
 	userIDValue, _ := c.Get(UserIDKey)
-	userID := userIDValue.(string)
+	userID, ok := userIDValue.(string)
+	if !ok {
+		errors.Error(c).Unauthorized("Authentication required")
+		return
+	}
 	_, exists := ah.service.userStore.GetUserByID(userID)
 	if !exists {
 		errors.Error(c).NotFound("user")
+		return
+	}
+	if err := ah.service.userStore.UpdateUserTraits(userID, sanitizeTraits(req.Traits)); err != nil {
+		ah.service.logError("Failed to update profile", err)
+		errors.Error(c).Internal(err)
 		return
 	}
 	ah.service.logSecurityEvent("profile_updated", map[string]interface{}{
@@ -353,7 +356,11 @@ func (ah *AuthHandlers) DeleteAccount(c *goryu.Ctx) {
 		return
 	}
 	userIDValue, _ := c.Get(UserIDKey)
-	userID := userIDValue.(string)
+	userID, ok := userIDValue.(string)
+	if !ok {
+		errors.Error(c).Unauthorized("Authentication required")
+		return
+	}
 	user, exists := ah.service.userStore.GetUserByID(userID)
 	if !exists {
 		errors.Error(c).NotFound("user")
@@ -361,6 +368,11 @@ func (ah *AuthHandlers) DeleteAccount(c *goryu.Ctx) {
 	}
 	if !VerifySecurePassword(req.Password, user.Password) {
 		errors.Error(c).BadRequest("Password is incorrect")
+		return
+	}
+	if err := ah.service.userStore.DeleteUser(userID); err != nil {
+		ah.service.logError("Failed to delete account", err)
+		errors.Error(c).Internal(err)
 		return
 	}
 	ah.service.logSecurityEvent("account_deleted", map[string]interface{}{
@@ -392,7 +404,7 @@ func (ah *AuthHandlers) extractRefreshToken(c *goryu.Ctx) string {
 		return cookie.Value
 	}
 	var body map[string]string
-	if err := json.NewDecoder(c.Request.Body).Decode(&body); err == nil {
+	if err := json.NewDecoder(io.LimitReader(c.Request.Body, 1<<20)).Decode(&body); err == nil {
 		if token, exists := body["refresh_token"]; exists {
 			return token
 		}
@@ -400,16 +412,18 @@ func (ah *AuthHandlers) extractRefreshToken(c *goryu.Ctx) string {
 	return ""
 }
 func (ah *AuthHandlers) validateToken(token string) (string, error) {
-	parsedToken, err := jwt.ParseWithClaims(token, &AuthClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return ah.service.jwt.secretKey, nil
-	})
+	userID, issued, err := ah.service.jwt.ValidateAuthToken(token)
 	if err != nil {
 		return "", err
 	}
-	if claims, ok := parsedToken.Claims.(*AuthClaims); ok && parsedToken.Valid {
-		return claims.Subject, nil
+	user, ok := ah.service.userStore.GetUserByID(userID)
+	if !ok {
+		return "", stderrors.New("user no longer exists")
 	}
-	return "", fmt.Errorf("invalid token claims")
+	if issued.Before(user.PasswordChangedAt) {
+		return "", stderrors.New("token invalidated by password change")
+	}
+	return userID, nil
 }
 func (ah *AuthHandlers) clearAuthCookies(c *goryu.Ctx) {
 	http.SetCookie(c.Writer, &http.Cookie{

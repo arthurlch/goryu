@@ -123,16 +123,16 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 		template := cfg.Format
 		replacer := strings.NewReplacer(
 			"${time}", stop.Format(cfg.TimeFormat),
-			"${request_id}", requestID,
+			"${request_id}", sanitizeLogField(requestID),
 			"${status}", fmt.Sprintf("%s%d%s", statusColor, statusCode, resetColor),
 			"${latency}", latency.String(),
-			"${ip}", clientIP,
+			"${ip}", sanitizeLogField(clientIP),
 			"${method}", fmt.Sprintf("%s%s%s", methodColor, method, resetColor),
-			"${path}", path,
+			"${path}", sanitizeLogField(path),
 			"${proto}", proto,
 			"${size}", strconv.Itoa(size),
-			"${user_agent}", userAgent,
-			"${error}", errMsg,
+			"${user_agent}", sanitizeLogField(userAgent),
+			"${error}", sanitizeLogField(errMsg),
 		)
 		buf.WriteString(replacer.Replace(template))
 		mu.Lock()
@@ -144,6 +144,11 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
 	return New()
+}
+
+// sanitizeLogField strips CR/LF so client-controlled values can't forge log lines.
+func sanitizeLogField(s string) string {
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(s)
 }
 func getClientIP(c *context.Context) string {
 	if xff := c.Request.Header.Get("X-Forwarded-For"); xff != "" {

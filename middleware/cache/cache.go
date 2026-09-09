@@ -1,10 +1,14 @@
 package cache
 
 import (
+	"bufio"
 	"bytes"
 	"container/list"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	context "github.com/arthurlch/goryu/goryuctx"
@@ -23,14 +27,14 @@ type lruItem struct {
 	entry *cacheEntry
 }
 type secureCache struct {
-	mu            sync.RWMutex
-	entries       map[string]*cacheEntry
-	lruList       *list.List
-	maxSize       int
-	maxMemory     int64
-	currentMemory int64
-	expiration    time.Duration
-	lastCleanup   time.Time
+	mu              sync.RWMutex
+	entries         map[string]*cacheEntry
+	lruList         *list.List
+	maxSize         int
+	maxMemory       int64
+	currentMemory   int64
+	expiration      time.Duration
+	lastCleanupNano int64
 }
 type Config struct {
 	base.BaseConfig
@@ -51,6 +55,17 @@ func (cw *cacheWriter) WriteHeader(code int) {
 }
 func (cw *cacheWriter) Write(b []byte) (int, error) {
 	return cw.body.Write(b)
+}
+func (cw *cacheWriter) Flush() {
+	if f, ok := cw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+func (cw *cacheWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := cw.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, http.ErrNotSupported
 }
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
@@ -83,13 +98,13 @@ func (c *Config) Validate() error {
 }
 func newSecureCache(maxSize int, maxMemory int64, expiration time.Duration, cleanupInterval time.Duration) *secureCache {
 	cache := &secureCache{
-		entries:       make(map[string]*cacheEntry, maxSize),
-		lruList:       list.New(),
-		maxSize:       maxSize,
-		maxMemory:     maxMemory,
-		currentMemory: 0,
-		expiration:    expiration,
-		lastCleanup:   time.Now(),
+		entries:         make(map[string]*cacheEntry, maxSize),
+		lruList:         list.New(),
+		maxSize:         maxSize,
+		maxMemory:       maxMemory,
+		currentMemory:   0,
+		expiration:      expiration,
+		lastCleanupNano: time.Now().UnixNano(),
 	}
 	return cache
 }
@@ -168,9 +183,6 @@ func (sc *secureCache) cleanup() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	now := time.Now()
-	if now.Sub(sc.lastCleanup) < time.Minute {
-		return
-	}
 	expiredKeys := make([]string, 0)
 	for key, entry := range sc.entries {
 		if now.Sub(entry.createdAt) >= sc.expiration {
@@ -185,7 +197,6 @@ func (sc *secureCache) cleanup() {
 			delete(sc.entries, key)
 		}
 	}
-	sc.lastCleanup = now
 }
 func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	cfg := Config{}
@@ -211,7 +222,18 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				next(c)
 				return
 			}
-			if time.Since(cacheStore.lastCleanup) > cfg.CleanupInterval {
+			// Never cache per-user responses: an authenticated request could
+			// otherwise have its response served to a different user.
+			if requestIsPrivate(c) {
+				next(c)
+				return
+			}
+			// Fire cleanup at most once per interval; the CAS guarantees a single
+			// goroutine wins instead of every request spawning one.
+			nowNano := time.Now().UnixNano()
+			last := atomic.LoadInt64(&cacheStore.lastCleanupNano)
+			if nowNano-last > int64(cfg.CleanupInterval) &&
+				atomic.CompareAndSwapInt64(&cacheStore.lastCleanupNano, last, nowNano) {
 				go cacheStore.cleanup()
 			}
 			key := cfg.KeyGenerator(c)
@@ -253,7 +275,9 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				body:       writer.body.Bytes(),
 				createdAt:  time.Now(),
 			}
-			cacheStore.put(key, newEntry)
+			if responseIsCacheable(newEntry.headers) {
+				cacheStore.put(key, newEntry)
+			}
 			originalWriter := writer.ResponseWriter
 			c.Writer = originalWriter
 			for k, v := range newEntry.headers {
@@ -272,4 +296,16 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 }
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
 	return New()
+}
+
+func requestIsPrivate(c *context.Context) bool {
+	return c.Request.Header.Get("Authorization") != "" || c.Request.Header.Get("Cookie") != ""
+}
+
+func responseIsCacheable(h http.Header) bool {
+	if h.Get("Set-Cookie") != "" {
+		return false
+	}
+	cc := strings.ToLower(h.Get("Cache-Control"))
+	return !strings.Contains(cc, "no-store") && !strings.Contains(cc, "no-cache") && !strings.Contains(cc, "private")
 }

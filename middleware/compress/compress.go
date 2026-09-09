@@ -137,23 +137,47 @@ type compressBuffer struct {
 	compressible []string
 	headersSent  bool
 }
+
+// Cap buffered response size so a large body can't exhaust memory.
+const maxBufferSize = 10 << 20
+
 type compressResponseWriter struct {
 	http.ResponseWriter
-	buffer     *compressBuffer
-	statusCode int
+	buffer      *compressBuffer
+	statusCode  int
+	passthrough bool
 }
 
+// WriteHeader only records the status; headers are committed once in finalize,
+// after we know whether Content-Encoding must be added.
 func (w *compressResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
-	if !w.buffer.headersSent {
-		w.buffer.headersSent = true
-		if statusCode < 200 || statusCode >= 300 {
-			w.buffer.encoding = ""
-		}
-		w.ResponseWriter.WriteHeader(statusCode)
+}
+func (w *compressResponseWriter) commit() {
+	if w.buffer.headersSent {
+		return
 	}
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
+	}
+	w.buffer.headersSent = true
+	w.ResponseWriter.WriteHeader(w.statusCode)
 }
 func (w *compressResponseWriter) Write(data []byte) (int, error) {
+	if w.passthrough {
+		return w.ResponseWriter.Write(data)
+	}
+	// Once the body outgrows the cap, flush what we have uncompressed and stream
+	// the rest directly instead of holding the whole response in memory.
+	if len(w.buffer.data)+len(data) > maxBufferSize {
+		w.commit()
+		if len(w.buffer.data) > 0 {
+			_, _ = w.ResponseWriter.Write(w.buffer.data)
+			w.buffer.data = nil
+		}
+		w.passthrough = true
+		return w.ResponseWriter.Write(data)
+	}
 	w.buffer.data = append(w.buffer.data, data...)
 	return len(data), nil
 }
@@ -173,21 +197,26 @@ func (w *compressResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, http.ErrNotSupported
 }
 func (w *compressResponseWriter) finalize() {
-	if len(w.buffer.data) == 0 {
+	if w.passthrough || len(w.buffer.data) == 0 {
 		return
 	}
-	if !w.buffer.headersSent {
-		if w.statusCode == 0 {
-			w.statusCode = http.StatusOK
-		}
-		w.WriteHeader(w.statusCode)
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
 	}
-	shouldCompress := w.shouldCompress()
-	if shouldCompress && w.buffer.encoding != "" && len(w.buffer.data) >= w.buffer.minLength {
+	compress := w.statusCode >= 200 && w.statusCode < 300 &&
+		w.buffer.encoding != "" && w.shouldCompress() &&
+		len(w.buffer.data) >= w.buffer.minLength
+	if compress {
+		w.Header().Set("Content-Encoding", w.buffer.encoding)
+		w.Header().Del("Content-Length")
+	}
+	w.commit()
+	if compress {
 		w.writeCompressed()
 	} else {
 		w.writeUncompressed()
 	}
+	w.buffer.data = nil
 }
 func (w *compressResponseWriter) shouldCompress() bool {
 	contentType := w.Header().Get("Content-Type")
@@ -210,8 +239,6 @@ func (w *compressResponseWriter) shouldCompress() bool {
 	return false
 }
 func (w *compressResponseWriter) writeCompressed() {
-	w.Header().Set("Content-Encoding", w.buffer.encoding)
-	w.Header().Del("Content-Length")
 	switch w.buffer.encoding {
 	case "gzip":
 		gzipWriter, err := gzip.NewWriterLevel(w.ResponseWriter, w.buffer.level)

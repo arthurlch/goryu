@@ -15,6 +15,7 @@ type Config struct {
 	CustomPort        int
 	ForwardedProtocol string
 	ForwardedHost     string
+	AllowedHosts      []string
 	RedirectFunc      func(c *context.Context, httpsURL string)
 }
 
@@ -89,9 +90,11 @@ func isSecureRequest(c *context.Context, config Config) bool {
 	return false
 }
 func buildHTTPSURL(c *context.Context, config Config) string {
-	host := c.Request.Header.Get(config.ForwardedHost)
-	if host == "" {
-		host = c.Request.Host
+	// Only trust X-Forwarded-Host when it matches the allowlist, otherwise an
+	// attacker could set it to redirect victims to an arbitrary site.
+	host := c.Request.Host
+	if fwd := c.Request.Header.Get(config.ForwardedHost); fwd != "" && hostAllowed(fwd, config.AllowedHosts) {
+		host = fwd
 	}
 	if strings.HasSuffix(host, ":80") {
 		host = strings.TrimSuffix(host, ":80")
@@ -107,4 +110,16 @@ func buildHTTPSURL(c *context.Context, config Config) string {
 		uri += "?" + c.Request.URL.RawQuery
 	}
 	return "https://" + host + uri
+}
+
+func hostAllowed(host string, allowed []string) bool {
+	if i := strings.LastIndex(host, ":"); i != -1 {
+		host = host[:i]
+	}
+	for _, a := range allowed {
+		if a == host {
+			return true
+		}
+	}
+	return false
 }

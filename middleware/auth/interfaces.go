@@ -11,6 +11,9 @@ type User struct {
 	Traits    map[string]interface{} `json:"traits,omitempty"`
 	CreatedAt time.Time              `json:"created_at"`
 	UpdatedAt time.Time              `json:"updated_at"`
+	// Tokens issued before this instant are rejected, so a password change
+	// invalidates every outstanding access and refresh token.
+	PasswordChangedAt time.Time `json:"-"`
 }
 
 const (

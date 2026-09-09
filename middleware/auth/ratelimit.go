@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const maxTrackedEntries = 50000
+
 type AttemptRecord struct {
 	Count        int
 	FirstAttempt time.Time
@@ -24,6 +26,7 @@ type RateLimiter struct {
 	cleanupInterval time.Duration
 	cleanupTicker   *time.Ticker
 	stopCleanup     chan bool
+	stopOnce        sync.Once
 }
 
 func NewRateLimiter(maxAttempts int, windowDuration, blockDuration time.Duration) *RateLimiter {
@@ -103,6 +106,7 @@ func (rl *RateLimiter) RecordFailedAttempt(ip, email string) {
 		ipRecord.Count++
 		ipRecord.LastAttempt = now
 	} else {
+		evictOldestIfFull(rl.ipAttempts)
 		rl.ipAttempts[normalizedIP] = &AttemptRecord{
 			Count:        1,
 			FirstAttempt: now,
@@ -113,11 +117,33 @@ func (rl *RateLimiter) RecordFailedAttempt(ip, email string) {
 		emailRecord.Count++
 		emailRecord.LastAttempt = now
 	} else {
+		evictOldestIfFull(rl.emailAttempts)
 		rl.emailAttempts[normalizedEmail] = &AttemptRecord{
 			Count:        1,
 			FirstAttempt: now,
 			LastAttempt:  now,
 		}
+	}
+}
+
+// evictOldestIfFull keeps the tracking maps bounded so a flood of distinct
+// keys can't exhaust memory. Caller must hold the lock.
+func evictOldestIfFull(records map[string]*AttemptRecord) {
+	if len(records) < maxTrackedEntries {
+		return
+	}
+	var oldestKey string
+	var oldest time.Time
+	found := false
+	for key, record := range records {
+		if !found || record.LastAttempt.Before(oldest) {
+			oldestKey = key
+			oldest = record.LastAttempt
+			found = true
+		}
+	}
+	if found {
+		delete(records, oldestKey)
 	}
 }
 func (rl *RateLimiter) RecordSuccessfulAttempt(email string) {
@@ -171,6 +197,7 @@ func (rl *RateLimiter) normalizeIP(ip string) string {
 func (rl *RateLimiter) startCleanup() {
 	rl.cleanupTicker = time.NewTicker(rl.cleanupInterval)
 	go func() {
+		defer func() { _ = recover() }()
 		for {
 			select {
 			case <-rl.cleanupTicker.C:
@@ -202,7 +229,7 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 func (rl *RateLimiter) Stop() {
-	close(rl.stopCleanup)
+	rl.stopOnce.Do(func() { close(rl.stopCleanup) })
 }
 func (rl *RateLimiter) Stats() map[string]interface{} {
 	rl.mu.RLock()

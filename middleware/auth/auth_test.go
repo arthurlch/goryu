@@ -148,7 +148,7 @@ func TestJWTTokens(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		validatedUserID, err := jwtAuth.ValidateAuthToken(token)
+		validatedUserID, _, err := jwtAuth.ValidateAuthToken(token)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -162,7 +162,7 @@ func TestJWTTokens(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		validatedUserID, validatedJTI, err := jwtAuth.ValidateRefreshToken(token)
+		validatedUserID, validatedJTI, _, err := jwtAuth.ValidateRefreshToken(token)
 		if err != nil {
 			t.Fatal(err)
 		}
