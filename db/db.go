@@ -1,17 +1,45 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/arthurlch/goryu/config"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+const pingTimeout = 5 * time.Second
+
+// configurePool applies the connection limits, falling back to safe defaults so
+// a zero-valued config can never open unlimited connections.
+func configurePool(db *sql.DB, maxOpen, maxIdle int, maxLifetime, maxIdleTime time.Duration) {
+	if maxOpen <= 0 {
+		maxOpen = 25
+	}
+	if maxIdle <= 0 {
+		maxIdle = 5
+	}
+	if maxLifetime <= 0 {
+		maxLifetime = 5 * time.Minute
+	}
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
+	db.SetConnMaxLifetime(maxLifetime)
+	db.SetConnMaxIdleTime(maxIdleTime)
+}
+
+func pingWithTimeout(db *sql.DB) error {
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+	defer cancel()
+	return db.PingContext(ctx)
+}
 
 // this was more complicated than I thought it would be...
 // but I think it's better now, more secure and robust now,
@@ -52,12 +80,10 @@ func Connect(cfg *config.Config) (*Connection, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
-	db.SetConnMaxIdleTime(cfg.Database.ConnMaxIdleTime)
+	configurePool(db, cfg.Database.MaxOpenConns, cfg.Database.MaxIdleConns,
+		cfg.Database.ConnMaxLifetime, cfg.Database.ConnMaxIdleTime)
 
-	if err := db.Ping(); err != nil {
+	if err := pingWithTimeout(db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -100,8 +126,9 @@ func ConnectLegacy(cfg *config.LegacyConfig) (*Connection, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Test connection
-	if err := db.Ping(); err != nil {
+	configurePool(db, 0, 0, 0, 0)
+
+	if err := pingWithTimeout(db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
