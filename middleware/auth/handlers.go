@@ -171,7 +171,9 @@ func (ah *AuthHandlers) ResendVerification(c *goryu.Ctx) {
 		errors.Error(c).Internal(err)
 		return
 	}
-	ah.service.tokenStore.AddToken(jti)
+	if err := ah.service.tokenStore.AddToken(jti); err != nil {
+		ah.service.logError("Failed to store verification token", err)
+	}
 	verifyURL := "/auth/verify-email?token=" + verificationToken
 	if err := ah.service.emailSender.SendVerificationEmail(req.Email, verificationToken, verifyURL); err != nil {
 		ah.service.logError("Failed to send verification email", err)

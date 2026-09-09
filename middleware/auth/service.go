@@ -177,7 +177,9 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 				Message: "Account created but failed to send verification email",
 			}
 		}
-		as.tokenStore.AddToken(jti)
+		if err := as.tokenStore.AddToken(jti); err != nil {
+			as.logError("Failed to store verification token", err)
+		}
 		verifyURL := fmt.Sprintf("/auth/verify-email?token=%s", verificationToken)
 		if err := as.emailSender.SendVerificationEmail(req.Email, verificationToken, verifyURL); err != nil {
 			as.logError("Failed to send verification email", err)
