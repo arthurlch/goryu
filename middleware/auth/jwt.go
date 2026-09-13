@@ -120,7 +120,7 @@ func (j *JWTAuth) CreatePasswordResetToken(email string) (string, string, error)
 	tokenString, err := token.SignedString(j.secretKey)
 	return tokenString, jti, err
 }
-func (j *JWTAuth) ValidateAuthToken(tokenString string) (string, error) {
+func (j *JWTAuth) ValidateAuthToken(tokenString string) (string, time.Time, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &AuthClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid signing method")
@@ -128,14 +128,14 @@ func (j *JWTAuth) ValidateAuthToken(tokenString string) (string, error) {
 		return j.secretKey, nil
 	})
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	if claims, ok := token.Claims.(*AuthClaims); ok && token.Valid {
-		return claims.Subject, nil
+		return claims.Subject, issuedAt(claims.IssuedAt), nil
 	}
-	return "", errors.New("invalid token claims")
+	return "", time.Time{}, errors.New("invalid token claims")
 }
-func (j *JWTAuth) ValidateRefreshToken(tokenString string) (string, string, error) {
+func (j *JWTAuth) ValidateRefreshToken(tokenString string) (string, string, time.Time, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &RefreshClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid signing method")
@@ -143,15 +143,22 @@ func (j *JWTAuth) ValidateRefreshToken(tokenString string) (string, string, erro
 		return j.secretKey, nil
 	})
 	if err != nil {
-		return "", "", err
+		return "", "", time.Time{}, err
 	}
 	if claims, ok := token.Claims.(*RefreshClaims); ok && token.Valid {
 		if claims.Type != "refresh" {
-			return "", "", errors.New("invalid token type")
+			return "", "", time.Time{}, errors.New("invalid token type")
 		}
-		return claims.Subject, claims.ID, nil
+		return claims.Subject, claims.ID, issuedAt(claims.IssuedAt), nil
 	}
-	return "", "", errors.New("invalid token claims")
+	return "", "", time.Time{}, errors.New("invalid token claims")
+}
+
+func issuedAt(d *jwt.NumericDate) time.Time {
+	if d == nil {
+		return time.Time{}
+	}
+	return d.Time
 }
 func (j *JWTAuth) ValidateVerificationToken(tokenString string) (string, string, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &VerificationClaims{}, func(token *jwt.Token) (interface{}, error) {

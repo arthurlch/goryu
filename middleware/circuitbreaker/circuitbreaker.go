@@ -87,22 +87,18 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				next(c)
 				return
 			}
-			err := cb.Execute(func() error {
-				next(c)
-				return nil
-			})
-			if err != nil {
+			serve(cb, c, next, func() {
 				if cfg.ErrorHandler != nil {
 					cfg.ErrorHandler(c, base.MiddlewareError{
 						Middleware: "CircuitBreaker",
-						Err:        err,
+						Err:        errOpen,
 						StatusCode: 503,
 					}, "CircuitBreaker")
 				} else {
 					c.Writer.WriteHeader(503)
-					c.Writer.Write([]byte("Service Unavailable - Circuit Breaker Open"))
+					_, _ = c.Writer.Write([]byte("Service Unavailable - Circuit Breaker Open"))
 				}
-			}
+			})
 		}
 	}
 }
@@ -119,14 +115,10 @@ func NewCircuitBreaker(config Config) *CircuitBreaker {
 func (cb *CircuitBreaker) Middleware() context.Middleware {
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
-			err := cb.Execute(func() error {
-				next(c)
-				return nil
-			})
-			if err != nil {
+			serve(cb, c, next, func() {
 				c.Writer.WriteHeader(503)
 				_, _ = c.Writer.Write([]byte("Service Unavailable - Circuit Breaker Open"))
-			}
+			})
 		}
 	}
 }
@@ -148,33 +140,52 @@ func WithCircuitBreaker(config Config) (*CircuitBreaker, func(next context.Handl
 				next(c)
 				return
 			}
-			err := cb.Execute(func() error {
-				next(c)
-				return nil
-			})
-			if err != nil {
+			serve(cb, c, next, func() {
 				if config.ErrorHandler != nil {
 					config.ErrorHandler(c, base.MiddlewareError{
 						Middleware: "CircuitBreaker",
-						Err:        err,
+						Err:        errOpen,
 						StatusCode: 503,
 					}, "CircuitBreaker")
 				} else {
 					c.Writer.WriteHeader(503)
-					c.Writer.Write([]byte("Service Unavailable - Circuit Breaker Open"))
+					_, _ = c.Writer.Write([]byte("Service Unavailable - Circuit Breaker Open"))
 				}
-			}
+			})
 		}
 	}
 	return cb, middleware
 }
+
+var (
+	errOpen       = errors.New("circuit breaker is open")
+	errDownstream = errors.New("downstream failure")
+)
+
 func (cb *CircuitBreaker) Execute(fn func() error) error {
 	if !cb.canRequest() {
-		return errors.New("circuit breaker is open")
+		return errOpen
 	}
 	err := fn()
 	cb.record(err)
 	return err
+}
+
+// serve runs next through the breaker, counting any 5xx response as a failure,
+// and calls onOpen only when the breaker rejected the request before running it.
+func serve(cb *CircuitBreaker, c *context.Context, next context.HandlerFunc, onOpen func()) {
+	rw := base.NewStandardResponseWriter(c.Writer)
+	c.Writer = rw
+	err := cb.Execute(func() error {
+		next(c)
+		if rw.Status() >= 500 {
+			return errDownstream
+		}
+		return nil
+	})
+	if errors.Is(err, errOpen) {
+		onOpen()
+	}
 }
 func (cb *CircuitBreaker) canRequest() bool {
 	cb.mutex.Lock()

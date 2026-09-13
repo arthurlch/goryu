@@ -100,6 +100,11 @@ func collectEnvVars(expose, exclude []string) map[string]string {
 	for _, key := range exclude {
 		excludeMap[key] = true
 	}
+	// Fail closed: never expose the whole environment. Only keys explicitly
+	// allowlisted via Expose are returned.
+	if len(exposeMap) == 0 {
+		return envMap
+	}
 	for _, e := range os.Environ() {
 		pair := strings.SplitN(e, "=", 2)
 		if len(pair) != 2 {

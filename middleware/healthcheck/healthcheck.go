@@ -3,6 +3,7 @@ package healthcheck
 import (
 	stdContext "context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -130,6 +131,11 @@ func runHealthChecks(ctx stdContext.Context, probes map[string]Probe, timeout ti
 			defer wg.Done()
 			done := make(chan error, 1)
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						done <- fmt.Errorf("probe panicked: %v", r)
+					}
+				}()
 				done <- probe(ctx)
 			}()
 			var err error

@@ -18,10 +18,11 @@ type Config struct {
 }
 type timeoutWriter struct {
 	http.ResponseWriter
-	mu         sync.Mutex
-	timedOut   int32
-	headerSent int32
-	written    int32
+	mu          sync.Mutex
+	timedOut    int32
+	headerSent  int32
+	written     int32
+	timeoutMode int32
 }
 
 func (tw *timeoutWriter) Header() http.Header {
@@ -30,24 +31,27 @@ func (tw *timeoutWriter) Header() http.Header {
 	return tw.ResponseWriter.Header()
 }
 
+// blocked reports whether the handler is trying to write after a timeout. Writes
+// from the timeout handler itself (timeoutMode) are allowed through.
+func (tw *timeoutWriter) blocked() bool {
+	return atomic.LoadInt32(&tw.timedOut) == 1 && atomic.LoadInt32(&tw.timeoutMode) == 0
+}
+
 func (tw *timeoutWriter) WriteHeader(status int) {
-	if atomic.LoadInt32(&tw.timedOut) == 1 || atomic.LoadInt32(&tw.written) == 1 {
-		return
-	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
+	if tw.blocked() {
+		return
+	}
 	if atomic.CompareAndSwapInt32(&tw.headerSent, 0, 1) {
 		tw.ResponseWriter.WriteHeader(status)
 	}
 }
 
 func (tw *timeoutWriter) Write(data []byte) (int, error) {
-	if atomic.LoadInt32(&tw.timedOut) == 1 {
-		return 0, http.ErrHandlerTimeout
-	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
-	if atomic.LoadInt32(&tw.timedOut) == 1 {
+	if tw.blocked() {
 		return 0, http.ErrHandlerTimeout
 	}
 	if atomic.CompareAndSwapInt32(&tw.headerSent, 0, 1) {
@@ -146,19 +150,21 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 			case <-ctx.Done():
 				timeoutWriter.markTimedOut()
 
-				// Wait for the handler to notice the timeout and stop
-				// Use a short timeout to avoid blocking forever
+				// Give the handler a moment to notice the cancellation and stop.
 				waitTimer := time.NewTimer(100 * time.Millisecond)
 				select {
 				case <-done:
 					waitTimer.Stop()
 				case <-waitTimer.C:
-					// Handler didn't stop in time, proceed anyway
 				}
 
-				c.Writer = originalWriter
+				// Write the timeout response through the same guarded writer so it
+				// never races with a late handler write, and never swap c.Writer
+				// out from under the handler goroutine.
 				if ctx.Err() == stdContext.DeadlineExceeded && !timeoutWriter.hasWritten() {
+					atomic.StoreInt32(&timeoutWriter.timeoutMode, 1)
 					cfg.TimeoutHandler(c)
+					atomic.StoreInt32(&timeoutWriter.timeoutMode, 0)
 				}
 				return
 			}

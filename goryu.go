@@ -145,9 +145,13 @@ func New(config ...Config) *App {
 	if monitor != nil {
 		app.Use(monitor.Middleware())
 
-		app.GET("/_health", monitor.HealthHandler())
-		app.GET("/_metrics", monitor.MetricsHandler())
-		app.GET("/_events", monitor.EventsHandler())
+		// These endpoints expose request metadata and runtime internals, so they
+		// are only served when monitoring is explicitly enabled, never by default.
+		if cfg.EnableMonitoring != nil && *cfg.EnableMonitoring {
+			app.GET("/_health", monitor.HealthHandler())
+			app.GET("/_metrics", monitor.MetricsHandler())
+			app.GET("/_events", monitor.EventsHandler())
+		}
 	}
 
 	return app
@@ -184,6 +188,12 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				http.Error(w, "Form data too large or invalid", http.StatusBadRequest)
 				return
 			}
+			// Remove any temp files ParseMultipartForm spilled to disk.
+			defer func() {
+				if req.MultipartForm != nil {
+					_ = req.MultipartForm.RemoveAll()
+				}
+			}()
 		}
 		// Skip form parsing for other content types - let Context handle it lazily
 	}
@@ -247,14 +257,6 @@ func (app *App) Mount(prefix string, subApp *App) {
 			subURL.Path = "/"
 		}
 		subRequest.URL = &subURL
-
-		subContext := goryu_context.NewContext(c.Writer, subRequest)
-
-		for key, value := range c.Keys {
-			if !strings.HasPrefix(key, "goryu.mount.") {
-				subContext.Set(key, value)
-			}
-		}
 
 		subApp.Router.ServeHTTP(c.Writer, subRequest)
 	}
@@ -489,6 +491,23 @@ func sanitizeStaticPath(root, requestPath string) (string, error) {
 		return "", fmt.Errorf("directory traversal attack detected")
 	}
 
+	// Never serve dotfiles (.git, .env, .htpasswd, ...).
+	for _, seg := range strings.Split(cleanPath, "/") {
+		if len(seg) > 0 && seg[0] == '.' && seg != "." && seg != ".." {
+			return "", fmt.Errorf("access to dotfiles is denied")
+		}
+	}
+
+	// Resolve symlinks on both sides and re-check containment so a link inside
+	// root can't escape it (resolving root too, since it may itself sit under a symlink).
+	if resolvedRoot, err := filepath.EvalSymlinks(rootAbs); err == nil {
+		if resolved, err := filepath.EvalSymlinks(fullPathAbs); err == nil {
+			if resolved != resolvedRoot && !strings.HasPrefix(resolved, resolvedRoot+string(filepath.Separator)) {
+				return "", fmt.Errorf("symlink escapes static root")
+			}
+		}
+	}
+
 	suspiciousPatterns := []string{
 		"~",    // Home directory access
 		"\\",   // Windows path separators on Unix
@@ -544,11 +563,24 @@ func (app *App) MountPath() string {
 	return app.mountPath
 }
 
+// newServer builds an http.Server with timeouts so slow clients can't hold
+// connections open indefinitely (Slowloris).
+func (app *App) newServer(addr string) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           app,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+}
+
 func (app *App) Run(addr string) error {
 	if !app.Config.DisableStartupMessage {
 		app.printStartupMessage(addr)
 	}
-	return http.ListenAndServe(addr, app)
+	return app.Listen(addr)
 }
 
 func (app *App) Listen(addr string) error {
@@ -557,7 +589,7 @@ func (app *App) Listen(addr string) error {
 	}
 
 	app.serverMu.Lock()
-	app.server = &http.Server{Addr: addr, Handler: app}
+	app.server = app.newServer(addr)
 	server := app.server
 	app.serverMu.Unlock()
 
@@ -570,7 +602,7 @@ func (app *App) ListenTLS(addr, certFile, keyFile string) error {
 	}
 
 	app.serverMu.Lock()
-	app.server = &http.Server{Addr: addr, Handler: app}
+	app.server = app.newServer(addr)
 	server := app.server
 	app.serverMu.Unlock()
 
@@ -622,10 +654,7 @@ func (app *App) printStartupMessage(addr string) {
 }
 
 func (app *App) Shutdown() error {
-	if app.server == nil {
-		return fmt.Errorf("server is not running")
-	}
-	return app.server.Shutdown(context.Background())
+	return app.ShutdownWithContext(context.Background())
 }
 
 func (app *App) ShutdownWithContext(ctx context.Context) error {
@@ -635,6 +664,9 @@ func (app *App) ShutdownWithContext(ctx context.Context) error {
 
 	if server == nil {
 		return fmt.Errorf("server is not running")
+	}
+	if app.Monitor != nil {
+		app.Monitor.Close()
 	}
 	return server.Shutdown(ctx)
 }

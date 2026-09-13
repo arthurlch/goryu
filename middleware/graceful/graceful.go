@@ -62,8 +62,12 @@ func NewGracefulServer(addr string, handler http.Handler, config ...ShutdownConf
 	}
 	return &GracefulServer{
 		server: &http.Server{
-			Addr:    addr,
-			Handler: handler,
+			Addr:              addr,
+			Handler:           handler,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		},
 		config: cfg,
 		logger: cfg.Logger,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -24,12 +25,28 @@ type Agent struct {
 
 func New() *Agent {
 	return &Agent{
-		client:      &http.Client{},
+		client: &http.Client{
+			Timeout:       30 * time.Second,
+			CheckRedirect: safeRedirect,
+		},
 		errors:      make([]error, 0),
 		debugWriter: os.Stdout,
 		jsonEncoder: json.Marshal,
 		jsonDecoder: json.Unmarshal,
 	}
+}
+
+// safeRedirect caps redirect chains and refuses to downgrade from HTTPS to HTTP
+// so credentials and data can't leak over plaintext.
+func safeRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	last := via[len(via)-1]
+	if last.URL.Scheme == "https" && req.URL.Scheme == "http" {
+		return errors.New("refusing to follow HTTPS to HTTP redirect")
+	}
+	return nil
 }
 
 func Get(url string) *Agent {
@@ -221,13 +238,14 @@ func (a *Agent) InsecureSkipVerify() *Agent {
 		a.tlsConfig = &tls.Config{}
 	}
 	a.tlsConfig.InsecureSkipVerify = true
-	if transport, ok := a.client.Transport.(*http.Transport); ok {
-		transport.TLSClientConfig = a.tlsConfig
-	} else {
-		a.client.Transport = &http.Transport{
-			TLSClientConfig: a.tlsConfig,
-		}
+	// Clone rather than mutate in place so we never disable verification on a
+	// transport shared with other clients.
+	transport := &http.Transport{}
+	if existing, ok := a.client.Transport.(*http.Transport); ok {
+		transport = existing.Clone()
 	}
+	transport.TLSClientConfig = a.tlsConfig
+	a.client.Transport = transport
 	return a
 }
 

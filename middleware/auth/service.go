@@ -2,12 +2,12 @@ package auth
 
 import (
 	"fmt"
-	"github.com/arthurlch/goryu"
-	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/arthurlch/goryu"
 )
 
 type AuthService struct {
@@ -160,7 +160,7 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 			Errors:  map[string]string{"email": "Email already registered"},
 		}
 	}
-	user, err := as.userStore.AddUser(req.Email, req.Password, req.Traits)
+	user, err := as.userStore.AddUser(req.Email, req.Password, sanitizeTraits(req.Traits))
 	if err != nil {
 		as.logError("Failed to create user", err)
 		return AuthResponse{
@@ -169,7 +169,7 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 		}
 	}
 	if as.config.RequireEmailVerification {
-		verificationToken, _, err := as.jwt.CreateVerificationToken(req.Email)
+		verificationToken, jti, err := as.jwt.CreateVerificationToken(req.Email)
 		if err != nil {
 			as.logError("Failed to create verification token", err)
 			return AuthResponse{
@@ -177,7 +177,9 @@ func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse 
 				Message: "Account created but failed to send verification email",
 			}
 		}
-		as.tokenStore.AddToken(verificationToken)
+		if err := as.tokenStore.AddToken(jti); err != nil {
+			as.logError("Failed to store verification token", err)
+		}
 		verifyURL := fmt.Sprintf("/auth/verify-email?token=%s", verificationToken)
 		if err := as.emailSender.SendVerificationEmail(req.Email, verificationToken, verifyURL); err != nil {
 			as.logError("Failed to send verification email", err)
@@ -352,10 +354,8 @@ func (as *AuthService) RequestPasswordReset(c *goryu.Ctx, req PasswordResetReque
 }
 func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfirmRequest) AuthResponse {
 	clientIP := as.getClientIP(c)
-	token, err := jwt.ParseWithClaims(req.Token, &ResetClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return as.jwt.secretKey, nil
-	})
-	if err != nil || !token.Valid {
+	email, jti, err := as.jwt.ValidatePasswordResetToken(req.Token)
+	if err != nil {
 		as.logSecurityEvent("password_reset_invalid_token", map[string]interface{}{
 			"ip":          clientIP,
 			"token_error": err.Error(),
@@ -365,16 +365,9 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 			Message: "Invalid or expired reset token",
 		}
 	}
-	claims, ok := token.Claims.(*ResetClaims)
-	if !ok {
-		return AuthResponse{
-			Success: false,
-			Message: "Invalid token format",
-		}
-	}
-	if !as.tokenStore.UseToken(claims.ID) {
+	if !as.tokenStore.UseToken(jti) {
 		as.logSecurityEvent("password_reset_token_reuse", map[string]interface{}{
-			"email": claims.Subject,
+			"email": email,
 			"ip":    clientIP,
 		})
 		return AuthResponse{
@@ -382,10 +375,10 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 			Message: "Reset token has already been used",
 		}
 	}
-	user, exists := as.userStore.GetUserByEmail(claims.Subject)
+	user, exists := as.userStore.GetUserByEmail(email)
 	if !exists {
 		as.logSecurityEvent("password_reset_user_not_found", map[string]interface{}{
-			"email": claims.Subject,
+			"email": email,
 			"ip":    clientIP,
 		})
 		return AuthResponse{
@@ -423,15 +416,9 @@ func (as *AuthService) ConfirmPasswordReset(c *goryu.Ctx, req PasswordResetConfi
 	}
 }
 func (as *AuthService) getClientIP(c *goryu.Ctx) string {
-	forwarded := c.GetHeader("X-Forwarded-For")
-	if forwarded != "" {
-		return strings.Split(forwarded, ",")[0]
-	}
-	realIP := c.GetHeader("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-	return c.Request.RemoteAddr
+	// RemoteIP only honors proxy headers when the peer is a configured trusted
+	// proxy, so it can't be spoofed to bypass rate limiting.
+	return c.RemoteIP()
 }
 func (as *AuthService) setSecureCookies(c *goryu.Ctx, accessToken, refreshToken string) {
 	if !as.config.SecureCookies {
@@ -478,8 +465,34 @@ func (as *AuthService) logError(message string, err error) {
 		log.Printf("AUTH ERROR: %s: %v", message, err)
 	}
 }
+
+// reservedTraitKeys are privilege-bearing keys a client must never set via
+// registration or profile updates; they can only be assigned server-side.
+var reservedTraitKeys = map[string]bool{
+	"role": true, "roles": true, "is_admin": true, "isadmin": true, "admin": true,
+	"permissions": true, "perms": true, "scope": true, "scopes": true,
+	"verified": true, "email_verified": true, "id": true, "user_id": true,
+}
+
+func sanitizeTraits(traits map[string]interface{}) map[string]interface{} {
+	if traits == nil {
+		return nil
+	}
+	clean := make(map[string]interface{}, len(traits))
+	for k, v := range traits {
+		if reservedTraitKeys[strings.ToLower(k)] {
+			continue
+		}
+		clean[k] = v
+	}
+	return clean
+}
+
 func (as *AuthService) Cleanup() {
 	if as.rateLimiter != nil {
 		as.rateLimiter.Stop()
+	}
+	if stopper, ok := as.tokenStore.(interface{ Stop() }); ok {
+		stopper.Stop()
 	}
 }

@@ -92,7 +92,7 @@ func TestTLSRedirectMiddleware(t *testing.T) {
 		}
 	})
 	t.Run("ForwardedHost", func(t *testing.T) {
-		middleware := tlsredirect.New(tlsredirect.Config{})
+		middleware := tlsredirect.New(tlsredirect.Config{AllowedHosts: []string{"example.com"}})
 		req := httptest.NewRequest("GET", "http://localhost/test", nil)
 		req.Header.Set("X-Forwarded-Host", "example.com")
 		req.Header.Set("X-Forwarded-Proto", "http")
