@@ -276,14 +276,20 @@ func (router *Router) Reverse(name string, params ...interface{}) string {
 
 // ServeHTTP makes the router implement the http.Handler interface.
 func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if err := recover(); err != nil && router.PanicHandler != nil {
-			router.PanicHandler(w, r, err)
-		}
-	}()
-
 	ctx := goryuctx.NewContext(w, r)
 	defer ctx.Release()
+	defer router.RecoverPanic(w, r)
+	router.Dispatch(ctx)
+}
+
+func (router *Router) RecoverPanic(w http.ResponseWriter, r *http.Request) {
+	if err := recover(); err != nil && router.PanicHandler != nil {
+		router.PanicHandler(w, r, err)
+	}
+}
+
+func (router *Router) Dispatch(ctx *goryuctx.Context) {
+	w, r := ctx.Writer, ctx.Request
 	path := r.URL.Path
 
 	if root := router.trees[r.Method]; root != nil {

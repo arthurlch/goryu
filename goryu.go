@@ -76,6 +76,9 @@ type App struct {
 	mountedApps map[string]*App     // Track mounted apps for path updates
 	config      *builder.Config     // New configuration from builder
 	Monitor     *monitoring.Monitor // Integrated monitoring system
+
+	chain     Handler
+	chainOnce sync.Once
 }
 
 func New(config ...Config) *App {
@@ -198,39 +201,48 @@ func (app *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// Skip form parsing for other content types - let Context handle it lazily
 	}
 
-	app.Router.ServeHTTP(w, req)
+	app.chainOnce.Do(app.buildChain)
+	c := goryu_context.NewContext(w, req)
+	defer c.Release()
+	defer app.Router.RecoverPanic(w, req)
+	app.chain(c)
+}
+
+func (app *App) buildChain() {
+	terminal := func(c *Ctx) { app.Router.Dispatch(c) }
+	app.chain = app.applyMiddleware(terminal)
 }
 
 func (app *App) GET(path string, handler Handler) *router.Route {
-	return app.Router.GET(path, app.applyMiddleware(handler))
+	return app.Router.GET(path, handler)
 }
 
 func (app *App) POST(path string, handler Handler) *router.Route {
-	return app.Router.POST(path, app.applyMiddleware(handler))
+	return app.Router.POST(path, handler)
 }
 
 func (app *App) PUT(path string, handler Handler) *router.Route {
-	return app.Router.PUT(path, app.applyMiddleware(handler))
+	return app.Router.PUT(path, handler)
 }
 
 func (app *App) DELETE(path string, handler Handler) *router.Route {
-	return app.Router.DELETE(path, app.applyMiddleware(handler))
+	return app.Router.DELETE(path, handler)
 }
 
 func (app *App) PATCH(path string, handler Handler) *router.Route {
-	return app.Router.PATCH(path, app.applyMiddleware(handler))
+	return app.Router.PATCH(path, handler)
 }
 
 func (app *App) HEAD(path string, handler Handler) *router.Route {
-	return app.Router.HEAD(path, app.applyMiddleware(handler))
+	return app.Router.HEAD(path, handler)
 }
 
 func (app *App) OPTIONS(path string, handler Handler) *router.Route {
-	return app.Router.OPTIONS(path, app.applyMiddleware(handler))
+	return app.Router.OPTIONS(path, handler)
 }
 
 func (app *App) ALL(path string, handler Handler) *router.RouteCollection {
-	return app.Router.ALL(path, app.applyMiddleware(handler))
+	return app.Router.ALL(path, handler)
 }
 
 func (app *App) Group(prefix string, middlewares ...Middleware) *router.Group {
