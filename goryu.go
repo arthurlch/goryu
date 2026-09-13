@@ -23,6 +23,7 @@ type Context = goryu_context.Context
 type Handler = goryu_context.HandlerFunc
 type HandlerFunc = goryu_context.HandlerFunc
 type Middleware = goryu_context.Middleware
+type SSEvent = goryu_context.SSEvent
 
 // Map is a shortcut for map[string]interface{}, useful for JSON responses
 type Map map[string]interface{}
