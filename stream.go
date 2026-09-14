@@ -37,7 +37,6 @@ func StreamJSON[T any](c *Ctx, producer func(emit func(T) error) error) error {
 	})
 }
 
-
 func SSEJSON[T any](c *Ctx, event string, producer func(send func(T) error) error) error {
 	return c.SSE(func(send func(SSEvent) error) error {
 		return producer(func(v T) error {

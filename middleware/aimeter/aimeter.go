@@ -158,7 +158,7 @@ func (m *meter) evictIfFull() {
 	if len(m.keys) < m.maxClients {
 		return
 	}
-	for k := range m.keys { 
+	for k := range m.keys {
 		delete(m.keys, k)
 		break
 	}

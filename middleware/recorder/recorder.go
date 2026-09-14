@@ -34,12 +34,12 @@ type Sink interface {
 type Config struct {
 	base.BaseConfig
 
-	Sink Sink
-	MaxBodyBytes int64
+	Sink            Sink
+	MaxBodyBytes    int64
 	CaptureRequest  *bool
 	CaptureResponse *bool
-	KeyFunc func(c *context.Context) string
-	MetaFunc func(c *context.Context) map[string]any
+	KeyFunc         func(c *context.Context) string
+	MetaFunc        func(c *context.Context) map[string]any
 }
 
 func (c *Config) Configure(baseConfig *base.BaseConfig) {

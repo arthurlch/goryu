@@ -73,7 +73,7 @@ func New(cfg Config) *Proxy {
 	}
 	streamClient := cfg.Client
 	if streamClient == nil {
-		streamClient = &http.Client{} 
+		streamClient = &http.Client{}
 	}
 	forwardClient := cfg.Client
 	if forwardClient == nil {

@@ -40,7 +40,7 @@ func buildSchema(t reflect.Type, seen map[reflect.Type]bool) map[string]any {
 		t = t.Elem()
 	}
 
-	// time.Time is the one std type worth special-casing ! 
+	// time.Time is the one std type worth special-casing !
 	if t.PkgPath() == "time" && t.Name() == "Time" {
 		return map[string]any{"type": "string", "format": "date-time"}
 	}
@@ -70,7 +70,7 @@ func buildSchema(t reflect.Type, seen map[reflect.Type]bool) map[string]any {
 		defer delete(seen, t)
 		return structSchema(t, seen)
 	default:
-		// all other non supported types 
+		// all other non supported types
 		return map[string]any{}
 	}
 }
@@ -81,7 +81,7 @@ func structSchema(t reflect.Type, seen map[reflect.Type]bool) map[string]any {
 
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		if f.PkgPath != "" { 
+		if f.PkgPath != "" {
 			continue
 		}
 		name, opts := parseJSONTag(f)
@@ -157,7 +157,7 @@ func applyConstraints(schema map[string]any, tag string) {
 	for _, tok := range strings.Split(tag, ",") {
 		k, v, ok := strings.Cut(tok, "=")
 		if !ok {
-			continue 
+			continue
 		}
 		k = strings.TrimSpace(k)
 		v = strings.TrimSpace(v)
