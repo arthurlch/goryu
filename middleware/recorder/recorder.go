@@ -126,28 +126,27 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				reqBody = readAndRestore(c, cfg.MaxBodyBytes)
 			}
 
-			var cw *captureWriter
-			if captureResp {
-				cw = &captureWriter{
-					ResponseWriter: c.Writer,
-					status:         http.StatusOK,
-					body:           bytes.NewBuffer(nil),
-					limit:          cfg.MaxBodyBytes,
-				}
-				c.Writer = cw
+			cw := &captureWriter{
+				ResponseWriter: c.Writer,
+				status:         http.StatusOK,
+				limit:          cfg.MaxBodyBytes,
 			}
+			if captureResp {
+				cw.body = bytes.NewBuffer(nil)
+			}
+			c.Writer = cw
 
 			next(c)
 
+			c.Writer = cw.ResponseWriter
 			rec := Record{
 				Time:      start,
 				Method:    c.Request.Method,
 				Path:      c.Request.URL.Path,
+				Status:    cw.status,
 				LatencyMS: time.Since(start).Milliseconds(),
 			}
-			if cw != nil {
-				c.Writer = cw.ResponseWriter
-				rec.Status = cw.status
+			if cw.body != nil {
 				rec.ResponseBody = toRawJSON(cw.body.Bytes())
 			}
 			if reqBody != nil {
@@ -171,17 +170,37 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 
+// Default builds the recorder with no sink configured, i.e. a pass-through until
+// you supply a Sink via New. It exists for API symmetry with other middleware.
+func Default() func(next context.HandlerFunc) context.HandlerFunc {
+	return New()
+}
+
+// readAndRestore captures up to max bytes of the body for the record, then
+// restores the request body so the handler still reads it in full — even when
+// the body is larger than max.
 func readAndRestore(c *context.Context, max int64) []byte {
-	if c.Request.Body == nil {
+	body := c.Request.Body
+	if body == nil {
 		return nil
 	}
-	body, err := io.ReadAll(io.LimitReader(c.Request.Body, max))
+	captured, err := io.ReadAll(io.LimitReader(body, max))
 	if err != nil {
 		return nil
 	}
-	c.Request.Body = io.NopCloser(bytes.NewReader(body))
-	return body
+	c.Request.Body = &restoredBody{r: io.MultiReader(bytes.NewReader(captured), body), c: body}
+	return captured
 }
+
+// restoredBody re-serves an already-consumed prefix followed by the untouched
+// remainder of the original body.
+type restoredBody struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (b *restoredBody) Read(p []byte) (int, error) { return b.r.Read(p) }
+func (b *restoredBody) Close() error               { return b.c.Close() }
 
 func toRawJSON(b []byte) json.RawMessage {
 	if len(b) == 0 {

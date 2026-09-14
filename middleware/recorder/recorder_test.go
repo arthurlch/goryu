@@ -3,6 +3,7 @@ package recorder_test
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -86,6 +87,52 @@ func TestRecorderRestoresRequestBody(t *testing.T) {
 	}
 }
 
+func TestRecorderPreservesLargeRequestBody(t *testing.T) {
+	sink := &memSink{}
+	mw := recorder.New(recorder.Config{Sink: sink, MaxBodyBytes: 8})
+	var seen int
+	handler := mw(func(c *context.Context) {
+		b, _ := io.ReadAll(c.Request.Body)
+		seen = len(b)
+		_ = c.Text(200, "ok")
+	})
+
+	body := strings.Repeat("z", 50) // larger than the 8-byte cap
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/x", strings.NewReader(body))
+	handler(context.NewContext(w, req))
+
+	if seen != 50 {
+		t.Fatalf("handler must see the full body; got %d want 50", seen)
+	}
+	if len(sink.records) != 1 || len(sink.records[0].RequestBody) == 0 {
+		t.Fatalf("expected a captured (truncated) request body in the record")
+	}
+}
+
+func TestRecorderCapturesStatusWithoutBody(t *testing.T) {
+	sink := &memSink{}
+	no := false
+	mw := recorder.New(recorder.Config{Sink: sink, CaptureResponse: &no})
+	handler := mw(func(c *context.Context) {
+		_ = c.JSON(404, map[string]string{"error": "nope"})
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/missing", nil)
+	handler(context.NewContext(w, req))
+
+	if len(sink.records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(sink.records))
+	}
+	if sink.records[0].Status != 404 {
+		t.Fatalf("status must be recorded even when body capture is off; got %d", sink.records[0].Status)
+	}
+	if len(sink.records[0].ResponseBody) != 0 {
+		t.Fatalf("response body must not be captured when disabled; got %s", sink.records[0].ResponseBody)
+	}
+}
+
 func TestFileSinkWritesNDJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "evals.jsonl")
 	sink, err := recorder.NewFileSink(path)
@@ -115,6 +162,9 @@ func TestFileSinkWritesNDJSON(t *testing.T) {
 			t.Fatalf("line not valid JSON: %v", err)
 		}
 		lines++
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("scan error: %v", err)
 	}
 	if lines != 2 {
 		t.Fatalf("expected 2 NDJSON lines, got %d", lines)

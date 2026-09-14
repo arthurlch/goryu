@@ -53,6 +53,10 @@ app.Use(promptcache.New(promptcache.Config{
 
 ## Security Note
 
-Never put authentication headers in `VaryHeaders`, and be careful caching
-per-user responses: a shared cache can leak one caller's answer to another.
-Include a user/tenant discriminator in the key when responses are user-specific.
+With the **default key** (request body only), requests carrying an
+`Authorization` or `Cookie` header are **not cached**, so one authenticated
+caller can never be served another's response.
+
+To cache per-user responses, supply a `KeyGenerator` (or `VaryHeaders`) that
+folds the user/tenant identity into the key — then you own that correctness and
+the privacy guard steps aside.
