@@ -22,7 +22,6 @@ import (
 	context "github.com/arthurlch/goryu/goryuctx"
 )
 
-// Config configures a Proxy.
 type Config struct {
 	// BaseURL is the upstream provider origin, e.g. https://api.openai.com.
 	BaseURL string
@@ -41,7 +40,6 @@ type Config struct {
 	Timeout time.Duration
 }
 
-// Proxy forwards requests to a configured upstream provider.
 type Proxy struct {
 	baseURL    string
 	apiKey     string
@@ -52,7 +50,6 @@ type Proxy struct {
 	forward    *http.Client
 }
 
-// hop-by-hop headers that must not be copied to/from the upstream.
 var hopHeaders = map[string]bool{
 	"Connection":          true,
 	"Keep-Alive":          true,
@@ -64,7 +61,6 @@ var hopHeaders = map[string]bool{
 	"Upgrade":             true,
 }
 
-// New builds a Proxy from Config.
 func New(cfg Config) *Proxy {
 	if cfg.AuthHeader == "" {
 		cfg.AuthHeader = "Authorization"
@@ -77,7 +73,7 @@ func New(cfg Config) *Proxy {
 	}
 	streamClient := cfg.Client
 	if streamClient == nil {
-		streamClient = &http.Client{} // no timeout: streams can be long-lived
+		streamClient = &http.Client{} 
 	}
 	forwardClient := cfg.Client
 	if forwardClient == nil {
@@ -94,8 +90,6 @@ func New(cfg Config) *Proxy {
 	}
 }
 
-// Stream forwards the current request to path on the upstream provider and
-// streams the response body back to the client, flushing as bytes arrive.
 func (p *Proxy) Stream(c *context.Context, path string) error {
 	resp, err := p.do(c, path, p.stream)
 	if err != nil {
@@ -130,8 +124,6 @@ func (p *Proxy) Stream(c *context.Context, path string) error {
 	}
 }
 
-// Forward proxies the current request to path and writes the full (buffered)
-// response back to the client. Use it for non-streaming provider calls.
 func (p *Proxy) Forward(c *context.Context, path string) error {
 	resp, err := p.do(c, path, p.forward)
 	if err != nil {
@@ -155,7 +147,6 @@ func (p *Proxy) do(c *context.Context, path string, client *http.Client) (*http.
 	if err != nil {
 		return nil, err
 	}
-	// Copy client request headers except hop-by-hop and host.
 	for k, v := range c.Request.Header {
 		if hopHeaders[http.CanonicalHeaderKey(k)] {
 			continue
