@@ -61,6 +61,15 @@ var hopHeaders = map[string]bool{
 	"Upgrade":             true,
 }
 
+// clientSecretHeaders are stripped from the client request before it is
+// forwarded upstream, so a caller's own credentials and session are never leaked
+// to the third-party provider. The proxy adds its own credential via AuthHeader.
+var clientSecretHeaders = map[string]bool{
+	"Authorization": true,
+	"Cookie":        true,
+	"X-Api-Key":     true,
+}
+
 func New(cfg Config) *Proxy {
 	if cfg.AuthHeader == "" {
 		cfg.AuthHeader = "Authorization"
@@ -148,7 +157,8 @@ func (p *Proxy) do(c *context.Context, path string, client *http.Client) (*http.
 		return nil, err
 	}
 	for k, v := range c.Request.Header {
-		if hopHeaders[http.CanonicalHeaderKey(k)] {
+		canonical := http.CanonicalHeaderKey(k)
+		if hopHeaders[canonical] || clientSecretHeaders[canonical] {
 			continue
 		}
 		req.Header[k] = append([]string(nil), v...)

@@ -56,5 +56,11 @@ app.POST("/v1/chat/completions", func(c *goryu.Ctx) {
   relies on the request context for cancellation. `Forward` uses `Timeout`.
 - Supplying your own `Client` overrides both; set its `Timeout` to `0` if you
   reuse it for streaming.
-- Headers are copied through except hop-by-hop headers; the injected auth header
-  overrides any client-supplied one.
+
+## Security
+
+- Client headers are forwarded except hop-by-hop headers **and the caller's
+  own secrets** (`Authorization`, `Cookie`, `X-Api-Key`) — those are stripped so
+  they never leak to the third-party provider. The proxy adds its own credential.
+- `path` is joined onto `BaseURL`; do **not** pass a user-controlled value, or a
+  caller could reach unintended upstream paths.

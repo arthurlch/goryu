@@ -16,6 +16,7 @@ func newGenerateCommand() *Command {
 		Usage:       "goryu generate handler <name> [flags]",
 		Flags: []Flag{
 			{Name: "type", Shorthand: "t", Description: "Handler type (basic, crud, api, ai)", Default: "basic"},
+			{Name: "kind", Description: "AI handler kind for --type=ai (chat, rag, agent)", Default: "chat"},
 			{Name: "path", Shorthand: "p", Description: "Output path", Default: "internal/handlers"},
 			{Name: "model", Description: "Associated model name"},
 			{Name: "middleware", Description: "Middleware to apply (comma-separated)"},

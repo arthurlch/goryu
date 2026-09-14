@@ -31,6 +31,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,7 +74,7 @@ type Token struct {
 }
 
 func main() {
-	app := goryu.New()
+	app := goryu.New(goryu.Config{AppName: "aichat"})
 
 	// --- Eval recording (outermost): capture every request/response pair. ---
 	sink, err := recorder.NewFileSink("evals.jsonl")
@@ -132,6 +133,9 @@ func main() {
 		})
 		log.Printf("provider passthrough enabled at POST /v1/chat/completions -> %s", base)
 	}
+
+	// Expose the API to tools and LLMs at /llms.txt and /llms.json.
+	app.MountLLMs()
 
 	log.Println("aichat listening on :3000")
 	if err := app.Run(":3000"); err != nil {
@@ -208,9 +212,9 @@ func promptTokens(req ChatRequest) int {
 // fakeReply is a stand-in for a real model call.
 func fakeReply(req ChatRequest) string {
 	last := ""
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == "user" {
-			last = req.Messages[i].Content
+	for _, m := range slices.Backward(req.Messages) {
+		if m.Role == "user" {
+			last = m.Content
 			break
 		}
 	}

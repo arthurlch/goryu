@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -100,7 +101,8 @@ func (s *store) get(key string) (entry, bool) {
 func (s *store) put(key string, e entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.entries) >= s.maxSize {
+	_, replacing := s.entries[key]
+	if !replacing && len(s.entries) >= s.maxSize {
 		now := time.Now()
 		for k, v := range s.entries { // evict an expired entry if possible
 			if now.After(v.expiresAt) {
@@ -119,9 +121,10 @@ func (s *store) put(key string, e entry) {
 
 type captureWriter struct {
 	http.ResponseWriter
-	status int
-	body   *bytes.Buffer
-	limit  int64
+	status   int
+	body     *bytes.Buffer
+	limit    int64
+	overflow bool // response exceeded limit; must not be cached truncated
 }
 
 func (w *captureWriter) WriteHeader(code int) {
@@ -130,12 +133,15 @@ func (w *captureWriter) WriteHeader(code int) {
 }
 
 func (w *captureWriter) Write(b []byte) (int, error) {
-	if int64(w.body.Len()) < w.limit {
+	if !w.overflow {
 		remaining := w.limit - int64(w.body.Len())
 		if int64(len(b)) <= remaining {
 			w.body.Write(b)
 		} else {
-			w.body.Write(b[:remaining])
+			if remaining > 0 {
+				w.body.Write(b[:remaining])
+			}
+			w.overflow = true
 		}
 	}
 	return w.ResponseWriter.Write(b)
@@ -176,6 +182,13 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				return
 			}
 			if !methodAllowed(cfg.Methods, c.Request.Method) {
+				next(c)
+				return
+			}
+			// With the default key (body only), an authenticated request must not
+			// have its response served to a different user. Custom KeyGenerators
+			// take responsibility for folding identity into the key.
+			if cfg.KeyGenerator == nil && requestIsPrivate(c) {
 				next(c)
 				return
 			}
@@ -244,22 +257,37 @@ func (cfg Config) key(c *context.Context, body []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+var errBodyTooLarge = errors.New("promptcache: body exceeds MaxBodyBytes")
+
+// readAndRestore reads up to max bytes for keying, then restores the request body
+// so the handler still sees it in full. When the body is larger than max it is
+// left un-keyed (errBodyTooLarge) but the full stream is preserved.
 func readAndRestore(c *context.Context, max int64) ([]byte, error) {
-	if c.Request.Body == nil {
+	body := c.Request.Body
+	if body == nil {
 		return nil, nil
 	}
-	body, err := io.ReadAll(io.LimitReader(c.Request.Body, max+1))
+	captured, err := io.ReadAll(io.LimitReader(body, max+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(body)) > max {
-		// Too large to key/cache reliably; restore and signal skip via error.
-		c.Request.Body = io.NopCloser(bytes.NewReader(body))
-		return nil, io.ErrShortBuffer
+	if int64(len(captured)) > max {
+		c.Request.Body = &restoredBody{r: io.MultiReader(bytes.NewReader(captured), body), c: body}
+		return nil, errBodyTooLarge
 	}
-	c.Request.Body = io.NopCloser(bytes.NewReader(body))
-	return body, nil
+	c.Request.Body = io.NopCloser(bytes.NewReader(captured))
+	return captured, nil
 }
+
+// restoredBody re-serves an already-consumed prefix followed by the untouched
+// remainder of the original body, so nothing is lost for the handler.
+type restoredBody struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (b *restoredBody) Read(p []byte) (int, error) { return b.r.Read(p) }
+func (b *restoredBody) Close() error               { return b.c.Close() }
 
 func methodAllowed(methods []string, m string) bool {
 	for _, x := range methods {
@@ -271,6 +299,9 @@ func methodAllowed(methods []string, m string) bool {
 }
 
 func cacheable(cw *captureWriter) bool {
+	if cw.overflow {
+		return false
+	}
 	if cw.status < 200 || cw.status >= 300 {
 		return false
 	}
@@ -282,7 +313,13 @@ func cacheable(cw *captureWriter) bool {
 		return false
 	}
 	cc := strings.ToLower(cw.Header().Get("Cache-Control"))
-	return !strings.Contains(cc, "no-store") && !strings.Contains(cc, "private")
+	return !strings.Contains(cc, "no-store") &&
+		!strings.Contains(cc, "no-cache") &&
+		!strings.Contains(cc, "private")
+}
+
+func requestIsPrivate(c *context.Context) bool {
+	return c.Request.Header.Get("Authorization") != "" || c.Request.Header.Get("Cookie") != ""
 }
 
 func cloneHeader(h http.Header) http.Header {

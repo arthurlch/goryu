@@ -110,7 +110,7 @@ type meter struct {
 }
 
 func newMeter(maxClients int, w time.Duration) *meter {
-	return &meter{keys: make(map[string]*window, 0), maxClients: maxClients, window: w}
+	return &meter{keys: make(map[string]*window), maxClients: maxClients, window: w}
 }
 
 func (m *meter) allow(key string, maxReq, maxTok int) (bool, string) {

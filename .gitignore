@@ -33,3 +33,6 @@ evals.jsonl
 docs
 /docs
 
+aichat
+.aichat 
+*.aichat

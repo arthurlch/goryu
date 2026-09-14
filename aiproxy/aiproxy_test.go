@@ -75,6 +75,44 @@ func TestProxyForwardBuffered(t *testing.T) {
 	}
 }
 
+func TestProxyStripsClientSecrets(t *testing.T) {
+	var gotAuth, gotCookie, gotAPIKey, gotContentType string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotCookie = r.Header.Get("Cookie")
+		gotAPIKey = r.Header.Get("X-Api-Key")
+		gotContentType = r.Header.Get("Content-Type")
+		w.WriteHeader(200)
+	}))
+	defer upstream.Close()
+
+	px := aiproxy.New(aiproxy.Config{BaseURL: upstream.URL, APIKey: "provider-key"})
+
+	req := httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer client-secret")
+	req.Header.Set("Cookie", "session=abc")
+	req.Header.Set("X-Api-Key", "client-key")
+	req.Header.Set("Content-Type", "application/json")
+	c := context.NewContext(httptest.NewRecorder(), req)
+
+	if err := px.Forward(c, "/v1/chat"); err != nil {
+		t.Fatalf("Forward error: %v", err)
+	}
+
+	if gotAuth != "Bearer provider-key" {
+		t.Fatalf("upstream auth should be the proxy credential, got %q", gotAuth)
+	}
+	if gotCookie != "" {
+		t.Fatalf("client cookie leaked upstream: %q", gotCookie)
+	}
+	if gotAPIKey != "" {
+		t.Fatalf("client X-Api-Key leaked upstream: %q", gotAPIKey)
+	}
+	if gotContentType != "application/json" {
+		t.Fatalf("content-type should pass through, got %q", gotContentType)
+	}
+}
+
 func TestProxyEmptyBaseURL(t *testing.T) {
 	px := aiproxy.New(aiproxy.Config{})
 	w := httptest.NewRecorder()

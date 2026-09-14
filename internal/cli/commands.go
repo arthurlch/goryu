@@ -19,6 +19,7 @@ func InitializeCommands(cli *CLI) {
 	// Utility commands
 	cli.RegisterCommand(newVersionCommand())
 	cli.RegisterCommand(newValidateCommand())
+	cli.RegisterCommand(newMCPCommand())
 
 	// Aliases
 	cli.RegisterCommand(newGenerateAliasCommand())

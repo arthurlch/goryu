@@ -24,6 +24,17 @@ func newScaffoldCommand() *Command {
 		Action: cmdScaffoldAPI,
 	}
 
+	scaffoldCmd.Subcommands["ai"] = &Command{
+		Name:        "ai",
+		Description: "Scaffold an AI/LLM endpoint (streaming chat, RAG, or agent tool)",
+		Usage:       "goryu scaffold ai <name> [--kind=chat|rag|agent]",
+		Flags: []Flag{
+			{Name: "kind", Shorthand: "k", Description: "Endpoint kind (chat, rag, agent)", Default: "chat"},
+			{Name: "path", Shorthand: "p", Description: "Output path", Default: "internal/handlers"},
+		},
+		Action: cmdScaffoldAI,
+	}
+
 	scaffoldCmd.Subcommands["service"] = &Command{
 		Name:        "service",
 		Description: "Scaffold microservice",

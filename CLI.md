@@ -150,6 +150,31 @@ goryu scaffold service <name> [flags]
 - `--kafka`: Include Kafka support [default: false]
 - `--monitoring`: Include monitoring [default: true]
 
+#### Scaffold AI
+
+Scaffold an AI/LLM endpoint wired to goryu's AI batteries.
+
+```bash
+goryu scaffold ai <name> [--kind=chat|rag|agent]
+```
+
+**Flags:**
+- `-k, --kind`: Endpoint kind — `chat` (streaming chat), `rag` (retrieval-augmented
+  answer), or `agent` (typed tool endpoint with a function-calling schema) [default: chat]
+- `-p, --path`: Output path [default: internal/handlers]
+
+### `goryu mcp`
+
+Run an MCP server (stdio JSON-RPC) that exposes goryu's project tools to AI
+agents: `list_routes`, `scaffold_handler`, and `run_dev_server`.
+
+```bash
+goryu mcp
+```
+
+Point an MCP client (e.g. Claude Code, an IDE agent) at `goryu mcp` running in
+your project directory.
+
 ### `goryu config`
 
 Manage application configuration.

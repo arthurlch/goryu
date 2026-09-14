@@ -2,14 +2,15 @@
 
 Token/cost metering and per-key rate limiting for AI/LLM backends. Handlers
 report provider token usage; the middleware accounts cost, enforces per-key
-request and token budgets within a rolling window, and surfaces the result via
-response headers and an `OnResult` callback.
+request and token budgets within a fixed window (counters reset at the end of
+each window), and surfaces the result via response headers and an `OnResult`
+callback.
 
 ## Features
 
 - **Token accounting**: prompt/completion/total tokens per request.
 - **Cost metering**: USD cost from per-1K-token pricing.
-- **Per-key limits**: request count *and* token budget within a rolling window.
+- **Per-key limits**: request count *and* token budget within a fixed window.
 - **Per-key isolation**: each API key (or IP) has its own window.
 - **Reliable hook**: `OnResult` for logging/metrics/billing.
 
@@ -57,7 +58,7 @@ func chat(c *goryu.Ctx) {
 | CompletionCostPer1K | `float64` | USD per 1K completion tokens | `0` |
 | MaxRequests | `int` | Max requests per window (0 = off) | `0` |
 | MaxTokens | `int` | Max tokens per window (0 = off) | `0` |
-| Window | `time.Duration` | Rolling window length | `1m` |
+| Window | `time.Duration` | Fixed window length | `1m` |
 | MaxClients | `int` | Max tracked keys | `10000` |
 | OnResult | `func(c, Result)` | Post-request accounting hook | none |
 | LimitReached | `func(c, reason)` | Custom rejection response | 429 |
