@@ -59,11 +59,17 @@ goryu generate handler <name> [flags]
 ```
 
 **Flags:**
-- `-t, --type`: Handler type (`basic`, `crud`, `api`, `websocket`) [default: basic]
+- `-t, --type`: Handler type (`basic`, `crud`, `api`, `ai`) [default: basic]
 - `-p, --path`: Output path [default: internal/handlers]
 - `--model`: Associated model name
 - `--middleware`: Middleware to apply (comma-separated)
 - `--route`: Route pattern [default: /{name}]
+
+> The `ai` type scaffolds a streaming LLM chat handler wired to goryu's AI
+> batteries: typed `Bind[T]` + `Validate`, `Schema[T]` for JSON Schema, SSE token
+> streaming via `SSEJSON`, and token/cost accounting via the `aimeter` middleware.
+> Pair it with the `aimeter`, `promptcache`, and `recorder` middleware (see
+> `goryu middleware list`) and the `aiproxy` helper for real provider passthrough.
 
 #### Generate Middleware
 

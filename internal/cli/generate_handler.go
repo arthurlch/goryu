@@ -48,6 +48,8 @@ func runGenerateHandler(args []string) error {
 		content = generateCRUDHandlerContent(name)
 	case "api":
 		content = generateAPIHandlerContent(name)
+	case "ai":
+		content = generateAIHandlerContent(name)
 	case "db":
 		switch dbTool {
 		case "sqlc":
@@ -60,7 +62,7 @@ func runGenerateHandler(args []string) error {
 			return fmt.Errorf("unknown db-tool: %s", dbTool)
 		}
 	default:
-		return fmt.Errorf("unknown handler type: %s (available: basic, crud, api)", handlerType)
+		return fmt.Errorf("unknown handler type: %s (available: basic, crud, api, ai)", handlerType)
 	}
 
 	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
@@ -94,5 +96,13 @@ func printHandlerTips(handlerType string) {
 		fmt.Printf("  • Add validation tags and business logic\n")
 		fmt.Printf("  • Consider adding authentication middleware\n")
 		// MEMRO: recheck for websocket later ...
+	case "ai":
+		fmt.Printf("  • Register routes:\n")
+		fmt.Printf("    - app.POST(\"/chat/stream\", handlers.ChatStream)  // SSE token streaming\n")
+		fmt.Printf("    - app.GET(\"/chat/schema\", handlers.ChatSchema)   // JSON Schema\n")
+		fmt.Printf("  • Meter tokens/cost: app.Use(aimeter.New(aimeter.Config{...}))\n")
+		fmt.Printf("  • Cache prompts:     app.Use(promptcache.New())\n")
+		fmt.Printf("  • Record for evals:  app.Use(recorder.New(recorder.Config{Sink: sink}))\n")
+		fmt.Printf("  • Replace the stubbed reply with a real provider call (see aiproxy)\n")
 	}
 }

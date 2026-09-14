@@ -15,7 +15,7 @@ func newGenerateCommand() *Command {
 		Description: "Generate HTTP handler",
 		Usage:       "goryu generate handler <name> [flags]",
 		Flags: []Flag{
-			{Name: "type", Shorthand: "t", Description: "Handler type (basic, crud, api, websocket)", Default: "basic"},
+			{Name: "type", Shorthand: "t", Description: "Handler type (basic, crud, api, ai)", Default: "basic"},
 			{Name: "path", Shorthand: "p", Description: "Output path", Default: "internal/handlers"},
 			{Name: "model", Description: "Associated model name"},
 			{Name: "middleware", Description: "Middleware to apply (comma-separated)"},

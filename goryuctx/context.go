@@ -38,6 +38,7 @@ type Context struct {
 	// SECUCHECK: Sync for thread-safe operations
 	mu           sync.RWMutex
 	responseSent int32 // SECUCHECK: Atomic flag to prevent response race conditions
+	detached     int32
 
 	errors       []error
 	errorHandler func(c *Context, err error)
@@ -89,7 +90,14 @@ func (c *Context) Reset(writer http.ResponseWriter, request *http.Request) {
 
 // Release puts the context back into the pool. It clears request-scoped state
 // so a pooled context never retains the previous request's data.
+func (c *Context) Detach() {
+	atomic.StoreInt32(&c.detached, 1)
+}
+
 func (c *Context) Release() {
+	if atomic.LoadInt32(&c.detached) == 1 {
+		return
+	}
 	c.Writer = nil
 	c.Request = nil
 	c.Route = nil

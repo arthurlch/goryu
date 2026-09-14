@@ -152,15 +152,17 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 
 				// Give the handler a moment to notice the cancellation and stop.
 				waitTimer := time.NewTimer(100 * time.Millisecond)
+				finished := false
 				select {
 				case <-done:
+					finished = true
 					waitTimer.Stop()
 				case <-waitTimer.C:
 				}
+				if !finished {
+					c.Detach()
+				}
 
-				// Write the timeout response through the same guarded writer so it
-				// never races with a late handler write, and never swap c.Writer
-				// out from under the handler goroutine.
 				if ctx.Err() == stdContext.DeadlineExceeded && !timeoutWriter.hasWritten() {
 					atomic.StoreInt32(&timeoutWriter.timeoutMode, 1)
 					cfg.TimeoutHandler(c)
