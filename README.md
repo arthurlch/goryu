@@ -220,17 +220,83 @@ func createProduct(c *goryuctx.Context) {
 - Logging
 - And 15+ more...
 
+## REST first, realtime when you need it
+
+Plain REST stays plain — a handler is just a function. Typed input with validation
+is one call:
+
+```go
+type Signup struct {
+    Email string `json:"email"`
+}
+
+func (s Signup) Validate() error {
+    if s.Email == "" {
+        return errors.New("email is required")
+    }
+    return nil
+}
+
+app.POST("/signup", func(c *goryuctx.Context) {
+    body, err := goryu.Bind[Signup](c)
+    if err != nil {
+        c.JSON(400, goryu.Map{"error": err.Error()})
+        return
+    }
+    c.JSON(201, goryu.Map{"email": body.Email})
+})
+```
+
+Streaming is first-class — great for progress updates and for AI token streaming:
+
+```go
+app.GET("/events", func(c *goryuctx.Context) {
+    c.SSE(func(send func(goryuctx.SSEvent) error) error {
+        for i := 0; i < 3; i++ {
+            if err := send(goryuctx.SSEvent{Event: "tick", Data: fmt.Sprint(i)}); err != nil {
+                return err
+            }
+        }
+        return nil
+    })
+})
+```
+
+WebSockets use the same `Context`:
+
+```go
+app.GET("/ws", func(c *goryuctx.Context) {
+    conn, err := websocket.Upgrade(c)
+    if err != nil {
+        return
+    }
+    defer conn.Close()
+    for {
+        _, msg, err := conn.ReadMessage()
+        if err != nil {
+            return
+        }
+        _ = conn.WriteText(string(msg))
+    }
+})
+```
+
+These are additive — you never pay for them in a plain REST app.
+
 ## Philosophy
 
-1. **Batteries included** - Everything you need to ship
-2. **No magic** - You can read the source
-3. **Performance matters** - Because blazingly fast performance is essential
-4. **Developer happiness** - Great DX is a feature
+1. **REST first** - The simple case stays simple; AI/realtime features are additive
+2. **Batteries included** - Everything you need to ship
+3. **No magic** - You can read the source
+4. **Human and LLM friendly** - A regular, predictable API that people and coding agents both write well
+5. **Performance matters** - Because blazingly fast performance is essential
 
 ## Documentation
 
 - [Tutorial](./TUTORIAL.md)
 - [CLI Reference](./CLI.md)
+- [Direction & Roadmap](./docs/DIRECTION.md)
+- [API Stability](./docs/STABILITY.md)
 - [API Reference](https://pkg.go.dev/github.com/arthurlch/goryu)
 - [Examples](./examples)
 

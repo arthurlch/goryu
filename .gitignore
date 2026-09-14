@@ -26,3 +26,10 @@ go.work.sum
 
 # Knowledge graph output (graphify)
 /graphify-out/
+
+# aichat example eval output
+evals.jsonl
+
+docs
+/docs
+
