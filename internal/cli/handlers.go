@@ -471,7 +471,21 @@ func cmdMiddlewareList(ctx *Context) error {
 		{"trustproxy", "Trust proxy headers"},
 	}
 
+	aiMiddleware := []struct {
+		name string
+		desc string
+	}{
+		{"aimeter", "Token/cost metering + per-key rate limiting"},
+		{"promptcache", "Prompt-keyed response cache (POST-friendly)"},
+		{"recorder", "Request/response recording for evals"},
+	}
+
 	for _, mw := range builtIn {
+		fmt.Printf("  %-20s %s\n", mw.name, mw.desc)
+	}
+
+	fmt.Println("\nAI/LLM middleware:")
+	for _, mw := range aiMiddleware {
 		fmt.Printf("  %-20s %s\n", mw.name, mw.desc)
 	}
 

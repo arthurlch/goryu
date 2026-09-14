@@ -310,6 +310,74 @@ app.POST("/login", func(c *goryu.Context) {
 				{Name: "ErrorTransformer", Description: "Transform errors before response", Default: ""},
 			},
 		},
+		"aimeter": {
+			Name:        "AI Meter",
+			Description: "Token/cost metering and per-key request/token rate limiting for AI backends",
+			Category:    "AI/LLM",
+			Package:     "github.com/arthurlch/goryu/middleware/aimeter",
+			Usage:       "app.Use(aimeter.New(aimeter.Config{...}))",
+			Example: `app.Use(aimeter.New(aimeter.Config{
+    PromptCostPer1K:     0.003,
+    CompletionCostPer1K: 0.015,
+    MaxRequests:         100,
+    MaxTokens:           200000,
+    Window:              time.Minute,
+    OnResult: func(c *goryu.Context, r aimeter.Result) {
+        log.Printf("key=%s tokens=%d cost=$%.4f", r.Key, r.Usage.Total(), r.CostUSD)
+    },
+}))
+
+// In a handler, after calling the provider:
+aimeter.SetUsage(c, aimeter.Usage{PromptTokens: 812, CompletionTokens: 344})`,
+			Options: []MiddlewareOption{
+				{Name: "PromptCostPer1K", Description: "USD per 1K prompt tokens", Default: "0"},
+				{Name: "CompletionCostPer1K", Description: "USD per 1K completion tokens", Default: "0"},
+				{Name: "MaxRequests", Description: "Max requests per window per key (0=off)", Default: "0"},
+				{Name: "MaxTokens", Description: "Max tokens per window per key (0=off)", Default: "0"},
+				{Name: "Window", Description: "Rolling window length", Default: "1m"},
+				{Name: "OnResult", Description: "Post-request accounting callback", Default: ""},
+			},
+		},
+		"promptcache": {
+			Name:        "Prompt Cache",
+			Description: "Response cache keyed on the request body (prompt), so it can cache POST responses",
+			Category:    "AI/LLM",
+			Package:     "github.com/arthurlch/goryu/middleware/promptcache",
+			Usage:       "app.Use(promptcache.New(promptcache.Config{...}))",
+			Example: `app.Use(promptcache.New(promptcache.Config{
+    Expiration:  10 * time.Minute,
+    VaryHeaders: []string{"X-Model"},
+}))`,
+			Options: []MiddlewareOption{
+				{Name: "Expiration", Description: "Freshness window", Default: "5m"},
+				{Name: "MaxSize", Description: "Max cached entries", Default: "1000"},
+				{Name: "MaxBodyBytes", Description: "Max request/response bytes cached", Default: "1 MiB"},
+				{Name: "Methods", Description: "Cacheable methods", Default: "[POST]"},
+				{Name: "VaryHeaders", Description: "Request headers folded into the key", Default: ""},
+			},
+		},
+		"recorder": {
+			Name:        "Recorder",
+			Description: "Captures request/response pairs to a Sink (NDJSON FileSink) for building eval datasets",
+			Category:    "AI/LLM",
+			Package:     "github.com/arthurlch/goryu/middleware/recorder",
+			Usage:       "app.Use(recorder.New(recorder.Config{Sink: sink}))",
+			Example: `sink, _ := recorder.NewFileSink("evals.jsonl")
+defer sink.Close()
+
+app.Use(recorder.New(recorder.Config{
+    Sink:    sink,
+    KeyFunc: func(c *goryu.Context) string { return c.GetHeader("X-API-Key") },
+}))`,
+			Options: []MiddlewareOption{
+				{Name: "Sink", Description: "Where records go (required)", Default: ""},
+				{Name: "MaxBodyBytes", Description: "Max bytes captured per body", Default: "64 KiB"},
+				{Name: "CaptureRequest", Description: "Capture request body", Default: "true"},
+				{Name: "CaptureResponse", Description: "Capture response body", Default: "true"},
+				{Name: "KeyFunc", Description: "Caller/session key extractor", Default: ""},
+				{Name: "MetaFunc", Description: "Attach metadata (model, usage)", Default: ""},
+			},
+		},
 	}
 
 	return middlewareData[name]
