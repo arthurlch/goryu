@@ -7,24 +7,45 @@ import (
 	"strings"
 )
 
+func isSafeName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func runGenerateHandler(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("handler name is required")
 	}
 
 	name := args[0]
+	if !isSafeName(name) {
+		return fmt.Errorf("invalid handler name %q: use letters, digits, '-' or '_'", name)
+	}
 	path := "internal/handlers"
 	handlerType := "basic" // basic, crud, api (websocket later), crud default ;/
 
 	// Parse arguments
 	dbTool := ""
+	kind := "chat"
 	for _, arg := range args[1:] {
-		if strings.HasPrefix(arg, "--path=") {
+		switch {
+		case strings.HasPrefix(arg, "--path="):
 			path = strings.TrimPrefix(arg, "--path=")
-		} else if strings.HasPrefix(arg, "--type=") {
+		case strings.HasPrefix(arg, "--type="):
 			handlerType = strings.TrimPrefix(arg, "--type=")
-		} else if strings.HasPrefix(arg, "--db-tool=") {
+		case strings.HasPrefix(arg, "--db-tool="):
 			dbTool = strings.TrimPrefix(arg, "--db-tool=")
+		case strings.HasPrefix(arg, "--kind="):
+			kind = strings.TrimPrefix(arg, "--kind=")
 		}
 	}
 
@@ -49,7 +70,10 @@ func runGenerateHandler(args []string) error {
 	case "api":
 		content = generateAPIHandlerContent(name)
 	case "ai":
-		content = generateAIHandlerContent(name)
+		if kind != "chat" && kind != "rag" && kind != "agent" {
+			return fmt.Errorf("unknown ai kind: %s (available: chat, rag, agent)", kind)
+		}
+		content = generateAIHandlerContent(name, kind)
 	case "db":
 		switch dbTool {
 		case "sqlc":

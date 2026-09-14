@@ -43,6 +43,7 @@ func cmdGenerateHandler(ctx *Context) error {
 	path := getFlag(ctx, "path", "internal/handlers")
 	model := getFlag(ctx, "model", "")
 	middleware := getFlag(ctx, "middleware", "")
+	kind := getFlag(ctx, "kind", "chat")
 
 	dbTool := getFlag(ctx, "db-tool", "")
 
@@ -57,6 +58,9 @@ func cmdGenerateHandler(ctx *Context) error {
 	}
 	if dbTool != "" {
 		args = append(args, "--db-tool="+dbTool)
+	}
+	if handlerType == "ai" {
+		args = append(args, "--kind="+kind)
 	}
 
 	return runGenerateHandler(args)
@@ -249,6 +253,29 @@ func cmdScaffoldAPI(ctx *Context) error {
 	fmt.Printf("  • Run tests with: go test ./internal/handlers\n")
 	fmt.Printf("  • Start server and access API at %s\n", routeGroup)
 
+	return nil
+}
+
+func cmdScaffoldAI(ctx *Context) error {
+	if len(ctx.Args) < 1 {
+		return fmt.Errorf("endpoint name is required")
+	}
+
+	name := ctx.Args[0]
+	kind := getFlag(ctx, "kind", "chat")
+	path := getFlag(ctx, "path", "internal/handlers")
+
+	fmt.Printf("🤖 Scaffolding %s AI endpoint: %s\n", kind, name)
+
+	if err := runGenerateHandler([]string{name, "--type=ai", "--kind=" + kind, "--path=" + path}); err != nil {
+		return err
+	}
+
+	fmt.Println("\n💡 Wire the AI middleware in your main.go:")
+	fmt.Println("  app.Use(aimeter.New(aimeter.Config{...}))     // token/cost metering")
+	fmt.Println("  app.Use(promptcache.New())                    // cache identical prompts")
+	fmt.Println("  app.Use(recorder.New(recorder.Config{Sink: sink})) // record for evals")
+	fmt.Println("  app.MountLLMs()                               // serve /llms.txt")
 	return nil
 }
 
