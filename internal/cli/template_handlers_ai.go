@@ -6,9 +6,7 @@ import (
 	"github.com/arthurlch/goryu/internal/utils"
 )
 
-// generateAIHandlerContent builds an AI/LLM handler for the given kind:
-// "chat" (streaming chat), "rag" (retrieval-augmented answer), or
-// "agent" (typed tool endpoint with a function-calling schema).
+// generateAIHandlerContent builds an AI handler: chat, rag, or agent.
 func generateAIHandlerContent(name, kind string) string {
 	var tmpl string
 	switch kind {

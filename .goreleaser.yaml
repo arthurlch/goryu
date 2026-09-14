@@ -46,6 +46,30 @@ checksum:
 sboms:
   - artifacts: archive
 
+# Keyless signing via cosign (Sigstore/Fulcio). Requires cosign on the runner and
+# `id-token: write` permission in the release workflow.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+docker_signs:
+  - cmd: cosign
+    args:
+      - sign
+      - "--yes"
+      - "${artifact}"
+    artifacts: all
+    output: true
+
 dockers:
   - image_templates:
       - "ghcr.io/arthurlch/goryu:{{ .Version }}-amd64"

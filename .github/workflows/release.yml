@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write # keyless cosign signing via Sigstore
 
 jobs:
   goreleaser:
@@ -36,6 +37,9 @@ jobs:
 
       - name: Install Syft for SBOMs
         uses: anchore/sbom-action/download-syft@v0
+
+      - name: Install cosign for signing
+        uses: sigstore/cosign-installer@v3
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

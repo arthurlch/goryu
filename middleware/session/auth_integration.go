@@ -61,7 +61,24 @@ func (ai *AuthIntegration) WrapLogoutHandler(originalHandler context.HandlerFunc
 		originalHandler(c)
 	}
 }
+
+const sessionIdleTimeout = 30 * time.Minute
+
+// SessionAuthMiddleware establishes identity from the session store. It does not
+// consult JWT revocation state; use AuthIntegration.SessionAuthMiddleware when an
+// app layers both mechanisms and needs shared invalidation.
 func SessionAuthMiddleware(sessionConfig *Config) func(next context.HandlerFunc) context.HandlerFunc {
+	return sessionAuth(sessionConfig, nil)
+}
+
+// SessionAuthMiddleware returns session auth that also honors password-change
+// revocation: a session established before the user's last password change is
+// rejected, so a password change/reset invalidates JWT and session auth alike.
+func (ai *AuthIntegration) SessionAuthMiddleware() func(next context.HandlerFunc) context.HandlerFunc {
+	return sessionAuth(ai.sessionConfig, ai.authService)
+}
+
+func sessionAuth(sessionConfig *Config, authService *auth.AuthService) func(next context.HandlerFunc) context.HandlerFunc {
 	return func(next context.HandlerFunc) context.HandlerFunc {
 		return func(c *context.Context) {
 			session, err := Get(c)
@@ -70,17 +87,19 @@ func SessionAuthMiddleware(sessionConfig *Config) func(next context.HandlerFunc)
 				return
 			}
 			if userID := session.Get("user_id"); userID != nil {
-				session.Set("last_activity", time.Now().Unix())
-				if lastActivity := session.Get("last_activity"); lastActivity != nil {
-					if lastActivityTime, ok := lastActivity.(int64); ok {
-						idleTimeout := 30 * time.Minute
-						if time.Since(time.Unix(lastActivityTime, 0)) > idleTimeout {
-							Destroy(c)
-							c.JSON(401, map[string]string{"error": "Session expired due to inactivity"})
-							return
-						}
+				if last, ok := session.Get("last_activity").(int64); ok {
+					if time.Since(time.Unix(last, 0)) > sessionIdleTimeout {
+						_ = Destroy(c)
+						_ = c.JSON(401, map[string]string{"error": "Session expired due to inactivity"})
+						return
 					}
 				}
+				if authService != nil && sessionOutdated(authService, session) {
+					_ = Destroy(c)
+					_ = c.JSON(401, map[string]string{"error": "Session invalidated, please sign in again"})
+					return
+				}
+				session.Set("last_activity", time.Now().Unix())
 				c.Set(auth.UserIDKey, userID)
 			}
 			if store, ok := sessionConfig.Store.(*SecureStore); ok && store.enableFingerprinting {
@@ -90,17 +109,31 @@ func SessionAuthMiddleware(sessionConfig *Config) func(next context.HandlerFunc)
 				}
 				fingerprint := GenerateFingerprint(headers, store.fingerprintFields)
 				if err := store.ValidateFingerprint(session.ID, fingerprint); err != nil {
-					Destroy(c)
+					_ = Destroy(c)
 					if sessionConfig.Logger != nil {
 						sessionConfig.Logger.Printf("Session hijacking detected for session %s: %v", session.ID, err)
 					}
-					c.JSON(401, map[string]string{"error": "Session security violation"})
+					_ = c.JSON(401, map[string]string{"error": "Session security violation"})
 					return
 				}
 			}
 			next(c)
 		}
 	}
+}
+
+// sessionOutdated reports whether the session predates the user's last password
+// change and must therefore be rejected.
+func sessionOutdated(authService *auth.AuthService, session *Session) bool {
+	changedAt, ok := authService.PasswordChangedAt(fmt.Sprintf("%v", session.Get("user_id")))
+	if !ok || changedAt.IsZero() {
+		return false
+	}
+	loginTime, ok := session.Get("login_time").(int64)
+	if !ok {
+		return true
+	}
+	return time.Unix(loginTime, 0).Before(changedAt)
 }
 
 type responseWriter struct {
@@ -131,7 +164,7 @@ func CreateIntegratedAuthSetup(app *goryu.App, jwtSecret, sessionKey string) (*a
 	app.Use(New(*sessionConfig))
 	authService, _ := auth.SetupAuthMiddleware(app, jwtSecret)
 	integration := NewAuthIntegration(sessionConfig, authService)
-	app.Use(SessionAuthMiddleware(sessionConfig))
+	app.Use(integration.SessionAuthMiddleware())
 	return authService, integration
 }
 
