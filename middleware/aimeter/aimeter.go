@@ -84,8 +84,8 @@ func (c *Config) Validate() error {
 	}
 	if c.LimitReached == nil {
 		c.LimitReached = func(ctx *context.Context, reason string) {
-			ctx.SetHeader("X-RateLimit-Reason", reason)
-			ctx.Status(http.StatusTooManyRequests).Text(http.StatusTooManyRequests, "Too Many Requests")
+			_ = ctx.SetHeader("X-RateLimit-Reason", reason)
+			_ = ctx.Status(http.StatusTooManyRequests).Text(http.StatusTooManyRequests, "Too Many Requests")
 		}
 	}
 	return nil
@@ -201,10 +201,10 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 			cost := cfg.cost(usage)
 
 			if !c.IsResponseSent() {
-				c.SetHeader("X-Tokens-Prompt", strconv.Itoa(usage.PromptTokens))
-				c.SetHeader("X-Tokens-Completion", strconv.Itoa(usage.CompletionTokens))
-				c.SetHeader("X-Tokens-Total", strconv.Itoa(usage.Total()))
-				c.SetHeader("X-Cost-USD", strconv.FormatFloat(cost, 'f', 6, 64))
+				_ = c.SetHeader("X-Tokens-Prompt", strconv.Itoa(usage.PromptTokens))
+				_ = c.SetHeader("X-Tokens-Completion", strconv.Itoa(usage.CompletionTokens))
+				_ = c.SetHeader("X-Tokens-Total", strconv.Itoa(usage.Total()))
+				_ = c.SetHeader("X-Cost-USD", strconv.FormatFloat(cost, 'f', 6, 64))
 			}
 			if cfg.OnResult != nil {
 				cfg.OnResult(c, Result{Key: key, Usage: usage, CostUSD: cost})

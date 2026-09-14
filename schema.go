@@ -36,7 +36,7 @@ func SchemaOf(t reflect.Type) map[string]any {
 }
 
 func buildSchema(t reflect.Type, seen map[reflect.Type]bool) map[string]any {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -147,7 +147,7 @@ func fieldRequired(f reflect.StructField, opts map[string]bool) bool {
 	if opts["omitempty"] {
 		return false
 	}
-	return f.Type.Kind() != reflect.Ptr
+	return f.Type.Kind() != reflect.Pointer
 }
 
 func applyConstraints(schema map[string]any, tag string) {

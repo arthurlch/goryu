@@ -80,7 +80,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("open eval sink: %v", err)
 	}
-	defer sink.Close()
+	defer func() { _ = sink.Close() }()
 
 	app.Use(recorder.New(recorder.Config{
 		Sink:    sink,
@@ -109,7 +109,7 @@ func main() {
 
 	// Schema endpoint: hand this to an LLM as a response schema, or to clients.
 	app.GET("/chat/schema", func(c *goryu.Ctx) {
-		c.JSON(200, goryu.Schema[ChatRequest]())
+		_ = c.JSON(200, goryu.Schema[ChatRequest]())
 	})
 
 	// Non-streaming endpoint, wrapped in the prompt cache: identical bodies
@@ -135,7 +135,7 @@ func main() {
 
 	log.Println("aichat listening on :3000")
 	if err := app.Run(":3000"); err != nil {
-		log.Fatal(err)
+		log.Printf("server stopped: %v", err) // deferred sink.Close still runs
 	}
 }
 
@@ -143,7 +143,7 @@ func main() {
 func chatStream(c *goryu.Ctx) {
 	req, err := goryu.Bind[ChatRequest](c)
 	if err != nil {
-		c.JSON(400, goryu.Map{"error": err.Error()})
+		_ = c.JSON(400, goryu.Map{"error": err.Error()})
 		return
 	}
 
@@ -176,7 +176,7 @@ func chatStream(c *goryu.Ctx) {
 func chat(c *goryu.Ctx) {
 	req, err := goryu.Bind[ChatRequest](c)
 	if err != nil {
-		c.JSON(400, goryu.Map{"error": err.Error()})
+		_ = c.JSON(400, goryu.Map{"error": err.Error()})
 		return
 	}
 
@@ -185,7 +185,7 @@ func chat(c *goryu.Ctx) {
 		PromptTokens:     promptTokens(req),
 		CompletionTokens: len(strings.Fields(reply)),
 	})
-	c.JSON(200, goryu.Map{"model": req.Model, "reply": reply})
+	_ = c.JSON(200, goryu.Map{"model": req.Model, "reply": reply})
 }
 
 // apiKey identifies the caller by X-API-Key, falling back to the remote IP.

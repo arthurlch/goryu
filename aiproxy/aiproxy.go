@@ -95,7 +95,7 @@ func (p *Proxy) Stream(c *context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	copyResponseHeaders(c, resp)
 	c.Writer.WriteHeader(resp.StatusCode)
@@ -129,7 +129,7 @@ func (p *Proxy) Forward(c *context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	copyResponseHeaders(c, resp)
 	c.Writer.WriteHeader(resp.StatusCode)
