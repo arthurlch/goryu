@@ -11,8 +11,7 @@ import (
 	"strings"
 )
 
-// The MCP server speaks JSON-RPC 2.0 over stdio (newline-delimited), exposing
-// goryu's project tools to AI agents. See https://modelcontextprotocol.io.
+// The MCP server speaks JSON-RPC 2.0 over stdio. See https://modelcontextprotocol.io.
 
 const mcpProtocolVersion = "2024-11-05"
 

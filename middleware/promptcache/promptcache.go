@@ -1,15 +1,6 @@
 // Package promptcache is a response cache keyed on the request body (the
-// "prompt") rather than the URL, so it can cache POST responses — the common
-// shape for LLM endpoints where the same prompt should return the same answer.
-//
-// It caches only complete, non-streaming responses: streaming responses
-// (text/event-stream, application/x-ndjson) are passed through untouched. Bodies
-// larger than MaxBodyBytes are not cached.
-//
-//	app.Use(promptcache.New(promptcache.Config{
-//	    Expiration: 10 * time.Minute,
-//	    Methods:    []string{"POST"},
-//	}))
+// "prompt") rather than the URL, so it can cache POST responses. Streaming
+// responses are passed through; bodies larger than MaxBodyBytes are not cached.
 package promptcache
 
 import (
@@ -29,33 +20,23 @@ import (
 	"github.com/arthurlch/goryu/middleware/base"
 )
 
-// Config configures the prompt cache.
 type Config struct {
 	base.BaseConfig
 
-	// Expiration is how long a cached response stays fresh. Default 5m.
-	Expiration time.Duration
-	// MaxSize caps the number of cached entries. Default 1000.
-	MaxSize int
-	// MaxBodyBytes caps the request body read for keying and the response body
-	// cached. Default 1 MiB.
+	Expiration   time.Duration
+	MaxSize      int
 	MaxBodyBytes int64
-	// Methods that are cacheable. Default {"POST"}.
-	Methods []string
+	Methods      []string
 	// VaryHeaders are request headers folded into the cache key (e.g. a model
 	// selector). Never include auth headers here.
-	VaryHeaders []string
-	// KeyGenerator overrides key derivation. When set, MaxBodyBytes/VaryHeaders
-	// keying is bypassed.
+	VaryHeaders  []string
 	KeyGenerator func(c *context.Context, body []byte) string
 }
 
-// Configure implements the base configurable-middleware contract.
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
 	c.BaseConfig = *baseConfig
 }
 
-// Validate fills defaults.
 func (c *Config) Validate() error {
 	if c.Expiration <= 0 {
 		c.Expiration = 5 * time.Minute
@@ -160,7 +141,6 @@ func (w *captureWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, http.ErrNotSupported
 }
 
-// New builds the prompt cache middleware.
 func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	cfg := Config{}
 	if len(config) > 0 {
@@ -233,7 +213,6 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 	}
 }
 
-// Default builds the prompt cache with default configuration.
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
 	return New()
 }
