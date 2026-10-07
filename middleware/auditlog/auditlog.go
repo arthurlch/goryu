@@ -36,6 +36,10 @@ type Config struct {
 	base.BaseConfig
 	Sink       Sink
 	UserIDFunc func(c *context.Context) string
+	// AnonymizeIP masks the client IP before it is recorded (IPv4 → /24,
+	// IPv6 → /64), for data minimization. Off by default: an audit trail
+	// normally wants the full source IP.
+	AnonymizeIP bool
 }
 
 func (c *Config) Configure(baseConfig *base.BaseConfig) {
@@ -106,6 +110,10 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 			next(c)
 
 			c.Writer = cw.ResponseWriter
+			ip := c.RemoteIP()
+			if cfg.AnonymizeIP {
+				ip = maskIP(ip)
+			}
 			event := Event{
 				Time:      start,
 				Method:    c.Request.Method,
@@ -113,7 +121,7 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 				Status:    cw.status,
 				LatencyMS: time.Since(start).Milliseconds(),
 				UserID:    cfg.UserIDFunc(c),
-				IP:        c.RemoteIP(),
+				IP:        ip,
 			}
 			if err := cfg.Sink.Write(event); err != nil {
 				logger := cfg.Logger
@@ -128,6 +136,17 @@ func New(config ...Config) func(next context.HandlerFunc) context.HandlerFunc {
 
 func Default() func(next context.HandlerFunc) context.HandlerFunc {
 	return New()
+}
+
+func maskIP(raw string) string {
+	ip := net.ParseIP(raw)
+	if ip == nil {
+		return raw
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.Mask(net.CIDRMask(24, 32)).String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String()
 }
 
 func defaultUserID(c *context.Context) string {

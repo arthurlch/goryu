@@ -32,6 +32,7 @@ Each event carries: `time`, `method`, `path`, `status`, `latency_ms`, `user_id`
 |--------|------|-------------|---------|
 | Sink | `Sink` | Where events go | JSON to the logger |
 | UserIDFunc | `func(c) string` | Extract the caller identity | `user_id` context key |
+| AnonymizeIP | `bool` | Mask the client IP (IPv4 → /24, IPv6 → /64) before recording | `false` |
 | Skip | `func(c) bool` | Skip auditing a request | none |
 
 ## Notes

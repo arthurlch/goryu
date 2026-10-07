@@ -45,6 +45,39 @@ func TestAuditCapturesRequest(t *testing.T) {
 	}
 }
 
+func TestAuditAnonymizeIP(t *testing.T) {
+	sink := &memSink{}
+	mw := auditlog.New(auditlog.Config{Sink: sink, AnonymizeIP: true})
+	handler := mw(func(c *context.Context) { _ = c.Text(200, "ok") })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.RemoteAddr = "203.0.113.7:5555"
+	handler(context.NewContext(w, req))
+
+	if len(sink.events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(sink.events))
+	}
+	if got := sink.events[0].IP; got != "203.0.113.0" {
+		t.Fatalf("IPv4 should be masked to /24; got %q", got)
+	}
+}
+
+func TestAuditKeepsFullIPByDefault(t *testing.T) {
+	sink := &memSink{}
+	mw := auditlog.New(auditlog.Config{Sink: sink})
+	handler := mw(func(c *context.Context) { _ = c.Text(200, "ok") })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.RemoteAddr = "203.0.113.7:5555"
+	handler(context.NewContext(w, req))
+
+	if got := sink.events[0].IP; got != "203.0.113.7" {
+		t.Fatalf("default should keep the full IP; got %q", got)
+	}
+}
+
 func TestAuditRespectsSkip(t *testing.T) {
 	sink := &memSink{}
 	cfg := auditlog.Config{Sink: sink}
