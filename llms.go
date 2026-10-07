@@ -5,22 +5,18 @@ import (
 	"strings"
 )
 
-// APIRoute is one endpoint in a machine-readable API reference.
 type APIRoute struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 	Name   string `json:"name,omitempty"`
 }
 
-// APIReference is a machine-readable description of an app's HTTP surface,
-// suitable for tooling and LLM consumption.
 type APIReference struct {
 	Name    string     `json:"name"`
 	Summary string     `json:"summary"`
 	Routes  []APIRoute `json:"routes"`
 }
 
-// APIReference builds a reference from the app's registered routes.
 func (app *App) APIReference() APIReference {
 	infos := app.Router.Routes()
 
@@ -43,8 +39,7 @@ func (app *App) APIReference() APIReference {
 	return APIReference{Name: name, Summary: summary, Routes: routes}
 }
 
-// LLMsText renders the app's API as an llms.txt document (https://llmstxt.org):
-// a title, a one-line summary, and the list of endpoints.
+// LLMsText renders the app's API as an llms.txt document (https://llmstxt.org).
 func (app *App) LLMsText() string {
 	ref := app.APIReference()
 
@@ -71,8 +66,7 @@ func (app *App) LLMsText() string {
 	return b.String()
 }
 
-// MountLLMs registers GET /llms.txt (the llms.txt document) and GET /llms.json
-// (the machine-readable APIReference). Call it after your routes are defined.
+// MountLLMs serves /llms.txt and /llms.json. Call it after routes are defined.
 func (app *App) MountLLMs() {
 	app.GET("/llms.txt", func(c *Ctx) {
 		_ = c.Data(200, "text/plain; charset=utf-8", []byte(app.LLMsText()))

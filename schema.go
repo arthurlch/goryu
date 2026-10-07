@@ -1,18 +1,9 @@
 package goryu
 
-// JSON Schema generation for typed I/O. This turns a Go type into a JSON Schema
-// (draft 2020-12) document, which is what most LLM providers want for structured
-// output / function calling, and doubles as machine-readable API documentation.
-//
-// It is deliberately dependency-free coz why not and (reflection only) and reads two struct
-// tags:
-//   - `json`      — property name and `omitempty` (affects `required`).
-//   - `jsonschema` — comma-separated constraints, e.g.
-//       `jsonschema:"description=User email,format=email,required"`
-//       `jsonschema:"enum=red|green|blue"` (enum values are `|`-separated)
-//       `jsonschema:"minimum=0,maximum=120"`
-//       `jsonschema:"minLength=1,maxLength=280"`
-//     Bare `required` / `optional` override the default derived from `omitempty`.
+// JSON Schema (draft 2020-12) generation from Go types via reflection. Reads the
+// `json` tag (name + omitempty) and a `jsonschema` tag of comma-separated
+// constraints, e.g. `jsonschema:"description=Email,format=email,enum=a|b,minimum=0"`.
+// Bare `required` / `optional` override the default derived from `omitempty`.
 
 import (
 	"reflect"
@@ -40,7 +31,7 @@ func buildSchema(t reflect.Type, seen map[reflect.Type]bool) map[string]any {
 		t = t.Elem()
 	}
 
-	// time.Time is the one std type worth special-casing !
+	// time.Time -> RFC3339 date-time string.
 	if t.PkgPath() == "time" && t.Name() == "Time" {
 		return map[string]any{"type": "string", "format": "date-time"}
 	}
@@ -70,7 +61,6 @@ func buildSchema(t reflect.Type, seen map[reflect.Type]bool) map[string]any {
 		defer delete(seen, t)
 		return structSchema(t, seen)
 	default:
-		// all other non supported types
 		return map[string]any{}
 	}
 }

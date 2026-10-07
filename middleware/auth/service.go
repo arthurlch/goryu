@@ -121,6 +121,16 @@ func NewAuthService(jwtAuth *JWTAuth, userStore UserStore, tokenStore TokenStore
 func (as *AuthService) SetLogger(logger Logger) {
 	as.logger = logger
 }
+
+// PasswordChangedAt reports when the user's password last changed. Credentials
+// issued before this instant (JWTs or sessions) must be rejected.
+func (as *AuthService) PasswordChangedAt(userID string) (time.Time, bool) {
+	user, ok := as.userStore.GetUserByID(userID)
+	if !ok {
+		return time.Time{}, false
+	}
+	return user.PasswordChangedAt, true
+}
 func (as *AuthService) Register(c *goryu.Ctx, req RegisterRequest) AuthResponse {
 	if err := ValidateEmail(req.Email); err != nil {
 		as.logSecurityEvent("registration_failed", map[string]interface{}{

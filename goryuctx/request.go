@@ -20,14 +20,6 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// SECUCHECK represents security checks implemented in the code
-// to prevent common vulnerabilities such as path traversal attacks,
-// file upload issues, and header manipulations.
-// Overall security posture is enhanced by validating inputs,
-// sanitizing file paths, and restricting file operations.
-// I believe we reached a good balance between security and usability,
-// but continuous testing is essential to maintain security and I wanna improve it even further
-
 func (c *Context) Query(name string) string {
 	return c.Request.URL.Query().Get(name)
 }
@@ -43,28 +35,24 @@ func (c *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, e
 func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstFilename string) error {
 	const uploadDir = "uploads"
 	const maxFilenameLength = 255
+	const maxFileSize = 50 << 20
 
-	// SECUCHECK: Comprehensive filename validation
 	if err := validateUploadFilename(dstFilename); err != nil {
 		return err
 	}
 
-	// SECUCHECK: File size validation (prevent huge file uploads)
-	const maxFileSize = 50 << 20 // 50MB
 	if file.Size > maxFileSize {
 		return fmt.Errorf("file too large: %d bytes (max %d bytes)", file.Size, maxFileSize)
 	}
 
-	// SECUCHECK: Filename length check
 	if len(dstFilename) > maxFilenameLength {
 		return errors.New("filename too long")
 	}
 
-	if err := os.MkdirAll(uploadDir, 0755); err != nil { // More restrictive permissions
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return err
 	}
 
-	// SECUCHECK: Enhanced path validation to prevent various attack vectors
 	cleanFilename, err := validateAndSanitizeUploadPath(dstFilename)
 	if err != nil {
 		return fmt.Errorf("invalid filename: %w", err)
@@ -72,7 +60,6 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstFilename strin
 
 	safePath := filepath.Join(uploadDir, cleanFilename)
 
-	// SECUCHECK: Double-check the resolved path is within upload directory
 	absUploadDir, err := filepath.Abs(uploadDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve upload directory: %w", err)
@@ -83,7 +70,6 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstFilename strin
 		return fmt.Errorf("failed to resolve destination path: %w", err)
 	}
 
-	// SECUCHECK: Comprehensive path traversal protection
 	if !strings.HasPrefix(absSafePath, absUploadDir+string(filepath.Separator)) && absSafePath != absUploadDir {
 		return errors.New("invalid destination: path traversal detected")
 	}
@@ -94,15 +80,13 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dstFilename strin
 	}
 	defer func() { _ = src.Close() }()
 
-	// SECUCHECK: Create file with restrictive permissions
 	out, err := os.OpenFile(absSafePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
 
-	var copyErr, closeErr error
-	_, copyErr = io.Copy(out, src)
-	closeErr = out.Close()
+	_, copyErr := io.Copy(out, src)
+	closeErr := out.Close()
 
 	if copyErr != nil {
 		return copyErr
@@ -115,17 +99,14 @@ func validateUploadFilename(filename string) error {
 		return errors.New("filename cannot be empty")
 	}
 
-	// SECURITY: Check for path separators (both Unix and Windows)
 	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
 		return errors.New("invalid destination filename: contains path separators")
 	}
 
-	// SECUCHECK: Check for hidden files and current/parent directory references
 	if strings.HasPrefix(filename, ".") {
 		return errors.New("invalid destination filename: hidden files not allowed")
 	}
 
-	// SECUCHECK: Check for null bytes and other dangerous characters
 	dangerousChars := []string{"\x00", "<", ">", ":", "\"", "|", "?", "*"}
 	for _, char := range dangerousChars {
 		if strings.Contains(filename, char) {
@@ -133,7 +114,6 @@ func validateUploadFilename(filename string) error {
 		}
 	}
 
-	// SECUCHECK: Check for reserved names (Windows)
 	reservedNames := []string{
 		"CON", "PRN", "AUX", "NUL",
 		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
@@ -149,7 +129,6 @@ func validateUploadFilename(filename string) error {
 		}
 	}
 
-	// SECUCHECK: Check for excessively long extensions
 	if strings.Contains(filename, ".") {
 		parts := strings.Split(filename, ".")
 		if len(parts) > 2 {
@@ -164,39 +143,34 @@ func validateUploadFilename(filename string) error {
 	return nil
 }
 
-// SECUCHECK: Protects against various path traversal and attack vectors
 func validateAndSanitizeUploadPath(filename string) (string, error) {
 	if filename == "" {
 		return "", errors.New("filename cannot be empty")
 	}
 
-	// SECUCHECK: Check filename length to prevent long path attacks
 	if len(filename) > 255 {
 		return "", errors.New("filename too long")
 	}
 
-	// SECUCHECK: Validate UTF-8 encoding
 	if !utf8.ValidString(filename) {
 		return "", errors.New("filename contains invalid UTF-8 characters")
 	}
 
-	// SECUCHECK: Normalize Unicode to prevent normalization attacks
 	normalized := norm.NFC.String(filename)
 
-	// SECUCHECK: Check for directory traversal patterns
 	traversalPatterns := []string{
-		"..",             // Basic traversal
-		"%2e%2e",         // URL encoded dots
-		"%252e%252e",     // Double URL encoded dots
-		"..%2f",          // Mixed encoding
-		"%2e.",           // Partial encoding
-		".%2e",           // Partial encoding
-		"..\\",           // Windows-style traversal
-		"..%5c",          // URL encoded backslash
-		"\\u002e\\u002e", // Unicode dots
-		"\u002e\u002e",   // Unicode path separators
-		"\u2024",         // One dot leader (Unicode)
-		"\uFF0E",         // Fullwidth full stop
+		"..",
+		"%2e%2e",
+		"%252e%252e",
+		"..%2f",
+		"%2e.",
+		".%2e",
+		"..\\",
+		"..%5c",
+		"\\u002e\\u002e",
+		"..",
+		"\u2024",
+		"\uFF0E",
 	}
 
 	lowerFilename := strings.ToLower(normalized)
@@ -206,19 +180,18 @@ func validateAndSanitizeUploadPath(filename string) (string, error) {
 		}
 	}
 
-	// SECURITY: Check for suspicious characters
 	suspiciousChars := []string{
-		"\x00", // Null byte
-		"\r",   // Carriage return
-		"\n",   // Newline
-		"\t",   // Tab
-		"<",    // HTML/XML
-		">",    // HTML/XML
-		":",    // Drive separator (Windows)
-		"|",    // Pipe character
-		"?",    // Wildcard
-		"*",    // Wildcard
-		"\"",   // Quote
+		"\x00",
+		"\r",
+		"\n",
+		"\t",
+		"<",
+		">",
+		":",
+		"|",
+		"?",
+		"*",
+		"\"",
 	}
 
 	for _, char := range suspiciousChars {
@@ -227,7 +200,6 @@ func validateAndSanitizeUploadPath(filename string) (string, error) {
 		}
 	}
 
-	// SECUCHECK: Check for reserved Windows filenames
 	reservedNames := []string{
 		"CON", "PRN", "AUX", "NUL",
 		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
@@ -241,12 +213,10 @@ func validateAndSanitizeUploadPath(filename string) (string, error) {
 		}
 	}
 
-	// SECUCHECK: Check for files starting with dot (hidden files)
 	if strings.HasPrefix(normalized, ".") {
 		return "", errors.New("hidden files (starting with '.') are not allowed")
 	}
 
-	// SECUCHECK: Check for executable file extensions (configurable based on needs)
 	dangerousExtensions := []string{
 		".exe", ".bat", ".cmd", ".com", ".pif", ".scr", ".vbs", ".js",
 		".jar", ".sh", ".bin", ".app", ".deb", ".dmg", ".pkg", ".msi",
@@ -260,10 +230,8 @@ func validateAndSanitizeUploadPath(filename string) (string, error) {
 		}
 	}
 
-	// SECUCHECK: Final cleanup - use filepath.Clean for normalization
 	cleaned := filepath.Clean(normalized)
 
-	// SECUCHECK: Ensure cleaned path doesn't escape current directory
 	if cleaned == ".." || strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") {
 		return "", errors.New("path attempts to escape upload directory")
 	}
@@ -279,8 +247,6 @@ func (c *Context) GetHeader(key string) string {
 	return c.Request.Header.Get(key)
 }
 
-// SECUCHECK: Only trusts proxy headers if explicitly configured with trusted proxies.
-// By default, only uses the direct connection IP to prevent spoofing attacks.
 func (c *Context) RemoteIP() string {
 	directIP, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 	if err != nil {
@@ -288,14 +254,13 @@ func (c *Context) RemoteIP() string {
 	}
 
 	if shouldTrustProxyHeaders(c, directIP) {
-		if ip := c.GetHeader("X-Forwarded-For"); ip != "" {
-			clientIP := strings.TrimSpace(strings.Split(ip, ",")[0])
-			if isValidIP(clientIP) {
-				return clientIP
+		if forwarded := c.GetHeader("X-Forwarded-For"); forwarded != "" {
+			if ip := parseIP(strings.Split(forwarded, ",")[0]); ip != "" {
+				return ip
 			}
 		}
-		if ip := c.GetHeader("X-Real-IP"); ip != "" {
-			if isValidIP(ip) {
+		if realIP := c.GetHeader("X-Real-IP"); realIP != "" {
+			if ip := parseIP(realIP); ip != "" {
 				return ip
 			}
 		}
@@ -305,18 +270,24 @@ func (c *Context) RemoteIP() string {
 }
 
 func shouldTrustProxyHeaders(c *Context, directIP string) bool {
-	if trustedProxies, exists := c.Get("trusted_proxies"); exists {
-		if proxies, ok := trustedProxies.([]string); ok {
-			for _, proxy := range proxies {
-				if proxy == directIP {
+	trustedProxies, exists := c.Get("trusted_proxies")
+	if !exists {
+		return false
+	}
+
+	proxies, ok := trustedProxies.([]string)
+	if !ok {
+		return false
+	}
+
+	for _, proxy := range proxies {
+		if proxy == directIP {
+			return true
+		}
+		if strings.Contains(proxy, "/") {
+			if _, cidr, err := net.ParseCIDR(proxy); err == nil {
+				if ip := net.ParseIP(directIP); ip != nil && cidr.Contains(ip) {
 					return true
-				}
-				if strings.Contains(proxy, "/") {
-					if _, cidr, err := net.ParseCIDR(proxy); err == nil {
-						if ip := net.ParseIP(directIP); ip != nil && cidr.Contains(ip) {
-							return true
-						}
-					}
 				}
 			}
 		}
@@ -324,8 +295,11 @@ func shouldTrustProxyHeaders(c *Context, directIP string) bool {
 	return false
 }
 
-func isValidIP(ip string) bool {
-	return net.ParseIP(ip) != nil
+func parseIP(raw string) string {
+	if ip := net.ParseIP(strings.TrimSpace(raw)); ip != nil {
+		return ip.String()
+	}
+	return ""
 }
 
 func (c *Context) BaseURL() string {
@@ -336,14 +310,13 @@ func (c *Context) BaseURL() string {
 	return scheme + "://" + c.Request.Host
 }
 
-const maxBodySize = 10 << 20 // 10MB
+const maxBodySize = 10 << 20
 
 func (c *Context) BodyRaw() ([]byte, error) {
 	return io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize))
 }
 
-// Optimization: Cache struct field metadata to avoid repeated reflection overhead
-var queryDecoderCache sync.Map // map[reflect.Type][]fieldInfo
+var queryDecoderCache sync.Map
 
 type fieldInfo struct {
 	Index int
@@ -364,7 +337,6 @@ func getCachedStructInfo(typ reflect.Type) []fieldInfo {
 		}
 	}
 
-	// Store even if empty to avoid re-scanning
 	queryDecoderCache.Store(typ, infos)
 	return infos
 }
@@ -385,7 +357,6 @@ func (c *Context) QueryParser(out interface{}) error {
 	elem := val.Elem()
 	typ := elem.Type()
 
-	// Optimization: Use cached field info
 	fields := getCachedStructInfo(typ)
 
 	for _, info := range fields {
@@ -402,8 +373,6 @@ func (c *Context) QueryParser(out interface{}) error {
 		case reflect.String:
 			fieldValue.SetString(paramValue)
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			// Parse at the field's real width so an out-of-range value is
-			// rejected instead of silently wrapping.
 			intVal, err := strconv.ParseInt(paramValue, 10, fieldValue.Type().Bits())
 			if err != nil {
 				return fmt.Errorf("invalid value for %q: %w", info.Tag, err)
@@ -434,7 +403,6 @@ func (c *Context) Is(extension string) bool {
 
 	mimeType := mime.TypeByExtension("." + extension)
 	if mimeType == "" {
-		// if no MIME type is found, assume the extension is a full MIME
 		mimeType = extension
 	}
 
@@ -454,28 +422,15 @@ func (c *Context) BindJSON(i interface{}) error {
 		return http.ErrNotSupported
 	}
 
-	// SECUCHECK: Limit JSON payload size to prevent DoS attacks (default 1MB)
-	const maxJSONSize = 1 << 20 // 1MB
-	// We read the body into a limit reader, but UnmarshalRead takes a reader directly.
-	// Note: UnmarshalRead in v2 consumes the whole reader by default logic or we might need to check.
-	// Actually, v2 UnmarshalRead reads until EOF or end of value.
-
+	const maxJSONSize = 1 << 20
 	limitedReader := io.LimitReader(c.Request.Body, maxJSONSize)
 
-	// Optimization: standard library friendly
 	decoder := json.NewDecoder(limitedReader)
-	// Default validation behavior
 	decoder.DisallowUnknownFields()
 
 	return decoder.Decode(i)
 }
 
-// BodyParser binds the request body to a struct based on the Content-Type header.
-// It supports:
-// - application/json -> BindJSON
-// - application/x-www-form-urlencoded -> QueryParser (form data)
-// - multipart/form-data -> QueryParser (form data)
-// - defaults to QueryParser for other types if methods is GET/DELETE
 func (c *Context) BodyParser(out interface{}) error {
 	ctype := c.GetHeader("Content-Type")
 
@@ -497,14 +452,12 @@ func (c *Context) BodyParser(out interface{}) error {
 		return fmt.Errorf("BodyParser: unsupported content-type: %s", ctype)
 	}
 
-	// Validation runs for every content type, not just the query-string path.
 	if validator, ok := out.(Validator); ok {
 		return validator.Validate()
 	}
 	return nil
 }
 
-// Validator is an interface for structs that can validate themselves
 type Validator interface {
 	Validate() error
 }
