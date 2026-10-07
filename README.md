@@ -7,27 +7,39 @@
 
 </div>
 
-## What is Goryu?
+## The Go backend your AI gets right the first time
 
-A Go web framework that gives you the productivity of Rails/Phoenix with the speed of Golang.
+You don't hand-write boilerplate anymore — you direct an agent. So the framework's
+job changed. It's no longer just about being pleasant to *type*; it has to be the
+thing your coding agent **generates correctly** and that you can **read well enough
+to trust shipping.**
 
-**Actually production-ready out of the box.**
+Goryu is built for that:
+
+- **Agents get it right the first time.** A small, regular API constrains codegen — fewer ways to call it means fewer ways to get it wrong. Go's compiler rejects the rest on the spot.
+- **Secure by default.** The one thing agents reliably get wrong — the security basics — is handled on every response path, whether the agent thinks about it or not.
+- **No magic.** Explicit, readable Go. You (or a non-technical reviewer) can read what the agent shipped and believe it's safe to deploy.
+- **Batteries included.** Fewer dependencies means fewer versions and APIs for an agent to hallucinate. One binary, zero assembly.
 
 ```go
 app := goryu.New()
 
-app.GET("/", func(c *goryuctx.Context) {
-    c.JSON(goryuctx.Map{"message": "Hello, World!"})
+app.GET("/", func(c *goryu.Ctx) {
+    c.JSON(200, goryu.Map{"message": "Hello, World!"})
 })
 
-app.Listen(":3000")
+app.Run(":3000")
 ```
 
 That's it. You now have health checks, metrics, structured logging, and graceful shutdown.
 
-## Why?
+## Why this matters now
 
-Because setting up a production Go service takes too long. You need:
+Point an agent at raw `net/http` and you get a different shape every time, with
+different security gaps, and nobody can review fifty bespoke services by hand.
+Goryu makes agent output **uniform, safe, and auditable** — so the person directing
+the agent can actually ship it. Everything below is wired from day one:
+
 - Router ✓
 - Validation ✓
 - Error handling ✓
@@ -36,10 +48,8 @@ Because setting up a production Go service takes too long. You need:
 - Metrics ✓
 - Graceful shutdown ✓
 - Good project structure ✓
-- A powerful CLI  ✓
+- A powerful CLI ✓
 - Scaffolding ✓
-
-Goryu gives you all of this. No setup needed.
 
 ## Performance
 
@@ -50,7 +60,7 @@ BenchmarkGoryu_Param-8        2,036,600 ops/sec    593.3 ns/op
 BenchmarkGin_Param-8          2,015,674 ops/sec    590.9 ns/op
 ```
 
-As fast as Gin. With 10x more features built-in.
+As fast as Gin. With 10x more features built-in — and none of the readability your agent depends on traded away for it.
 
 ## Developer Experience
 
@@ -58,13 +68,16 @@ As fast as Gin. With 10x more features built-in.
 
 ```go
 // One context object. No request/response split.
-app.POST("/users", func(c *goryuctx.Context) {
+app.POST("/users", func(c *goryu.Ctx) {
     var user CreateUserRequest
-    c.BodyParser(&user)  // Parses + validates
-    
+    if err := c.BodyParser(&user); err != nil {  // Parses + validates
+        c.JSON(400, goryu.Map{"error": err.Error()})
+        return
+    }
+
     // Do stuff...
-    
-    c.Status(201).JSON(user)  // Chainable responses
+
+    c.JSON(201, user)
 })
 ```
 
@@ -81,7 +94,7 @@ goryu generate model product --fields="name:string,price:float"
 goryu scaffold blog title:string content:text --api
 ```
 
-Generated code is clean, tested, and yours to modify.
+Generated code is clean, tested, and yours to modify. A human and a coding agent produce the same output.
 
 ### 3. Built-in Monitoring
 
@@ -148,7 +161,6 @@ package main
 
 import (
     "github.com/arthurlch/goryu"
-    "github.com/arthurlch/goryu/goryuctx"
     "github.com/arthurlch/goryu/middleware/logger"
     "github.com/arthurlch/goryu/middleware/cors"
 )
@@ -161,30 +173,29 @@ type Product struct {
 
 func main() {
     app := goryu.New()
-    
+
     // Middleware
     app.Use(logger.New(), cors.Default())
-    
+
     // Routes
     products := app.Group("/api/products")
     products.GET("/", listProducts)
     products.GET("/:id", getProduct)
     products.POST("/", createProduct)
-    
-    app.Listen(":8080")
+
+    app.Run(":8080")
 }
 
-func createProduct(c *goryuctx.Context) {
-    var product Product
-    if err := c.BodyParser(&product); err != nil {
-        c.Status(400).JSON(goryuctx.Map{"error": err.Error()})
+func createProduct(c *goryu.Ctx) {
+    product, err := goryu.Bind[Product](c) // parse + validate
+    if err != nil {
+        c.JSON(400, goryu.Map{"error": err.Error()})
         return
     }
-    
-    // Validation happens automatically
+
     // Save product...
-    
-    c.Status(201).JSON(product)
+
+    c.JSON(201, product)
 }
 ```
 
@@ -203,11 +214,22 @@ func createProduct(c *goryuctx.Context) {
 - **Graceful shutdown** - Never drop a connection
 - **Panic recovery** - Your app stays up
 
+### Secure by default
+- **Security headers & CSRF** - on every response path
+- **JWT & sessions** - with a unified invalidation seam
+- **OAuth2 / OIDC** - and passkeys / WebAuthn
+- **RBAC & audit log** - authorization and a tamper-evident trail
+
 ### Developer Tools
 - **CLI generators** - Generate handlers, models, full features
 - **Hot reload** - `goryu dev` watches your code
 - **Project structure** - Scalable layout from day one
 - **Testing helpers** - Test your HTTP handlers easily
+
+### Self-describing to the next agent
+- **`llms.txt` + machine-readable API reference** (`App.MountLLMs`)
+- **MCP server** - `goryu mcp` lets agents list routes, scaffold, and run
+- **AI scaffolds** - `goryu scaffold ai <name> --kind=chat|rag|agent`
 
 ### Middleware
 - Authentication (JWT, Basic, API Key)
@@ -237,7 +259,7 @@ func (s Signup) Validate() error {
     return nil
 }
 
-app.POST("/signup", func(c *goryuctx.Context) {
+app.POST("/signup", func(c *goryu.Ctx) {
     body, err := goryu.Bind[Signup](c)
     if err != nil {
         c.JSON(400, goryu.Map{"error": err.Error()})
@@ -250,10 +272,10 @@ app.POST("/signup", func(c *goryuctx.Context) {
 Streaming is first-class — great for progress updates and for AI token streaming:
 
 ```go
-app.GET("/events", func(c *goryuctx.Context) {
-    c.SSE(func(send func(goryuctx.SSEvent) error) error {
+app.GET("/events", func(c *goryu.Ctx) {
+    c.SSE(func(send func(goryu.SSEvent) error) error {
         for i := 0; i < 3; i++ {
-            if err := send(goryuctx.SSEvent{Event: "tick", Data: fmt.Sprint(i)}); err != nil {
+            if err := send(goryu.SSEvent{Event: "tick", Data: fmt.Sprint(i)}); err != nil {
                 return err
             }
         }
@@ -265,7 +287,7 @@ app.GET("/events", func(c *goryuctx.Context) {
 WebSockets use the same `Context`:
 
 ```go
-app.GET("/ws", func(c *goryuctx.Context) {
+app.GET("/ws", func(c *goryu.Ctx) {
     conn, err := websocket.Upgrade(c)
     if err != nil {
         return
@@ -285,11 +307,12 @@ These are additive — you never pay for them in a plain REST app.
 
 ## Philosophy
 
-1. **REST first** - The simple case stays simple; AI/realtime features are additive
-2. **Batteries included** - Everything you need to ship
-3. **No magic** - You can read the source
-4. **Human and LLM friendly** - A regular, predictable API that people and coding agents both write well
-5. **Performance matters** - Because blazingly fast performance is essential
+1. **If an LLM can't reliably generate correct Goryu code, the API is too clever** - so it isn't. The regular, predictable API is a feature for people and agents alike.
+2. **Built to be directed, not just typed** - the same clean API serves the human reviewing and the agent writing.
+3. **No magic** - read the source and understand it; trusting what ships now matters more than typing it.
+4. **Secure by default** - on every response path, not opt-in.
+5. **REST first** - the simple case stays simple; AI/realtime features are additive.
+6. **Performance matters** - because blazingly fast performance is essential.
 
 ## Documentation
 
@@ -311,5 +334,5 @@ MIT
 ---
 
 <div align="center">
-  <strong>Build something awesome.</strong>
+  <strong>Build something your agent gets right.</strong>
 </div>
